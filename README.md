@@ -1,12 +1,12 @@
 <div align="center">
   <img src="frontend/public/favicon.svg" alt="Raptor AI Logo" width="120" height="120" />
-  <h1>🦖 Raptor AI — Autonomous Code Review Engine</h1>
+  <h1> Raptor AI — Autonomous Code Review Engine</h1>
   <p><b>Autonomous inline pull request reviews. Flawless, secure codebases.</b></p>
 </div>
 
 ---
 
-## 📖 Introduction
+##  Introduction
 
 **Raptor AI** is a next-generation autonomous static analysis and AI code review platform. Designed for modern engineering organizations, Raptor bridges the gap between traditional regex-bound linters and fully semantic AI agents. 
 
@@ -14,31 +14,31 @@ By integrating directly with your **GitHub Catalog** and utilizing **Google Gemi
 
 ---
 
-## ⚡ Core Capabilities
+##  Core Capabilities
 
-### 🛡️ Semantic Vulnerability Detection
+###  Semantic Vulnerability Detection
 Unlike standard static linters that produce overwhelming false positives based on keyword matching, Raptor understands semantic intent. It actively detects:
 - **Authentication & Authorization Bypasses**: Unvalidated route parameters, broken object-level authorization (BOLA), and improper token checks.
 - **Injection Vulnerabilities**: SQL injection, command injection, and Cross-Site Scripting (XSS) via unescaped string concatenation.
 - **Sensitive Data Exposure**: Unmasked API keys, hardcoded credentials, and leaked PII in logger streams.
 
-### 🚀 Database & Performance Profiling
+###  Database & Performance Profiling
 Raptor analyzes query structures and async loop lifecycles across modern ORMs (Prisma, SQLAlchemy, Django ORM, GORM):
 - **N+1 Query Detection**: Identifies database access patterns occurring within iterative loops and suggests batched query aggregations.
 - **Memory & Resource Leaks**: Highlights unclosed database connections, dangling event listeners, and runaway recursive promises.
 
-### 🛠️ Autonomous Fix & Pull Request Generation
+###  Autonomous Fix & Pull Request Generation
 Raptor does not just report issues; it acts autonomously to resolve them:
 - **AI Diff Suggestions**: Generates precise, production-ready replacement blocks formatted exactly to match your existing code style.
 - **One-Click Automated Fix PRs**: Clicking "Create Fix PR" automatically creates a patch branch, commits the verified AST fixes, and opens a fully documented Pull Request directly on your GitHub repository.
 
-### ⬛ Minimalist CLI-Inspired Design System
+###  Minimalist CLI-Inspired Design System
 - Built on a **pure black** aesthetic (`#000000`) with high-contrast typography and clean borders (`border-white/10`).
 - Eliminates visual clutter, popup modals, and ambient noise to provide developers with a lightning-fast, distraction-free review gateway.
 
 ---
 
-## 🏗️ System Architecture
+##  System Architecture
 
 ```
 React + Vite Frontend ↔ Python FastAPI REST API ↔ GitHub API & Webhooks ↔ Gemini 1.5 Pro
@@ -51,7 +51,7 @@ React + Vite Frontend ↔ Python FastAPI REST API ↔ GitHub API & Webhooks ↔ 
 
 ---
 
-## 🚀 Quick Start Guide
+##  Quick Start Guide
 
 ### Prerequisites
 - Python 3.10+
@@ -112,7 +112,7 @@ The frontend application will run live at `http://localhost:5173`.
 
 ---
 
-## 🛡️ Gateway Workflows
+##  Gateway Workflows
 
 1. **Connect GitHub Handshake**: Click **Login with GitHub** on the Gateway Dashboard to sync your account profile and active repositories.
 2. **Execute AST Scan**: Click **Scan Repository** on any connected repository card to trigger live static AST parsing and Gemini AI vulnerability evaluation.
@@ -121,7 +121,7 @@ The frontend application will run live at `http://localhost:5173`.
 
 ---
 
-## 📜 API Reference
+##  API Reference
 
 | HTTP Method | Endpoint | Description |
 |---|---|---|
@@ -135,6 +135,6 @@ The frontend application will run live at `http://localhost:5173`.
 
 ---
 
-## 📄 License
+##  License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
