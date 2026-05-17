@@ -1,11 +1,7 @@
 {
-    "experimentalServices": {
-        "frontend": {
-            "routePrefix": "/"
-        },
-        "backend": {
-            "entrypoint": "backend",
-            "routePrefix": "/_/backend"
-        }
-    }
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "http://localhost:8000/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
