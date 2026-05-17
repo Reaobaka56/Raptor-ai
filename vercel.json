@@ -24,3 +24,14 @@
     "NODE_ENV": "production"
   }
 }
+{
+    "experimentalServices": {
+        "frontend": {
+            "routePrefix": "/"
+        },
+        "backend": {
+            "entrypoint": "backend",
+            "routePrefix": "/_/backend"
+        }
+    }
+}
