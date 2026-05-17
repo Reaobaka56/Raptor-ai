@@ -1,0 +1,23 @@
+{
+  "name": "AI Code Review Agent",
+  "url": "https://your-domain.com",
+  "hook_attributes": {
+    "url": "https://your-domain.com/webhook/github",
+    "active": true
+  },
+  "redirect_url": "https://your-domain.com/install/callback",
+  "setup_url": "https://your-domain.com/install",
+  "setup_on_update": true,
+  "default_permissions": {
+    "pull_requests": "write",
+    "contents": "read",
+    "issues": "write",
+    "metadata": "read"
+  },
+  "default_events": [
+    "pull_request",
+    "installation",
+    "installation_repositories"
+  ],
+  "public": true
+}
