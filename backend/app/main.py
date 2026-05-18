@@ -23,6 +23,8 @@ from app.models import (
     RepositoryInfo, UserProfile, AuthResponse, ScanRequest, CreatePRResponse
 )
 from app.services.ai_service import ai_service
+from app.services.github_app import github_app_service
+
 
 app = FastAPI(
     title="Raptor AI Code Review Backend",
