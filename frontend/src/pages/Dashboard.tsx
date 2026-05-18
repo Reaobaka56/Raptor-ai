@@ -15,7 +15,7 @@ import {
   Lock,
   Globe
 } from 'lucide-react'
-import { statsApi, reviewsApi, reposApi, authApi, type Stats, type Review, type UserProfile } from '../api'
+import { statsApi, reviewsApi, reposApi, type Stats, type Review, type UserProfile } from '../api'
 import { formatDistanceToNow } from 'date-fns'
 
 function StatCard({ 
@@ -176,7 +176,6 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [user, setUser] = useState<UserProfile | null>(null)
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [scanningRepo, setScanningRepo] = useState<string | null>(null)
 
   useEffect(() => {
@@ -273,11 +272,11 @@ export default function Dashboard() {
             <div className="pt-2 font-mono">
               <button
                 onClick={handleLogin}
-                disabled={isLoggingIn}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded text-xs font-bold text-black bg-white hover:bg-gray-200 transition-colors tracking-wide disabled:opacity-50"
+                type="button"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded text-xs font-bold text-black bg-white hover:bg-gray-200 transition-colors tracking-wide"
               >
-                <Github className={`w-4 h-4 ${isLoggingIn ? 'animate-spin' : ''}`} />
-                {isLoggingIn ? 'Authenticating...' : 'Login with GitHub'}
+                <Github className="w-4 h-4" />
+                Login with GitHub
               </button>
             </div>
           </div>
