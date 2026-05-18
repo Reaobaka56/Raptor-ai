@@ -26,7 +26,6 @@ from app.models import (
     RepositoryInfo, UserProfile, AuthResponse, GitHubAuthRequest,
     GitHubLoginUrlResponse, ScanRequest, CreatePRResponse
 )
-
 # =====================================================================
 # FIXED INTERNAL IMPORTS FOR TWO-FILE FLAT LAYOUT
 # =====================================================================
