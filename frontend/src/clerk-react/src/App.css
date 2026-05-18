@@ -161,6 +161,34 @@
   }
 }
 
+.clerk-header {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 16px 32px;
+  box-sizing: border-box;
+}
+
+.auth-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.clerk-button {
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.clerk-button:hover {
+  background: var(--accent-bg);
+}
+
 .ticks {
   position: relative;
   width: 100%;
