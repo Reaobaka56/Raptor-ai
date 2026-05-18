@@ -6,3 +6,5 @@ requests
 python-dotenv
 google-generativeai
 psutil
+pyjwt
+cryptography

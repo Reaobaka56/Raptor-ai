@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { ReviewResult, PRContext } from '../types';
+import { ReviewIssue, ReviewResult, PRContext } from '../types';
 import { logger } from '../utils/logger';
 
 const prisma = new PrismaClient();
@@ -89,6 +89,8 @@ export async function getReviewStats(repo?: string) {
 
   let totalReviewTime = 0;
   const timeMap = new Map<string, { count: number; issues: number }>();
+  const severities = new Set<ReviewIssue['severity']>(['critical', 'high', 'medium', 'low']);
+  const categories = new Set<ReviewIssue['category']>(['security', 'performance', 'quality', 'design']);
 
   for (const review of reviews) {
     const issues = (review.issues as any[]) || [];
@@ -96,8 +98,8 @@ export async function getReviewStats(repo?: string) {
     totalReviewTime += review.reviewTimeMs || 0;
 
     for (const issue of issues) {
-      if (issue.severity) stats.issuesBySeverity[issue.severity]++;
-      if (issue.category) stats.issuesByCategory[issue.category]++;
+      if (severities.has(issue.severity)) stats.issuesBySeverity[issue.severity as ReviewIssue['severity']]++;
+      if (categories.has(issue.category)) stats.issuesByCategory[issue.category as ReviewIssue['category']]++;
     }
 
     const date = review.createdAt.toISOString().split('T')[0];

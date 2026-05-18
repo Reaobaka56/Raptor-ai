@@ -1,8 +1,7 @@
 import os
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, TypedDict
 from datetime import datetime
 import time
 import uuid
@@ -22,9 +21,12 @@ from app.models import (
     Review, ReviewIssue, ReviewsResponse, Pagination, Stats, 
     SeverityStats, CategoryStats, TimeSeriesPoint, WebhookPayload,
     SystemTelemetry, WebhookLogItem, ParserStatusItem,
-    RepositoryInfo, UserProfile, AuthResponse, AuthCallbackRequest, ScanRequest, CreatePRResponse
+    RepositoryInfo, UserProfile, AuthResponse, GitHubAuthRequest,
+    GitHubLoginUrlResponse, ScanRequest, CreatePRResponse
 )
 from app.services.ai_service import ai_service
+from app.services.github_app import github_app_service
+
 
 app = FastAPI(
     title="Raptor AI Code Review Backend",
@@ -42,6 +44,13 @@ app.add_middleware(
 
 START_TIME = time.time()
 ACTIVE_QUEUE_COUNT = 0
+
+class GitHubSession(TypedDict):
+    access_token: str
+    user: UserProfile
+    repositories: List[RepositoryInfo]
+
+USER_SESSIONS: Dict[str, GitHubSession] = {}
 
 LIVE_WEBHOOK_LOGS: List[WebhookLogItem] = [
     WebhookLogItem(id="wh_98a72b", repo="organization/api-gateway", event="pull_request.synchronize", status=200, time="20s ago"),
@@ -109,8 +118,7 @@ MOCK_REVIEWS: List[Review] = [
     )
 ]
 
-def get_github_auth_headers():
-    token = os.getenv("GITHUB_TOKEN")
+def get_github_auth_headers(token: Optional[str] = None):
     if not token:
         return None
     return {
@@ -119,97 +127,37 @@ def get_github_auth_headers():
         "X-GitHub-Api-Version": "2022-11-28"
     }
 
-def get_github_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise HTTPException(status_code=500, detail=f"Missing {name} environment variable")
-    return value
+def get_required_github_session(authorization: Optional[str] = Header(default=None)) -> GitHubSession:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authentication token")
 
-@app.get("/api/auth/github/login", tags=["Auth"])
-def github_login(redirectUri: str = Query(...), state: str = Query(...)):
-    client_id = get_github_env("GITHUB_CLIENT_ID")
-    params = {
-        "client_id": client_id,
-        "redirect_uri": redirectUri,
-        "scope": "repo read:user",
-        "state": state,
-        "allow_signup": "false",
-    }
-    auth_url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
-    return RedirectResponse(auth_url)
+    session_token = authorization.removeprefix("Bearer ").strip()
+    session = USER_SESSIONS.get(session_token)
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+    return session
 
-@app.post("/api/auth/github/callback", response_model=AuthResponse, tags=["Auth"])
-def github_callback(payload: AuthCallbackRequest):
-    client_id = get_github_env("GITHUB_CLIENT_ID")
-    client_secret = get_github_env("GITHUB_CLIENT_SECRET")
+def build_repository_list(access_token: str) -> List[RepositoryInfo]:
+    headers = get_github_auth_headers(access_token)
+    if not headers:
+        return []
 
-    token_payload = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "code": payload.code,
-    }
-    if payload.redirectUri:
-        token_payload["redirect_uri"] = payload.redirectUri
+    repos_res = requests.get("https://api.github.com/user/repos?per_page=30&sort=updated", headers=headers, timeout=10)
+    if repos_res.status_code != 200:
+        raise HTTPException(status_code=502, detail="Unable to fetch repositories from GitHub")
 
-    try:
-        token_res = requests.post(
-            "https://github.com/login/oauth/access_token",
-            json=token_payload,
-            headers={"Accept": "application/json"},
-            timeout=10,
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"GitHub token exchange failed: {exc}")
-
-    if token_res.status_code != 200:
-        raise HTTPException(status_code=502, detail="GitHub token exchange failed")
-
-    token_data = token_res.json()
-    access_token = token_data.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=400, detail="Failed to obtain GitHub access token")
-
-    auth_headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/vnd.github.v3+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-    user_res = requests.get("https://api.github.com/user", headers=auth_headers, timeout=10)
-    if user_res.status_code != 200:
-        raise HTTPException(status_code=502, detail="Unable to fetch GitHub user profile")
-
-    udata = user_res.json()
-    user = UserProfile(
-        username=udata.get("login", "developer"),
-        avatarUrl=udata.get("avatar_url", ""),
-        githubId=udata.get("id", 0),
-    )
-
-    repositories = MOCK_REPOSITORIES
-    repos_res = requests.get("https://api.github.com/user/repos?per_page=30&sort=updated", headers=auth_headers, timeout=10)
-    if repos_res.status_code == 200:
-        rdata = repos_res.json()
-        live_repos: List[RepositoryInfo] = []
-        for item in rdata:
-            lang = item.get("language") or "TypeScript"
-            live_repos.append(RepositoryInfo(
-                id=str(item.get("id")),
-                fullName=item.get("full_name"),
-                private=bool(item.get("private", False)),
-                defaultBranch=item.get("default_branch", "main"),
-                lastScan=None,
-                issuesCount=0,
-                language=lang,
-            ))
-        if live_repos:
-            repositories = live_repos
-
-    return AuthResponse(
-        token=f"raptor_gh_{uuid.uuid4().hex}",
-        user=user,
-        repositories=repositories,
-    )
+    repositories: List[RepositoryInfo] = []
+    for item in repos_res.json():
+        repositories.append(RepositoryInfo(
+            id=str(item.get("id")),
+            fullName=item.get("full_name"),
+            private=bool(item.get("private", False)),
+            defaultBranch=item.get("default_branch", "main"),
+            lastScan=None,
+            issuesCount=0,
+            language=item.get("language") or "TypeScript"
+        ))
+    return repositories
 
 @app.get("/health", tags=["Telemetry"])
 def health_check():
@@ -221,65 +169,80 @@ def health_check():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-@app.post("/api/auth/github", response_model=AuthResponse, tags=["Auth"])
-def authenticate_with_github():
-    global MOCK_REPOSITORIES
-    headers = get_github_auth_headers()
-    
-    # Default profile fallback
-    user = UserProfile(
-        username="github_developer",
-        avatarUrl="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-        githubId=9402120
-    )
-    
-    if headers:
-        try:
-            # Fetch real user profile
-            user_res = requests.get("https://api.github.com/user", headers=headers, timeout=10)
-            if user_res.status_code == 200:
-                udata = user_res.json()
-                user = UserProfile(
-                    username=udata.get("login", "developer"),
-                    avatarUrl=udata.get("avatar_url", user.avatarUrl),
-                    githubId=udata.get("id", 1)
-                )
-            
-            # Fetch real repositories
-            repos_res = requests.get("https://api.github.com/user/repos?per_page=30&sort=updated", headers=headers, timeout=10)
-            if repos_res.status_code == 200:
-                rdata = repos_res.json()
-                live_repos = []
-                for item in rdata:
-                    lang = item.get("language") or "TypeScript"
-                    live_repos.append(RepositoryInfo(
-                        id=str(item.get("id")),
-                        fullName=item.get("full_name"),
-                        private=bool(item.get("private", False)),
-                        defaultBranch=item.get("default_branch", "main"),
-                        lastScan=None,
-                        issuesCount=0,
-                        language=lang
-                    ))
-                if live_repos:
-                    MOCK_REPOSITORIES = live_repos
-        except Exception as e:
-            print(f"Error calling GitHub REST API: {e}")
+@app.get("/api/auth/github/login", response_model=GitHubLoginUrlResponse, tags=["Auth"])
+def get_github_login_url(state: str = Query(..., min_length=16), redirect_uri: str = Query(..., alias="redirectUri")):
+    client_id = os.getenv("GITHUB_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(status_code=500, detail="GitHub OAuth is not configured")
 
-    return AuthResponse(
-        token=f"raptor_gh_{uuid.uuid4().hex}",
-        user=user,
-        repositories=MOCK_REPOSITORIES
+    query = urlencode({
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "read:user repo",
+        "state": state,
+    })
+    return GitHubLoginUrlResponse(url=f"https://github.com/login/oauth/authorize?{query}")
+
+@app.post("/api/auth/github", response_model=AuthResponse, tags=["Auth"])
+def authenticate_with_github(auth: GitHubAuthRequest):
+    client_id = os.getenv("GITHUB_CLIENT_ID")
+    client_secret = os.getenv("GITHUB_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="GitHub OAuth is not configured")
+
+    token_res = requests.post(
+        "https://github.com/login/oauth/access_token",
+        headers={"Accept": "application/json"},
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": auth.code,
+            "redirect_uri": auth.redirectUri,
+        },
+        timeout=10,
     )
+    if token_res.status_code != 200:
+        raise HTTPException(status_code=502, detail="Unable to exchange GitHub authorization code")
+
+    token_data = token_res.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=401, detail=token_data.get("error_description", "GitHub authorization failed"))
+
+    headers = get_github_auth_headers(access_token)
+    user_res = requests.get("https://api.github.com/user", headers=headers, timeout=10)
+    if user_res.status_code != 200:
+        raise HTTPException(status_code=502, detail="Unable to fetch authenticated GitHub user")
+
+    udata = user_res.json()
+    user = UserProfile(
+        username=udata.get("login", "developer"),
+        avatarUrl=udata.get("avatar_url", ""),
+        githubId=udata.get("id", 0)
+    )
+    repositories = build_repository_list(access_token)
+
+    session_token = f"raptor_session_{uuid.uuid4().hex}"
+    USER_SESSIONS[session_token] = {
+        "access_token": access_token,
+        "user": user,
+        "repositories": repositories,
+    }
+
+    return AuthResponse(token=session_token, user=user, repositories=repositories)
 
 @app.get("/api/repos", response_model=List[RepositoryInfo], tags=["Repositories"])
-def get_repositories():
-    return MOCK_REPOSITORIES
+def get_repositories(session: GitHubSession = Depends(get_required_github_session)):
+    return session["repositories"]
 
 @app.post("/api/scan", response_model=Review, tags=["Scanning"])
-def trigger_repository_scan(req: ScanRequest):
+def trigger_repository_scan(req: ScanRequest, session: GitHubSession = Depends(get_required_github_session)):
     repo_name = req.repo
-    headers = get_github_auth_headers()
+    allowed_repos = {repo.fullName.lower() for repo in session["repositories"]}
+    if repo_name.lower() not in allowed_repos:
+        raise HTTPException(status_code=403, detail="Repository is not available to the authenticated GitHub user")
+
+    headers = get_github_auth_headers(session["access_token"])
     diff_text = None
     pr_num = 99
     pr_title = f"Autonomous scan of {repo_name}"
@@ -369,7 +332,7 @@ index e69de29..4b825dc 100644
     )
     MOCK_REVIEWS.insert(0, new_rev)
     
-    for r in MOCK_REPOSITORIES:
+    for r in session["repositories"]:
         if r.fullName.lower() == repo_name.lower():
             r.lastScan = datetime.utcnow().isoformat() + "Z"
             r.issuesCount = len(issues_list)

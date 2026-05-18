@@ -84,15 +84,26 @@ export interface AuthResponse {
   repositories: RepositoryInfo[]
 }
 
-export interface GithubAuthCallbackRequest {
-  code: string
-  state: string
-  redirectUri?: string
+export const getGithubRedirectUri = () => `${window.location.origin}/auth/github/callback`
+
+export const startGithubLogin = async () => {
+  const state = crypto.randomUUID()
+  sessionStorage.setItem('github_oauth_state', state)
+  const res = await api.get<{ url: string }>('/auth/github/login', {
+    params: { state, redirectUri: getGithubRedirectUri() },
+  })
+  window.location.assign(res.data.url)
 }
 
+export const completeGithubLogin = (code: string) =>
+  api.post<AuthResponse>('/auth/github', {
+    code,
+    redirectUri: getGithubRedirectUri(),
+  })
+
 export const authApi = {
-  completeGithubLogin: (code: string, state: string, redirectUri?: string) =>
-    api.post<AuthResponse>('/auth/github/callback', { code, state, redirectUri }),
+  startGithubLogin,
+  completeGithubLogin,
 }
 
 export const reposApi = {

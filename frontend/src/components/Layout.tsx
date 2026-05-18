@@ -47,11 +47,15 @@ export default function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener('auth-change', checkAuth)
   }, [])
 
-  const handleLogin = () => {
-    const state = crypto.randomUUID()
-    sessionStorage.setItem('github_oauth_state', state)
-    const redirectUri = `${window.location.origin}/auth/github/callback`
-    window.location.href = `/api/auth/github/login?redirectUri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`
+  const handleLogin = async () => {
+    setIsLoggingIn(true)
+    try {
+      await authApi.startGithubLogin()
+    } catch (err) {
+      console.error('GitHub authentication failed', err)
+    } finally {
+      setIsLoggingIn(false)
+    }
   }
 
   const handleLogout = () => {
