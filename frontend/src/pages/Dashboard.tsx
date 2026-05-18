@@ -216,11 +216,13 @@ export default function Dashboard() {
   const handleLogin = async () => {
     setIsLoggingIn(true)
     try {
-      const res = await authApi.loginWithGithub()
-      localStorage.setItem('token', res.data.token)
-      localStorage.setItem('user', JSON.stringify(res.data.user))
-      setUser(res.data.user)
-      window.dispatchEvent(new Event('auth-change'))
+      const auth = await authApi.startGithubLogin()
+      if (auth) {
+        localStorage.setItem('token', auth.token)
+        localStorage.setItem('user', JSON.stringify(auth.user))
+        setUser(auth.user)
+        window.dispatchEvent(new Event('auth-change'))
+      }
     } catch (err) {
       console.error('GitHub authentication failed', err)
     } finally {
