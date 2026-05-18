@@ -132,7 +132,7 @@ router.post('/github', async (req: Request, res: Response) => {
     // Process webhook asynchronously
     await webhooks.receive({
       id: req.headers['x-github-delivery'] as string,
-      name: req.headers['x-github-event'] as string,
+      name: req.headers['x-github-event'] as any,
       payload: req.body,
     });
 
