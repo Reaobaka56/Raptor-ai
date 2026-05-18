@@ -1,15 +1,16 @@
-from flask import Flask, request, redirect
+from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
 import os
 import requests
 
-app = Flask(__name__)
+router = APIRouter()
 
-@app.route("/auth/github/callback")
-def github_callback():
-    code = request.args.get("code")
+@router.get("/auth/github/callback")
+async def github_callback(request: Request):
+    code = request.query_params.get("code")
 
     if not code:
-        return {"error": "Missing code"}, 400
+        return {"error": "Missing code"}
 
     # Exchange code for access token
     token_res = requests.post(
@@ -28,23 +29,23 @@ def github_callback():
 
     if not access_token:
         return {
-            "error": "Failed to get access token",
+            "error": "OAuth failed",
             "details": token_data
-        }, 400
+        }
 
-    # Fetch GitHub user
+    # Get GitHub user
     user_res = requests.get(
         "https://api.github.com/user",
         headers={
-            "Authorization": f"Bearer {access_token}"
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.github+json"
         },
         timeout=10
     )
 
     user = user_res.json()
 
-    # DEBUG: print or store user
-    print("GitHub user:", user["login"])
+    print("GitHub login:", user.get("login"))
 
-    # Redirect to frontend
-    return redirect("https://raptor-agent-ai.vercel.app/dashboard")
+    # Redirect to frontend dashboard
+    return RedirectResponse(url="https://raptor-agent-ai.vercel.app/dashboard")
