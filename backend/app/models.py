@@ -94,6 +94,11 @@ class AuthResponse(BaseModel):
     user: UserProfile
     repositories: List[RepositoryInfo]
 
+class AuthCallbackRequest(BaseModel):
+    code: str
+    state: str
+    redirectUri: Optional[str] = None
+
 class ScanRequest(BaseModel):
     repo: str
 
