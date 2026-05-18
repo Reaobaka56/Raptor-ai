@@ -84,8 +84,15 @@ export interface AuthResponse {
   repositories: RepositoryInfo[]
 }
 
+export interface GithubAuthCallbackRequest {
+  code: string
+  state: string
+  redirectUri?: string
+}
+
 export const authApi = {
-  loginWithGithub: () => api.post<AuthResponse>('/auth/github'),
+  completeGithubLogin: (code: string, state: string, redirectUri?: string) =>
+    api.post<AuthResponse>('/auth/github/callback', { code, state, redirectUri }),
 }
 
 export const reposApi = {

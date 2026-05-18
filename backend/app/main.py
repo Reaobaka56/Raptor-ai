@@ -1,11 +1,13 @@
 import os
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import time
 import uuid
 import requests
+from urllib.parse import urlencode
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,7 +22,7 @@ from app.models import (
     Review, ReviewIssue, ReviewsResponse, Pagination, Stats, 
     SeverityStats, CategoryStats, TimeSeriesPoint, WebhookPayload,
     SystemTelemetry, WebhookLogItem, ParserStatusItem,
-    RepositoryInfo, UserProfile, AuthResponse, ScanRequest, CreatePRResponse
+    RepositoryInfo, UserProfile, AuthResponse, AuthCallbackRequest, ScanRequest, CreatePRResponse
 )
 from app.services.ai_service import ai_service
 
@@ -116,6 +118,98 @@ def get_github_auth_headers():
         "Accept": "application/vnd.github.v3+json",
         "X-GitHub-Api-Version": "2022-11-28"
     }
+
+def get_github_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise HTTPException(status_code=500, detail=f"Missing {name} environment variable")
+    return value
+
+@app.get("/api/auth/github/login", tags=["Auth"])
+def github_login(redirectUri: str = Query(...), state: str = Query(...)):
+    client_id = get_github_env("GITHUB_CLIENT_ID")
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirectUri,
+        "scope": "repo read:user",
+        "state": state,
+        "allow_signup": "false",
+    }
+    auth_url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
+    return RedirectResponse(auth_url)
+
+@app.post("/api/auth/github/callback", response_model=AuthResponse, tags=["Auth"])
+def github_callback(payload: AuthCallbackRequest):
+    client_id = get_github_env("GITHUB_CLIENT_ID")
+    client_secret = get_github_env("GITHUB_CLIENT_SECRET")
+
+    token_payload = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": payload.code,
+    }
+    if payload.redirectUri:
+        token_payload["redirect_uri"] = payload.redirectUri
+
+    try:
+        token_res = requests.post(
+            "https://github.com/login/oauth/access_token",
+            json=token_payload,
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"GitHub token exchange failed: {exc}")
+
+    if token_res.status_code != 200:
+        raise HTTPException(status_code=502, detail="GitHub token exchange failed")
+
+    token_data = token_res.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Failed to obtain GitHub access token")
+
+    auth_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    user_res = requests.get("https://api.github.com/user", headers=auth_headers, timeout=10)
+    if user_res.status_code != 200:
+        raise HTTPException(status_code=502, detail="Unable to fetch GitHub user profile")
+
+    udata = user_res.json()
+    user = UserProfile(
+        username=udata.get("login", "developer"),
+        avatarUrl=udata.get("avatar_url", ""),
+        githubId=udata.get("id", 0),
+    )
+
+    repositories = MOCK_REPOSITORIES
+    repos_res = requests.get("https://api.github.com/user/repos?per_page=30&sort=updated", headers=auth_headers, timeout=10)
+    if repos_res.status_code == 200:
+        rdata = repos_res.json()
+        live_repos: List[RepositoryInfo] = []
+        for item in rdata:
+            lang = item.get("language") or "TypeScript"
+            live_repos.append(RepositoryInfo(
+                id=str(item.get("id")),
+                fullName=item.get("full_name"),
+                private=bool(item.get("private", False)),
+                defaultBranch=item.get("default_branch", "main"),
+                lastScan=None,
+                issuesCount=0,
+                language=lang,
+            ))
+        if live_repos:
+            repositories = live_repos
+
+    return AuthResponse(
+        token=f"raptor_gh_{uuid.uuid4().hex}",
+        user=user,
+        repositories=repositories,
+    )
 
 @app.get("/health", tags=["Telemetry"])
 def health_check():
