@@ -3,12 +3,31 @@ import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import heroImg from './assets/hero.png'
 import './App.css'
+import { SignedIn, SignedOut, SignInButton, SignOutButton, UserButton } from '@clerk/clerk-react'
 
 function App() {
   const [count, setCount] = useState(0)
 
   return (
     <>
+      <header className="clerk-header">
+        <SignedIn>
+          <div className="auth-row">
+            <UserButton />
+            <SignOutButton>
+              <button type="button" className="clerk-button">Sign out</button>
+            </SignOutButton>
+          </div>
+        </SignedIn>
+        <SignedOut>
+          <div className="auth-row">
+            <SignInButton>
+              <button type="button" className="clerk-button">Sign in</button>
+            </SignInButton>
+          </div>
+        </SignedOut>
+      </header>
+
       <section id="center">
         <div className="hero">
           <img src={heroImg} className="base" width="170" height="179" alt="" />
