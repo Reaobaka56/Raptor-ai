@@ -56,7 +56,7 @@ React + Vite Frontend ↔ Python FastAPI REST API ↔ GitHub API & Webhooks ↔ 
 ### Prerequisites
 - Python 3.10+
 - Node.js 18+
-- GitHub Account & Personal Access Token / OAuth Client Credentials
+- GitHub Account & OAuth Client Credentials
 - Google Gemini API Key
 
 ---
@@ -76,11 +76,12 @@ Create or edit your `.env` file with your active keys:
 # GitHub Credentials
 GITHUB_CLIENT_ID=your_github_client_id
 GITHUB_CLIENT_SECRET=your_github_client_secret
-GITHUB_TOKEN=your_github_personal_access_token
 
 # AI Model Configuration
 GEMINI_API_KEY=your_google_gemini_api_key
 ```
+
+Configure your GitHub OAuth app callback URL as `<frontend-origin>/auth/github/callback` (for local development, `http://localhost:5173/auth/github/callback`).
 
 ---
 
@@ -125,7 +126,8 @@ The frontend application will run live at `http://localhost:5173`.
 
 | HTTP Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/auth/github` | Authenticates GitHub session and fetches profile details |
+| `GET` | `/api/auth/github/login` | Starts the GitHub OAuth login flow |
+| `POST` | `/api/auth/github` | Exchanges a GitHub OAuth code for a per-user session and repository list |
 | `GET` | `/api/repos` | Retrieves list of user repositories from GitHub REST API |
 | `POST` | `/api/scan` | Executes Gemini 1.5 Pro AST scan on selected repository |
 | `GET` | `/api/reviews` | Retrieves paginated scan execution reports |
