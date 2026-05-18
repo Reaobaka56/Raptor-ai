@@ -2,7 +2,7 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any, TypedDict
+from typing import List, Optional, Dict, Any, TypedDict, Literal
 import requests
 from urllib.parse import urlencode
 from dotenv import load_dotenv
@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Depends, Header, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -19,26 +20,160 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-from app.models import (
-    Review, ReviewIssue, ReviewsResponse, Pagination, Stats, 
-    SeverityStats, CategoryStats, TimeSeriesPoint, WebhookPayload,
-    SystemTelemetry, WebhookLogItem, ParserStatusItem,
-    RepositoryInfo, UserProfile, AuthResponse, GitHubAuthRequest,
-    GitHubLoginUrlResponse, ScanRequest, CreatePRResponse
-)
 # =====================================================================
-# FIXED INTERNAL IMPORTS FOR TWO-FILE FLAT LAYOUT
+# INTEGRATED PYDANTIC MODELS (No external models.py import needed!)
 # =====================================================================
-# Import directly from github_app.py in the root directory
+class ReviewIssue(BaseModel):
+    file: str = Field(..., description="Target file path")
+    line: int = Field(..., description="Line number of the issue")
+    severity: Literal['critical', 'high', 'medium', 'low']
+    category: Literal['security', 'performance', 'quality', 'design']
+    title: str
+    description: str
+    suggestion: str
+
+class Review(BaseModel):
+    id: int
+    githubRepo: str
+    prNumber: int
+    prTitle: Optional[str] = None
+    prUrl: Optional[str] = None
+    issues: List[ReviewIssue] = []
+    summary: Optional[str] = None
+    status: str = "completed"
+    reviewTimeMs: Optional[int] = None
+    createdAt: str
+
+class Pagination(BaseModel):
+    total: int
+    limit: int
+    offset: int
+
+class ReviewsResponse(BaseModel):
+    reviews: List[Review]
+    pagination: Pagination
+
+class SeverityStats(BaseModel):
+    critical: int
+    high: int
+    medium: int
+    low: int
+
+class CategoryStats(BaseModel):
+    security: int
+    performance: int
+    quality: int
+    design: int
+
+class TimeSeriesPoint(BaseModel):
+    date: str
+    count: int
+    issues: int
+
+class Stats(BaseModel):
+    totalReviews: int
+    totalIssues: int
+    avgReviewTime: int
+    issuesBySeverity: SeverityStats
+    issuesByCategory: CategoryStats
+    reviewsOverTime: List[TimeSeriesPoint]
+
+class PullRequestModel(BaseModel):
+    number: int
+    title: str
+    html_url: str
+    diff_url: str
+    state: str
+
+class RepositoryModel(BaseModel):
+    full_name: str
+    html_url: str
+
+class InstallationModel(BaseModel):
+    id: int
+
+class WebhookPayload(BaseModel):
+    action: Optional[str] = None
+    pull_request: Optional[PullRequestModel] = None
+    repository: Optional[RepositoryModel] = None
+    installation: Optional[InstallationModel] = None
+
+class RepositoryInfo(BaseModel):
+    id: str
+    fullName: str
+    private: bool
+    defaultBranch: str
+    lastScan: Optional[str] = None
+    issuesCount: int = 0
+    language: str
+
+class UserProfile(BaseModel):
+    username: str
+    avatarUrl: str
+    githubId: int
+
+class GitHubLoginUrlResponse(BaseModel):
+    url: str
+
+class GitHubAuthRequest(BaseModel):
+    code: str
+    redirectUri: str
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserProfile
+    repositories: List[RepositoryInfo]
+
+class AuthCallbackRequest(BaseModel):
+    code: str
+    state: str
+    redirectUri: Optional[str] = None
+
+class ScanRequest(BaseModel):
+    repo: str
+
+class CreatePRResponse(BaseModel):
+    status: str
+    prNumber: int
+    prUrl: str
+    message: str
+
+class WebhookLogItem(BaseModel):
+    id: str
+    repo: str
+    event: str
+    status: int
+    time: str
+
+class ParserStatusItem(BaseModel):
+    language: str
+    version: str
+    status: str
+    cacheHits: str
+
+class SystemTelemetry(BaseModel):
+    cpuLoad: float
+    astCacheRate: float
+    queueBacklog: int
+    memoryUsedGb: float
+    memoryTotalGb: float
+    uptimeSec: int
+    parsers: List[ParserStatusItem]
+    webhookLogs: List[WebhookLogItem]
+
+# =====================================================================
+# FIXED INTERNAL COMPONSENT IMPORTS
+# =====================================================================
 from github_app import github_app_service
 
-# Inline fallback to prevent crashing due to missing app/services/ai_service.py
 class InlineAIService:
     def analyze_ast(self, prompt: str) -> str:
         return "Raptor local AST validation completed successfully."
 ai_service = InlineAIService()
-# =====================================================================
 
+# =====================================================================
+# FASTAPI APPLICATION SETUP
+# =====================================================================
 app = FastAPI(
     title="Raptor AI Code Review Backend",
     description="Autonomous live GitHub integration and Gemini AST analysis engine",
@@ -196,10 +331,6 @@ def get_github_login_url(state: str = Query(..., min_length=16), redirect_uri: s
 
 @app.get("/api/auth/github/callback")
 def github_callback(code: str = Query(None), state: str = Query(None)):
-    """
-    Unified Callback Endpoint. Processes code exchange, creates session state, 
-    injects cookies and routes context cleanly back into the Vercel dashboard UI.
-    """
     if not code:
         raise HTTPException(status_code=400, detail="Missing OAuth exchange code")
 
