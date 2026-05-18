@@ -69,10 +69,15 @@ class RepositoryModel(BaseModel):
     full_name: str
     html_url: str
 
+class InstallationModel(BaseModel):
+    id: int
+
 class WebhookPayload(BaseModel):
-    action: str
-    pull_request: PullRequestModel
-    repository: RepositoryModel
+    action: Optional[str] = None
+    pull_request: Optional[PullRequestModel] = None
+    repository: Optional[RepositoryModel] = None
+    installation: Optional[InstallationModel] = None
+
 
 # GitHub Auth & Repository management models
 class RepositoryInfo(BaseModel):
