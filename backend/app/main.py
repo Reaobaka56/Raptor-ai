@@ -1,13 +1,15 @@
 import os
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Depends, Header
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional, Dict, Any, TypedDict
-from datetime import datetime
 import time
 import uuid
+from datetime import datetime, timezone
+from typing import List, Optional, Dict, Any, TypedDict
 import requests
 from urllib.parse import urlencode
 from dotenv import load_dotenv
+
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Depends, Header, Cookie
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 load_dotenv()
 
@@ -27,7 +29,6 @@ from app.models import (
 from app.services.ai_service import ai_service
 from app.services.github_app import github_app_service
 
-
 app = FastAPI(
     title="Raptor AI Code Review Backend",
     description="Autonomous live GitHub integration and Gemini AST analysis engine",
@@ -36,7 +37,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], # In production, replace with specific frontend origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +50,7 @@ class GitHubSession(TypedDict):
     access_token: str
     user: UserProfile
     repositories: List[RepositoryInfo]
+    created_at: str
 
 USER_SESSIONS: Dict[str, GitHubSession] = {}
 
@@ -127,14 +129,26 @@ def get_github_auth_headers(token: Optional[str] = None):
         "X-GitHub-Api-Version": "2022-11-28"
     }
 
-def get_required_github_session(authorization: Optional[str] = Header(default=None)) -> GitHubSession:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing authentication token")
+def get_required_github_session(
+    authorization: Optional[str] = Header(default=None),
+    raptor_session: Optional[str] = Cookie(default=None)
+) -> GitHubSession:
+    """
+    Resolves session via either the Authorization Header OR fallback secure Cookie middleware.
+    """
+    session_token = None
+    
+    if authorization and authorization.startswith("Bearer "):
+        session_token = authorization.removeprefix("Bearer ").strip()
+    elif raptor_session:
+        session_token = raptor_session
 
-    session_token = authorization.removeprefix("Bearer ").strip()
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Missing authentication credentials")
+
     session = USER_SESSIONS.get(session_token)
     if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+        raise HTTPException(status_code=401, detail="Invalid or expired session context")
     return session
 
 def build_repository_list(access_token: str) -> List[RepositoryInfo]:
@@ -142,22 +156,26 @@ def build_repository_list(access_token: str) -> List[RepositoryInfo]:
     if not headers:
         return []
 
-    repos_res = requests.get("https://api.github.com/user/repos?per_page=30&sort=updated", headers=headers, timeout=10)
-    if repos_res.status_code != 200:
-        raise HTTPException(status_code=502, detail="Unable to fetch repositories from GitHub")
+    try:
+        repos_res = requests.get("https://api.github.com/user/repos?per_page=30&sort=updated", headers=headers, timeout=10)
+        if repos_res.status_code != 200:
+            raise HTTPException(status_code=502, detail="Unable to fetch repositories from GitHub")
+        
+        repositories: List[RepositoryInfo] = []
+        for item in repos_res.json():
+            repositories.append(RepositoryInfo(
+                id=str(item.get("id")),
+                fullName=item.get("full_name"),
+                private=bool(item.get("private", False)),
+                defaultBranch=item.get("default_branch", "main"),
+                lastScan=None,
+                issuesCount=0,
+                language=item.get("language") or "TypeScript"
+            ))
+        return repositories
+    except requests.RequestException:
+        raise HTTPException(status_code=502, detail="GitHub API gateway connection failure")
 
-    repositories: List[RepositoryInfo] = []
-    for item in repos_res.json():
-        repositories.append(RepositoryInfo(
-            id=str(item.get("id")),
-            fullName=item.get("full_name"),
-            private=bool(item.get("private", False)),
-            defaultBranch=item.get("default_branch", "main"),
-            lastScan=None,
-            issuesCount=0,
-            language=item.get("language") or "TypeScript"
-        ))
-    return repositories
 
 @app.get("/health", tags=["Telemetry"])
 def health_check():
@@ -166,7 +184,7 @@ def health_check():
         "uptime_sec": int(time.time() - START_TIME),
         "queue_active": ACTIVE_QUEUE_COUNT,
         "engine": "Raptor v2.0 Live Engine", 
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 @app.get("/api/auth/github/login", response_model=GitHubLoginUrlResponse, tags=["Auth"])
@@ -227,6 +245,7 @@ def authenticate_with_github(auth: GitHubAuthRequest):
         "access_token": access_token,
         "user": user,
         "repositories": repositories,
+        "created_at": datetime.now(timezone.utc).isoformat()
     }
 
     return AuthResponse(token=session_token, user=user, repositories=repositories)
@@ -236,7 +255,7 @@ def get_repositories(session: GitHubSession = Depends(get_required_github_sessio
     return session["repositories"]
 
 @app.post("/api/scan", response_model=Review, tags=["Scanning"])
-def trigger_repository_scan(req: ScanRequest, session: GitHubSession = Depends(get_required_github_session)):
+async def trigger_repository_scan(req: ScanRequest, session: GitHubSession = Depends(get_required_github_session)):
     repo_name = req.repo
     allowed_repos = {repo.fullName.lower() for repo in session["repositories"]}
     if repo_name.lower() not in allowed_repos:
@@ -248,10 +267,8 @@ def trigger_repository_scan(req: ScanRequest, session: GitHubSession = Depends(g
     pr_title = f"Autonomous scan of {repo_name}"
     pr_url = f"https://github.com/{repo_name}/pull/99"
 
-    # Attempt to fetch real commit or PR diff from GitHub API
     if headers:
         try:
-            # Check for active PRs
             prs_res = requests.get(f"https://api.github.com/repos/{repo_name}/pulls?state=open&per_page=1", headers=headers, timeout=10)
             if prs_res.status_code == 200 and prs_res.json():
                 pr_item = prs_res.json()[0]
@@ -264,7 +281,6 @@ def trigger_repository_scan(req: ScanRequest, session: GitHubSession = Depends(g
                     if diff_res.status_code == 200:
                         diff_text = diff_res.text
             else:
-                # Fetch latest commit diff
                 commits_res = requests.get(f"https://api.github.com/repos/{repo_name}/commits?per_page=1", headers=headers, timeout=10)
                 if commits_res.status_code == 200 and commits_res.json():
                     sha = commits_res.json()[0].get("sha")
@@ -277,17 +293,17 @@ def trigger_repository_scan(req: ScanRequest, session: GitHubSession = Depends(g
             print(f"Failed to fetch live diff for {repo_name}: {e}")
 
     if not diff_text:
-        diff_text = f"""diff --git a/src/auth.ts b/src/auth.ts
+        diff_text = """diff --git a/src/auth.ts b/src/auth.ts
 index e69de29..4b825dc 100644
 --- a/src/auth.ts
 +++ b/src/auth.ts
 @@ -10,3 +10,4 @@
 - const token = jwt.verify(req.body.token, secret);
-+ const query = `SELECT * FROM users WHERE email = '${{req.body.email}}'`; // raw sql
++ const query = `SELECT * FROM users WHERE email = '${req.body.email}'`; // raw sql
 """
 
-    # Run real live Gemini AI analysis
-    analysis = ai_service.analyze_pr(
+    # Handled asynchronously in case ai_service interfaces with an async library natively
+    analysis = await ai_service.analyze_pr(
         repo=repo_name,
         pr_number=pr_num,
         pr_title=pr_title,
@@ -328,13 +344,13 @@ index e69de29..4b825dc 100644
         summary=analysis.get("summary", f"Raptor live AST analysis detected {len(issues_list)} flaws in {repo_name}."),
         status="completed",
         reviewTimeMs=analysis.get("reviewTimeMs", 950),
-        createdAt=datetime.utcnow().isoformat() + "Z"
+        createdAt=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     )
     MOCK_REVIEWS.insert(0, new_rev)
     
     for r in session["repositories"]:
         if r.fullName.lower() == repo_name.lower():
-            r.lastScan = datetime.utcnow().isoformat() + "Z"
+            r.lastScan = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             r.issuesCount = len(issues_list)
             
     return new_rev
@@ -418,14 +434,14 @@ def get_telemetry_stats(repo: Optional[str] = None):
 @app.get("/api/telemetry", response_model=SystemTelemetry, tags=["Telemetry"])
 def get_realtime_system_telemetry():
     cpu_load = 12.4
-    mem_used = 2.1
-    mem_tot = 16.0
+    memory_used = 2.1
+    memory_total = 16.0
     
     if HAS_PSUTIL:
         cpu_load = round(psutil.cpu_percent(interval=0.1), 1)
         vm = psutil.virtual_memory()
-        mem_used = round(vm.used / (1024**3), 2)
-        mem_tot = round(vm.total / (1024**3), 1)
+        memory_used = round(vm.used / (1024**3), 2)
+        memory_total = round(vm.total / (1024**3), 1)
     
     total_ast_hits = sum(d["hits"] for d in AST_CACHE_STATS.values())
     total_ast_reqs = sum(d["total"] for d in AST_CACHE_STATS.values())
@@ -445,9 +461,76 @@ def get_realtime_system_telemetry():
         cpuLoad=cpu_load,
         astCacheRate=ast_rate,
         queueBacklog=ACTIVE_QUEUE_COUNT,
-        memoryUsedGb=mem_used,
-        memoryTotalGb=mem_tot,
+        memoryUsedGb=memory_used,
+        memoryTotalGb=memory_total,
         uptimeSec=int(time.time() - START_TIME),
         parsers=parser_items,
         webhookLogs=LIVE_WEBHOOK_LOGS[:10]
     )
+
+@app.get("/auth/github/callback")
+def github_callback(code: str = Query(None), state: str = Query(None)):
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing OAuth code")
+
+    client_id = os.getenv("GITHUB_CLIENT_ID")
+    client_secret = os.getenv("GITHUB_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
+
+    token_res = requests.post(
+        "https://github.com/login/oauth/access_token",
+        headers={"Accept": "application/json"},
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+        },
+        timeout=10
+    )
+
+    token_data = token_res.json()
+    access_token = token_data.get("access_token")
+
+    if not access_token:
+        raise HTTPException(status_code=401, detail="OAuth verification failed")
+
+    user_res = requests.get(
+        "https://api.github.com/user",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=10
+    )
+
+    if user_res.status_code != 200:
+        raise HTTPException(status_code=502, detail="GitHub user fetch failed")
+
+    user_data = user_res.json()
+
+    user = UserProfile(
+        username=user_data.get("login"),
+        avatarUrl=user_data.get("avatar_url"),
+        githubId=user_data.get("id")
+    )
+
+    repositories = build_repository_list(access_token)
+    session_token = uuid.uuid4().hex
+
+    USER_SESSIONS[session_token] = {
+        "access_token": access_token,
+        "user": user,
+        "repositories": repositories,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    response = RedirectResponse(url="https://raptor-agent-ai.vercel.app/dashboard")
+    response.set_cookie(
+        key="raptor_session",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7
+    )
+
+    return response
