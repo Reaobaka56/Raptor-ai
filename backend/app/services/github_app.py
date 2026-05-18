@@ -1,51 +1,47 @@
-from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
 import os
 import requests
+from typing import Dict, Any
 
-router = APIRouter()
+class GitHubAppService:
+    def __init__(self):
+        self.client_id = os.getenv("GITHUB_CLIENT_ID")
+        self.client_secret = os.getenv("GITHUB_CLIENT_SECRET")
+        # Base URLs for GitHub REST interactions
+        self.base_url = "https://api.github.com"
 
-@router.get("/auth/github/callback")
-async def github_callback(request: Request):
-    code = request.query_params.get("code")
-
-    if not code:
-        return {"error": "Missing code"}
-
-    # Exchange code for access token
-    token_res = requests.post(
-        "https://github.com/login/oauth/access_token",
-        headers={"Accept": "application/json"},
-        data={
-            "client_id": os.getenv("GITHUB_CLIENT_ID"),
-            "client_secret": os.getenv("GITHUB_CLIENT_SECRET"),
-            "code": code,
-        },
-        timeout=10
-    )
-
-    token_data = token_res.json()
-    access_token = token_data.get("access_token")
-
-    if not access_token:
+    def process_webhook_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Processes incoming payload data from live GitHub App webhooks 
+        (e.g., pull_request event triggers).
+        """
+        event_type = payload.get("action")
+        repo_name = payload.get("repository", {}).get("full_name")
+        
+        # Add background processing or analysis logic here
         return {
-            "error": "OAuth failed",
-            "details": token_data
+            "processed": True,
+            "repo": repo_name,
+            "event": event_type
         }
 
-    # Get GitHub user
-    user_res = requests.get(
-        "https://api.github.com/user",
-        headers={
-            "Authorization": f"Bearer {access_token}",
+    def post_pr_comment(self, repo_full_name: str, pr_number: int, comment_body: str, token: str) -> bool:
+        """
+        Posts code review results or automated comments directly onto a GitHub PR.
+        """
+        url = f"{self.base_url}/repos/{repo_full_name}/issues/{pr_number}/comments"
+        headers = {
+            "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json"
-        },
-        timeout=10
-    )
+        }
+        
+        try:
+            res = requests.post(url, json={"body": comment_body}, headers=headers, timeout=10)
+            return res.status_code == 201
+        except requests.RequestException:
+            return False
 
-    user = user_res.json()
-
-    print("GitHub login:", user.get("login"))
-
-    # Redirect to frontend dashboard
-    return RedirectResponse(url="https://raptor-agent-ai.vercel.app/dashboard")
+# =====================================================================
+# CRITICAL EXPORT
+# This instantiates the exact object name expected by main.py line 30
+# =====================================================================
+github_app_service = GitHubAppService()
