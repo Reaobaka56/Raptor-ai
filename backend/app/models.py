@@ -94,6 +94,13 @@ class UserProfile(BaseModel):
     avatarUrl: str
     githubId: int
 
+class GitHubLoginUrlResponse(BaseModel):
+    url: str
+
+class GitHubAuthRequest(BaseModel):
+    code: str
+    redirectUri: str
+
 class AuthResponse(BaseModel):
     token: str
     user: UserProfile
