@@ -7,28 +7,39 @@ import ReviewDetail from './pages/ReviewDetail'
 import Analytics from './pages/Analytics'
 import Docs from './pages/Docs'
 import Blog from './pages/Blog'
+import GithubCallback from './pages/GithubCallback'
 import Changelog from './pages/Changelog'
 import Discord from './pages/Discord'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
-import GithubCallback from './pages/GithubCallback'
+import { ClerkProvider, SignInButton, SignUpButton, UserButton } from '@clerk/react'
+import './index.css'
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/docs" element={<Docs />} />
-      <Route path="/blog" element={<Blog />} />
-      <Route path="/changelog" element={<Changelog />} />
-      <Route path="/discord" element={<Discord />} />
-      <Route path="/terms" element={<Terms />} />
-      <Route path="/privacy" element={<Privacy />} />
-      <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
-      <Route path="/reviews" element={<Layout><Reviews /></Layout>} />
-      <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
-      <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
-      <Route path="/auth/github/callback" element={<GithubCallback />} />
-    </Routes>
+    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+      <>
+        <header>
+          <SignInButton />
+          <SignUpButton />
+          <UserButton />
+        </header>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/docs" element={<Docs />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/changelog" element={<Changelog />} />
+          <Route path="/discord" element={<Discord />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/auth/github/callback" element={<GithubCallback />} />
+          <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
+          <Route path="/reviews" element={<Layout><Reviews /></Layout>} />
+          <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
+          <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
+        </Routes>
+      </>
+    </ClerkProvider>
   )
 }
 

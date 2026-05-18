@@ -1,40 +1,34 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Github } from 'lucide-react'
 import { authApi } from '../api'
 
 export default function GithubCallback() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(null)
-  const navigate = useNavigate()
 
   useEffect(() => {
-    const code = searchParams.get('code')
-    const state = searchParams.get('state')
-    const savedState = sessionStorage.getItem('github_oauth_state')
-
-    if (!code || !state || !savedState) {
-      setError('Missing GitHub callback parameters. Please try again.')
-      return
-    }
-
-    if (state !== savedState) {
-      setError('GitHub state validation failed. Please retry login.')
-      return
-    }
-
-    const redirectUri = `${window.location.origin}/auth/github/callback`
-
     const completeLogin = async () => {
+      const code = searchParams.get('code')
+      const returnedState = searchParams.get('state')
+      const expectedState = sessionStorage.getItem('github_oauth_state')
+      sessionStorage.removeItem('github_oauth_state')
+
+      if (!code || !returnedState || !expectedState || returnedState !== expectedState) {
+        setError('GitHub sign-in could not be verified. Please try connecting again.')
+        return
+      }
+
       try {
-        const res = await authApi.completeGithubLogin(code, state, redirectUri)
+        const res = await authApi.completeGithubLogin(code)
         localStorage.setItem('token', res.data.token)
         localStorage.setItem('user', JSON.stringify(res.data.user))
-        sessionStorage.removeItem('github_oauth_state')
         window.dispatchEvent(new Event('auth-change'))
         navigate('/dashboard', { replace: true })
       } catch (err) {
-        console.error('GitHub callback failed', err)
-        setError('Unable to complete GitHub login. Please try again.')
+        console.error('GitHub authentication failed', err)
+        setError('GitHub sign-in failed. Please try connecting again.')
       }
     }
 
@@ -42,29 +36,22 @@ export default function GithubCallback() {
   }, [navigate, searchParams])
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-24">
-      <div className="max-w-xl w-full text-center space-y-6">
-        <h1 className="text-3xl font-semibold">Finishing GitHub sign-in</h1>
+    <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 font-sans">
+      <div className="max-w-md w-full border border-white/10 rounded-xl p-8 bg-white/5 text-center space-y-5">
+        <Github className="w-10 h-10 mx-auto" />
         {error ? (
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-left space-y-4">
-            <p className="text-sm text-red-300">{error}</p>
-            <div className="flex flex-col gap-3 sm:flex-row justify-center">
-              <Link
-                to="/"
-                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Back to home
-              </Link>
-              <Link
-                to="/dashboard"
-                className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
-              >
-                Try login again
-              </Link>
-            </div>
-          </div>
+          <>
+            <h1 className="text-xl font-bold">Unable to connect GitHub</h1>
+            <p className="text-sm text-gray-400">{error}</p>
+            <Link to="/dashboard" className="inline-flex bg-white text-black px-4 py-2 rounded text-xs font-bold">
+              Back to Dashboard
+            </Link>
+          </>
         ) : (
-          <p className="text-sm text-slate-300">Please wait while we complete your GitHub login.</p>
+          <>
+            <h1 className="text-xl font-bold">Completing GitHub sign-in…</h1>
+            <p className="text-sm text-gray-400">Verifying that this browser started the OAuth request.</p>
+          </>
         )}
       </div>
     </div>
