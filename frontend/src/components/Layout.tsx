@@ -51,13 +51,7 @@ export default function Layout({ children }: LayoutProps) {
   const handleLogin = async () => {
     setIsLoggingIn(true)
     try {
-      const auth = await authApi.startGithubLogin()
-      if (auth) {
-        localStorage.setItem('token', auth.token)
-        localStorage.setItem('user', JSON.stringify(auth.user))
-        setUser(auth.user)
-        window.dispatchEvent(new Event('auth-change'))
-      }
+      await authApi.startGithubLogin()
     } catch (err) {
       console.error('GitHub authentication failed', err)
     } finally {

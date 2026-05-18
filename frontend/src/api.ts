@@ -86,22 +86,13 @@ export interface AuthResponse {
 
 export const getGithubRedirectUri = () => `${window.location.origin}/auth/github/callback`
 
-const isLocalDevelopment = () =>
-  Boolean((import.meta as any).env?.DEV) && ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
-
 export const startGithubLogin = async () => {
-  if (isLocalDevelopment()) {
-    const res = await api.post<AuthResponse>('/auth/github/dev-token')
-    return res.data
-  }
-
   const state = crypto.randomUUID()
   sessionStorage.setItem('github_oauth_state', state)
   const res = await api.get<{ url: string }>('/auth/github/login', {
     params: { state, redirectUri: getGithubRedirectUri() },
   })
   window.location.assign(res.data.url)
-  return null
 }
 
 export const completeGithubLogin = (code: string) =>
