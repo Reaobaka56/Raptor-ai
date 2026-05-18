@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 import uuid
 import requests
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -157,36 +157,6 @@ def build_repository_list(access_token: str) -> List[RepositoryInfo]:
         ))
     return repositories
 
-def is_local_development_origin(origin: Optional[str]) -> bool:
-    if not origin:
-        return False
-
-    hostname = urlparse(origin).hostname
-    return hostname in {"localhost", "127.0.0.1", "::1"}
-
-def create_github_session(access_token: str) -> AuthResponse:
-    headers = get_github_auth_headers(access_token)
-    user_res = requests.get("https://api.github.com/user", headers=headers, timeout=10)
-    if user_res.status_code != 200:
-        raise HTTPException(status_code=502, detail="Unable to fetch authenticated GitHub user")
-
-    udata = user_res.json()
-    user = UserProfile(
-        username=udata.get("login", "developer"),
-        avatarUrl=udata.get("avatar_url", ""),
-        githubId=udata.get("id", 0)
-    )
-    repositories = build_repository_list(access_token)
-
-    session_token = f"raptor_session_{uuid.uuid4().hex}"
-    USER_SESSIONS[session_token] = {
-        "access_token": access_token,
-        "user": user,
-        "repositories": repositories,
-    }
-
-    return AuthResponse(token=session_token, user=user, repositories=repositories)
-
 @app.get("/health", tags=["Telemetry"])
 def health_check():
     return {
@@ -237,18 +207,27 @@ def authenticate_with_github(auth: GitHubAuthRequest):
     if not access_token:
         raise HTTPException(status_code=401, detail=token_data.get("error_description", "GitHub authorization failed"))
 
-    return create_github_session(access_token)
+    headers = get_github_auth_headers(access_token)
+    user_res = requests.get("https://api.github.com/user", headers=headers, timeout=10)
+    if user_res.status_code != 200:
+        raise HTTPException(status_code=502, detail="Unable to fetch authenticated GitHub user")
 
-@app.post("/api/auth/github/dev-token", response_model=AuthResponse, tags=["Auth"])
-def authenticate_with_development_github_token(origin: Optional[str] = Header(default=None)):
-    if os.getenv("ENVIRONMENT") != "development" or not is_local_development_origin(origin):
-        raise HTTPException(status_code=404, detail="Not found")
+    udata = user_res.json()
+    user = UserProfile(
+        username=udata.get("login", "developer"),
+        avatarUrl=udata.get("avatar_url", ""),
+        githubId=udata.get("id", 0)
+    )
+    repositories = build_repository_list(access_token)
 
-    token = os.getenv("GITHUB_TOKEN")
-    if not token:
-        raise HTTPException(status_code=500, detail="Development GitHub token is not configured")
+    session_token = f"raptor_session_{uuid.uuid4().hex}"
+    USER_SESSIONS[session_token] = {
+        "access_token": access_token,
+        "user": user,
+        "repositories": repositories,
+    }
 
-    return create_github_session(token)
+    return AuthResponse(token=session_token, user=user, repositories=repositories)
 
 @app.get("/api/repos", response_model=List[RepositoryInfo], tags=["Repositories"])
 def get_repositories(session: GitHubSession = Depends(get_required_github_session)):

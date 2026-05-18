@@ -81,7 +81,7 @@ GITHUB_CLIENT_SECRET=your_github_client_secret
 GEMINI_API_KEY=your_google_gemini_api_key
 ```
 
-Configure your GitHub OAuth app callback URL as `<frontend-origin>/auth/github/callback` (for local development, `http://localhost:5173/auth/github/callback`). During `npm run dev` only, the frontend can also use `GITHUB_TOKEN` through a localhost-only development endpoint so local testing still works while production users continue to authenticate with their own OAuth sessions.
+Configure your GitHub OAuth app callback URL as `<frontend-origin>/auth/github/callback` (for local development, `http://localhost:5173/auth/github/callback`).
 
 ---
 
