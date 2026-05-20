@@ -12,19 +12,11 @@ import Changelog from './pages/Changelog'
 import Discord from './pages/Discord'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
-import { ClerkProvider, SignInButton, SignUpButton, UserButton } from '@clerk/react'
 import './index.css'
 
 function App() {
   return (
-    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
-      <>
-        <header>
-          <SignInButton />
-          <SignUpButton />
-          <UserButton />
-        </header>
-        <Routes>
+    <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/blog" element={<Blog />} />
@@ -37,9 +29,7 @@ function App() {
           <Route path="/reviews" element={<Layout><Reviews /></Layout>} />
           <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
           <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
-        </Routes>
-      </>
-    </ClerkProvider>
+      </Routes>
   )
 }
 
