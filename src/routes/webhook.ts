@@ -3,9 +3,11 @@ import { Webhooks } from '@octokit/webhooks';
 import { logger } from '../utils/logger';
 import { analyzeCode } from '../services/claude';
 import {
+  createRemediationPullRequest,
   extractPRContext,
   fetchPRDiffs,
   getInstallationOctokit,
+  postInlineComment,
   postReviewComment,
 } from '../services/github';
 import { saveReview, saveInstallation, deactivateInstallation } from '../services/database';
@@ -94,6 +96,33 @@ async function handlePullRequest(payload: WebhookPayload) {
     // Build and post comment
     const commentBody = buildCommentBody(result);
     await postReviewComment(octokit, context, commentBody);
+
+    // Post inline issue comments for better PR workflow integration
+    await Promise.all(
+      result.issues
+        .filter(issue => issue.file && issue.line > 0)
+        .slice(0, 15)
+        .map(issue => postInlineComment(
+          octokit,
+          context,
+          issue.file,
+          issue.line,
+          `**${issue.severity.toUpperCase()} · ${issue.category}** — ${issue.title}\n\n${issue.description}\n\n**Suggested fix:** ${issue.suggestion}`
+        ))
+    );
+
+    // Optional automated remediation PR creation
+    const autoFixEnabled = process.env.AUTO_FIX_PR_ENABLED === 'true';
+    if (autoFixEnabled && result.issues.length > 0) {
+      const remediationPrUrl = await createRemediationPullRequest(octokit, context, result.issues, files);
+      if (remediationPrUrl) {
+        await postReviewComment(
+          octokit,
+          context,
+          `## 🛠️ Automated Remediation PR Opened\n\nRaptor opened a remediation draft PR with suggested fixes:\n${remediationPrUrl}`
+        );
+      }
+    }
 
     // Save review to database
     const reviewTime = Date.now() - startTime;
