@@ -2,7 +2,7 @@ import os
 import json
 import time
 import requests
-import google.generativeai as genai
+from google import genai
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 
@@ -12,10 +12,9 @@ class AIService:
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key and api_key != "mock_key":
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel("gemini-1.5-pro")
+            self.client = genai.Client(api_key=api_key)
         else:
-            self.model = None
+            self.client = None
 
     def fetch_diff(self, diff_url: str) -> str:
         """Fetch raw git diff from GitHub PR url."""
@@ -64,7 +63,7 @@ Return your findings strictly in valid JSON format matching this schema:
 }}
 """
         try:
-            if not self.model:
+            if not self.client:
                 time.sleep(0.8) # simulate latency
                 mock_issues = [
                     {
@@ -93,9 +92,10 @@ Return your findings strictly in valid JSON format matching this schema:
                     "reviewTimeMs": elapsed
                 }
 
-            response = self.model.generate_content(
-                prompt,
-                generation_config={"response_mime_type": "application/json"}
+            response = self.client.models.generate_content(
+                model="gemini-1.5-pro",
+                contents=prompt,
+                config={"response_mime_type": "application/json"}
             )
             data = json.loads(response.text)
             elapsed = int((time.time() - start_time) * 1000)
