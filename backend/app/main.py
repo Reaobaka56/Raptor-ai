@@ -164,7 +164,7 @@ class SystemTelemetry(BaseModel):
 # =====================================================================
 # FIXED INTERNAL COMPONSENT IMPORTS
 # =====================================================================
-from github_app import github_app_service
+from app.services.github_app import github_app_service
 
 class InlineAIService:
     def analyze_ast(self, prompt: str) -> str:
