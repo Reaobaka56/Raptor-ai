@@ -15,7 +15,7 @@ import {
   Lock,
   Globe
 } from 'lucide-react'
-import { statsApi, reviewsApi, reposApi, type Stats, type Review, type UserProfile } from '../api'
+import { authApi, statsApi, reviewsApi, reposApi, type Stats, type Review, type UserProfile } from '../api'
 import { formatDistanceToNow } from 'date-fns'
 
 function StatCard({ 
@@ -177,6 +177,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient()
   const [user, setUser] = useState<UserProfile | null>(null)
   const [scanningRepo, setScanningRepo] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   useEffect(() => {
     const checkAuth = () => {
@@ -273,10 +274,11 @@ export default function Dashboard() {
               <button
                 onClick={handleLogin}
                 type="button"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded text-xs font-bold text-black bg-white hover:bg-gray-200 transition-colors tracking-wide"
+                disabled={isLoggingIn}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded text-xs font-bold text-black bg-white hover:bg-gray-200 transition-colors tracking-wide disabled:opacity-60"
               >
                 <Github className="w-4 h-4" />
-                Login with GitHub
+                {isLoggingIn ? 'Connecting…' : 'Login with GitHub'}
               </button>
             </div>
           </div>
