@@ -23,7 +23,6 @@ function App() {
           <Route path="/discord" element={<Discord />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
-          <Route path="/auth/github/callback" element={<GithubCallback />} />
           <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
           <Route path="/reviews" element={<Layout><Reviews /></Layout>} />
           <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
