@@ -17,5 +17,6 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
+  "exclude": ["src/clerk-react"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
