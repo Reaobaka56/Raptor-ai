@@ -12,6 +12,7 @@ import Discord from './pages/Discord'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
 import './index.css'
+import AuthCallback from './pages/AuthCallback'
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="/reviews" element={<Layout><Reviews /></Layout>} />
           <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
           <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
+          <Route path="/auth/github/callback" element={<AuthCallback />} />
       </Routes>
   )
 }
