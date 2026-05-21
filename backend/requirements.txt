@@ -4,7 +4,7 @@ pydantic
 pydantic-settings
 requests
 python-dotenv
-google-generativeai
+google-genai
 psutil
 pyjwt
 cryptography

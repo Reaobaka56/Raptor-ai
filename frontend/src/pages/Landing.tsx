@@ -13,6 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
+import GitHubLoginButton from '../components/GitHubLoginButton'
 
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -89,6 +90,7 @@ export default function Landing() {
               to="/dashboard" 
               className="px-4 py-1.5 rounded text-xs font-semibold bg-white/85 text-black hover:bg-white transition-all duration-200 shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]"
             >
+              <GitHubLoginButton />
               Get Started
             </Link>
           </div>
@@ -107,14 +109,14 @@ export default function Landing() {
 
         <div className="max-w-4xl mx-auto text-center px-6 pt-12 pb-12">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-6 leading-[1.15]">
-            Autonomous reviews.<br />
+            Real-time PR diff analysis.<br />
             <span className="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">
-              Flawless codebases.
+              Autonomous code review.
             </span>
           </h1>
 
           <p className="text-lg md:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed font-normal">
-            Catch security vulnerabilities, SQL injections, and performance leaks directly in your GitHub Pull Requests within seconds.
+            Raptor AI is an autonomous code review and static analysis platform. Unlike regex-bound linters, it combines AST-level analysis with semantic reasoning to catch high-impact issues in context and generate reliable, inline fixes.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 font-sans">
@@ -132,6 +134,32 @@ export default function Landing() {
               <Terminal className="w-4 h-4 text-gray-400" />
               View Live Demo
             </a>
+          </div>
+        </div>
+
+        <div className="max-w-5xl mx-auto px-6 mb-20">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 md:p-10">
+            <p className="text-white text-xl md:text-2xl font-semibold mb-6">“The AI security engineer inside every pull request.”</p>
+            <div className="grid md:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-xs font-mono tracking-[0.2em] uppercase text-gray-500 mb-3">Why teams switch</h3>
+                <ul className="space-y-2 text-gray-300 text-sm">
+                  <li>• Trust: precise findings with code-aware explanations.</li>
+                  <li>• Speed: real-time analysis on every pull request diff.</li>
+                  <li>• Precision: AST + semantic hybrid reasoning, not shallow pattern matching.</li>
+                  <li>• Workflow: native GitHub comments, inline suggestions, and automated remediation PRs.</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xs font-mono tracking-[0.2em] uppercase text-gray-500 mb-3">Core moat</h3>
+                <ul className="space-y-2 text-gray-300 text-sm">
+                  <li>• Repository context memory.</li>
+                  <li>• AST + semantic hybrid analysis.</li>
+                  <li>• Automated fix generation.</li>
+                  <li>• Org-wide architectural learning.</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
 
