@@ -9,51 +9,45 @@ export default function AuthCallback() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = params.get("token")
-    const username = params.get("username")
-    const githubId = params.get("githubId")
-    const avatarUrl = params.get("avatarUrl")
-    const errorParam = params.get("error")
+  const code = params.get("code");
+  const state = params.get("state");
 
-    // Check for error from backend
-    if (errorParam) {
-      setError(`Authentication failed: ${errorParam}`)
-      setLoading(false)
-      setTimeout(() => navigate("/"), 3000)
-      return
-    }
+  // Verify state if needed (CSRF protection)
+  const storedState = sessionStorage.getItem("github_oauth_state");
+  if (state && storedState && state !== storedState) {
+    setError("Invalid OAuth state. Please try logging in again.");
+    setLoading(false);
+    setTimeout(() => navigate("/"), 3000);
+    return;
+  }
 
-    // Check if token is present
-    if (!token) {
-      setError("No authentication token received. Please try logging in again.")
-      setLoading(false)
-      setTimeout(() => navigate("/"), 3000)
-      return
-    }
+  if (!code) {
+    setError("No authorization code received. Please try logging in again.");
+    setLoading(false);
+    setTimeout(() => navigate("/"), 3000);
+    return;
+  }
 
-    try {
-      // Store authentication data
-      localStorage.setItem("authToken", token)
-      localStorage.setItem("username", username || "")
-      localStorage.setItem("githubId", githubId || "")
-      localStorage.setItem("avatarUrl", avatarUrl || "")
-      localStorage.setItem("loggedInAt", new Date().toISOString())
-      const user = { username: username || "", avatarUrl: avatarUrl || "", githubId: githubId || "" };
+  // Exchange code for token and user profile
+  authApi
+    .completeGithubLogin(code)
+    .then((res) => {
+      const { token, user } = res.data;
+      // Store token and user info
+      localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
-      window.dispatchEvent(new Event('auth-change'));
-
-
-      setLoading(false)
-      // Redirect to dashboard
-      navigate("/dashboard", { replace: true })
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error"
-      console.error("Auth callback error:", err)
-      setError(`Authentication error: ${errorMessage}`)
-      setLoading(false)
-      setTimeout(() => navigate("/"), 3000)
-    }
-  }, [params, navigate])
+      // Notify other components
+      window.dispatchEvent(new Event("auth-change"));
+      navigate("/dashboard", { replace: true });
+    })
+    .catch((err) => {
+      const errorMessage = err?.response?.data?.error || err.message || "Authentication failed";
+      console.error("Auth callback error:", err);
+      setError(`Authentication error: ${errorMessage}`);
+      setTimeout(() => navigate("/"), 3000);
+    })
+    .finally(() => setLoading(false));
+}, [params, navigate]);
 
   // Loading state
   if (loading) {
