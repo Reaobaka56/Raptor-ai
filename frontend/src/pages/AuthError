@@ -1,0 +1,22 @@
+import { useNavigate } from "react-router-dom"
+import { useEffect } from "react"
+
+export default function AuthError() {
+  const navigate = useNavigate()
+  const params = new URLSearchParams(window.location.search)
+  const error = params.get("error") || "Unknown error"
+
+  useEffect(() => {
+    setTimeout(() => navigate("/"), 3000)
+  }, [navigate])
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
+      <div className="text-center max-w-md">
+        <h1 className="text-2xl font-bold text-red-500 mb-3">Authentication Failed</h1>
+        <p className="text-slate-300 mb-6">{error}</p>
+        <p className="text-slate-400 text-sm">Redirecting to home in 3 seconds...</p>
+      </div>
+    </div>
+  )
+}
