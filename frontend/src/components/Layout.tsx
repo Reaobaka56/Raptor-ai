@@ -127,6 +127,7 @@ export default function Layout({ children }: LayoutProps) {
               ) : (
                 <button
                   onClick={handleLogin}
+                  disabled={isLoggingIn}
                   type="button"
                   disabled={isLoggingIn}
                   className="inline-flex items-center gap-2 bg-white text-black px-4 py-2 rounded text-xs font-semibold hover:bg-gray-100 transition-colors disabled:opacity-60"
@@ -185,6 +186,7 @@ export default function Layout({ children }: LayoutProps) {
               ) : (
                 <button
                   onClick={() => { handleLogin(); setMobileMenuOpen(false); }}
+                  disabled={isLoggingIn}
                   type="button"
                   disabled={isLoggingIn}
                   className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 rounded text-xs font-semibold disabled:opacity-60"
