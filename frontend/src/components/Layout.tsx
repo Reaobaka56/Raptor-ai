@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { TRexIcon } from './TRexIcon'
-import { type UserProfile } from '../api'
+import { type UserProfile, authApi } from '../api'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -27,6 +27,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<UserProfile | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   useEffect(() => {
     const checkAuth = () => {
@@ -126,11 +127,12 @@ export default function Layout({ children }: LayoutProps) {
               ) : (
                 <button
                   onClick={handleLogin}
+                  disabled={isLoggingIn}
                   type="button"
-                  className="inline-flex items-center gap-2 bg-white text-black px-4 py-2 rounded text-xs font-semibold hover:bg-gray-100 transition-colors"
+                  className="inline-flex items-center gap-2 bg-white text-black px-4 py-2 rounded text-xs font-semibold hover:bg-gray-100 transition-colors disabled:opacity-50"
                 >
                   <Github className="w-4 h-4" />
-                  Connect GitHub
+                  {isLoggingIn ? 'Connecting...' : 'Connect GitHub'}
                 </button>
               )}
             </div>
@@ -183,10 +185,11 @@ export default function Layout({ children }: LayoutProps) {
               ) : (
                 <button
                   onClick={() => { handleLogin(); setMobileMenuOpen(false); }}
+                  disabled={isLoggingIn}
                   type="button"
-                  className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 rounded text-xs font-semibold"
+                  className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 rounded text-xs font-semibold disabled:opacity-50"
                 >
-                  <Github className="w-4 h-4" /> Connect GitHub
+                  <Github className="w-4 h-4" /> {isLoggingIn ? 'Connecting...' : 'Connect GitHub'}
                 </button>
               )}
             </div>
