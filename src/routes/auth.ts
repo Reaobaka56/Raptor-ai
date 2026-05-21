@@ -1,5 +1,3 @@
-
-
 import { Request, Response, Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../services/database';
@@ -121,7 +119,7 @@ router.post('/auth/github', async (req: Request, res: Response) => {
       }),
     });
 
-    const tokenData: GitHubTokenResponse = await tokenResponse.json();
+    const tokenData = await tokenResponse.json() as GitHubTokenResponse;
 
     if (tokenData.error) {
       logger.error('GitHub token exchange failed', new Error(tokenData.error_description));
@@ -144,7 +142,7 @@ router.post('/auth/github', async (req: Request, res: Response) => {
       throw new Error('Failed to fetch GitHub user data');
     }
 
-    const user: GitHubUser = await userResponse.json();
+    const user = await userResponse.json() as GitHubUser;
 
     logger.info('GitHub user authenticated', {
       userId: user.id,
@@ -224,7 +222,7 @@ router.post('/auth/github/callback', async (req: Request, res: Response) => {
       }),
     });
 
-    const tokenData: GitHubTokenResponse = await tokenResponse.json();
+    const tokenData = await tokenResponse.json() as GitHubTokenResponse;
 
     if (tokenData.error) {
       return res.status(400).json({
@@ -240,7 +238,7 @@ router.post('/auth/github/callback', async (req: Request, res: Response) => {
       },
     });
 
-    const user: GitHubUser = await userResponse.json();
+    const user = await userResponse.json() as GitHubUser;
     const token = generateJWT(user);
 
     res.json({
