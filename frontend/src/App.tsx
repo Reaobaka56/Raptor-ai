@@ -13,10 +13,13 @@ import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
 import './index.css'
 import AuthCallback from './pages/AuthCallback'
+import AuthError from './pages/AuthError'
+
 
 function App() {
   return (
     <Routes>
+          <Route path="/auth/error" element={<AuthError />} />
           <Route path="/" element={<Landing />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/blog" element={<Blog />} />
