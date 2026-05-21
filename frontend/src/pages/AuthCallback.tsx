@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
+import { authApi } from "../api"
 
 export default function AuthCallback() {
   const [params] = useSearchParams()
@@ -37,6 +38,10 @@ export default function AuthCallback() {
       localStorage.setItem("githubId", githubId || "")
       localStorage.setItem("avatarUrl", avatarUrl || "")
       localStorage.setItem("loggedInAt", new Date().toISOString())
+      const user = { username: username || "", avatarUrl: avatarUrl || "", githubId: githubId || "" };
+      localStorage.setItem("user", JSON.stringify(user));
+      window.dispatchEvent(new Event('auth-change'));
+
 
       setLoading(false)
       // Redirect to dashboard
