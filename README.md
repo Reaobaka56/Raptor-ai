@@ -8,7 +8,9 @@
 
 ##  Introduction
 
-**Raptor AI** is a next-generation autonomous static analysis and AI code review platform. Designed for modern engineering organizations, Raptor bridges the gap between traditional regex-bound linters and fully semantic AI agents. 
+**Raptor AI** is a next-generation autonomous static analysis and# AI Code Review Agent
+
+_Updated for redeploy after fixing Git email_form. Designed for modern engineering organizations, Raptor bridges the gap between traditional regex-bound linters and fully semantic AI agents. 
 
 By integrating directly with your **GitHub Catalog** and utilizing **Google Gemini 1.5 Pro** for deep Abstract Syntax Tree (AST) evaluation, Raptor reads pull request diffs in real-time. It catches critical security vulnerabilities, database performance bottlenecks, and architectural leaks within seconds—providing exact inline diff fixes and opening automated pull requests before code ever reaches production.
 
