@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
+import { authApi } from "../api"
 
 export default function AuthCallback() {
   const [params] = useSearchParams()
@@ -8,47 +9,55 @@ export default function AuthCallback() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = params.get("token")
-    const username = params.get("username")
-    const githubId = params.get("githubId")
-    const avatarUrl = params.get("avatarUrl")
-    const errorParam = params.get("error")
+  const code = params.get("code");
+  const state = params.get("state");
+  const errorMsg = params.get("error");
 
-    // Check for error from backend
-    if (errorParam) {
-      setError(`Authentication failed: ${errorParam}`)
-      setLoading(false)
-      setTimeout(() => navigate("/"), 3000)
-      return
+  // Handle error returned from backend
+  if (errorMsg) {
+    setError(errorMsg);
+    setLoading(false);
+    setTimeout(() => navigate("/"), 3000);
+    return;
+  }
+
+  // If we have an OAuth code, exchange it for token/user info
+  if (code) {
+    // Optional: verify state matches sessionStorage to prevent CSRF
+    const savedState = sessionStorage.getItem('github_oauth_state');
+    if (state && savedState && state !== savedState) {
+      setError('Invalid OAuth state. Please try logging in again.');
+      setLoading(false);
+      setTimeout(() => navigate('/'), 3000);
+      return;
     }
 
-    // Check if token is present
-    if (!token) {
-      setError("No authentication token received. Please try logging in again.")
-      setLoading(false)
-      setTimeout(() => navigate("/"), 3000)
-      return
-    }
+    // Call backend to complete login
+    authApi.completeGithubLogin(code)
+      .then((response) => {
+        const data = response.data;
+        // Store token and user info
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.dispatchEvent(new Event('auth-change'));
+        navigate('/dashboard', { replace: true });
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.detail || err.message || 'Authentication failed';
+        setError(msg);
+        setTimeout(() => navigate('/'), 3000);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+    return; // exit early; async handling will manage loading state
+  }
 
-    try {
-      // Store authentication data
-      localStorage.setItem("authToken", token)
-      localStorage.setItem("username", username || "")
-      localStorage.setItem("githubId", githubId || "")
-      localStorage.setItem("avatarUrl", avatarUrl || "")
-      localStorage.setItem("loggedInAt", new Date().toISOString())
-
-      setLoading(false)
-      // Redirect to dashboard
-      navigate("/dashboard", { replace: true })
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error"
-      console.error("Auth callback error:", err)
-      setError(`Authentication error: ${errorMessage}`)
-      setLoading(false)
-      setTimeout(() => navigate("/"), 3000)
-    }
-  }, [params, navigate])
+  // No code and no error: something went wrong
+  setError('Missing authentication data. Please try logging in again.');
+  setLoading(false);
+  setTimeout(() => navigate('/'), 3000);
+}, [params, navigate]);
 
   // Loading state
   if (loading) {

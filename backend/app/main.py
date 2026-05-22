@@ -7,7 +7,7 @@ import requests
 from urllib.parse import urlencode
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Depends, Header, Cookie
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Depends, Header, Cookie, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
@@ -330,68 +330,13 @@ def get_github_login_url(state: str = Query(..., min_length=16), redirect_uri: s
     return GitHubLoginUrlResponse(url=f"https://github.com/login/oauth/authorize?{query}")
 
 @app.get("/api/auth/github/callback")
-def github_callback(code: str = Query(None), state: str = Query(None)):
+def github_callback(request: Request, code: str = Query(None), state: str = Query(None)):
     if not code:
         raise HTTPException(status_code=400, detail="Missing OAuth exchange code")
-
-    client_id = os.getenv("GITHUB_CLIENT_ID")
-    client_secret = os.getenv("GITHUB_CLIENT_SECRET")
-
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=500, detail="GitHub OAuth parameters are missing natively")
-
-    token_res = requests.post(
-        "https://github.com/login/oauth/access_token",
-        headers={"Accept": "application/json"},
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-        },
-        timeout=10
-    )
-
-    token_data = token_res.json()
-    access_token = token_data.get("access_token")
-
-    if not access_token:
-        raise HTTPException(status_code=401, detail="OAuth authorization sequence broke down")
-
-    user_res = requests.get(
-        "https://api.github.com/user",
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=10
-    )
-
-    if user_res.status_code != 200:
-        raise HTTPException(status_code=502, detail="GitHub user profile fetch failed")
-
-    user_data = user_res.json()
-    user = UserProfile(
-        username=user_data.get("login"),
-        avatarUrl=user_data.get("avatar_url"),
-        githubId=user_data.get("id")
-    )
-
-    repositories = build_repository_list(access_token)
-    session_token = uuid.uuid4().hex
-
-    USER_SESSIONS[session_token] = {
-        "access_token": access_token,
-        "user": user,
-        "repositories": repositories,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-
-    response = RedirectResponse(url="https://raptor-agent-ai.vercel.app/dashboard")
-    response.set_cookie(
-        key="raptor_session",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=60 * 60 * 24 * 7
-    )
+    # Forward to frontend AuthCallback route
+    frontend_origin = request.headers.get('origin') or "http://localhost:5174"
+    redirect_url = f"{frontend_origin}/auth/github/callback?code={code}&state={state}" if state else f"{frontend_origin}/auth/github/callback?code={code}"
+    response = RedirectResponse(url=redirect_url)
     return response
 
 @app.get("/api/repos", response_model=List[RepositoryInfo], tags=["Repositories"])
