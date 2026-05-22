@@ -1,6 +1,6 @@
 // GitHubLoginButton component
 import { Github } from 'lucide-react';
-import React from 'react';
+
 
 interface GitHubLoginButtonProps {
   onClick?: () => void;
