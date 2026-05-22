@@ -11,42 +11,52 @@ export default function AuthCallback() {
   useEffect(() => {
   const code = params.get("code");
   const state = params.get("state");
+  const errorMsg = params.get("error");
 
-  // Verify state if needed (CSRF protection)
-  const storedState = sessionStorage.getItem("github_oauth_state");
-  if (state && storedState && state !== storedState) {
-    setError("Invalid OAuth state. Please try logging in again.");
+  // Handle error returned from backend
+  if (errorMsg) {
+    setError(errorMsg);
     setLoading(false);
     setTimeout(() => navigate("/"), 3000);
     return;
   }
 
-  if (!code) {
-    setError("No authorization code received. Please try logging in again.");
-    setLoading(false);
-    setTimeout(() => navigate("/"), 3000);
-    return;
+  // If we have an OAuth code, exchange it for token/user info
+  if (code) {
+    // Optional: verify state matches sessionStorage to prevent CSRF
+    const savedState = sessionStorage.getItem('github_oauth_state');
+    if (state && savedState && state !== savedState) {
+      setError('Invalid OAuth state. Please try logging in again.');
+      setLoading(false);
+      setTimeout(() => navigate('/'), 3000);
+      return;
+    }
+
+    // Call backend to complete login
+    authApi.completeGithubLogin(code)
+      .then((response) => {
+        const data = response.data;
+        // Store token and user info
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.dispatchEvent(new Event('auth-change'));
+        navigate('/dashboard', { replace: true });
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.detail || err.message || 'Authentication failed';
+        setError(msg);
+        setTimeout(() => navigate('/'), 3000);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+    return; // exit early; async handling will manage loading state
   }
 
-  // Exchange code for token and user profile
-  authApi
-    .completeGithubLogin(code)
-    .then((res) => {
-      const { token, user } = res.data;
-      // Store token and user info
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      // Notify other components
-      window.dispatchEvent(new Event("auth-change"));
-      navigate("/dashboard", { replace: true });
-    })
-    .catch((err) => {
-      const errorMessage = err?.response?.data?.error || err.message || "Authentication failed";
-      console.error("Auth callback error:", err);
-      setError(`Authentication error: ${errorMessage}`);
-      setTimeout(() => navigate("/"), 3000);
-    })
-    .finally(() => setLoading(false));
+  // No code and no error: something went wrong
+  setError('Missing authentication data. Please try logging in again.');
+  setLoading(false);
+  setTimeout(() => navigate('/'), 3000);
 }, [params, navigate]);
 
   // Loading state
