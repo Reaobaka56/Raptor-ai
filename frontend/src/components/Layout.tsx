@@ -1,8 +1,8 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  List, 
-  BarChart3, 
+import {
+  LayoutDashboard,
+  List,
+  BarChart3,
   Menu,
   X,
   Github,
@@ -89,11 +89,10 @@ export default function Layout({ children }: LayoutProps) {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                      isActive
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${isActive
                         ? 'bg-white text-black font-bold'
                         : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
+                      }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
                     {item.label}
@@ -107,9 +106,9 @@ export default function Layout({ children }: LayoutProps) {
               {user ? (
                 <div className="flex items-center gap-4 pl-4 border-l border-white/10">
                   <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
-                    <img 
-                      src={user.avatarUrl} 
-                      alt={user.username} 
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.username}
                       className="w-6 h-6 rounded-full border border-white/20 object-cover"
                     />
                     <div className="flex flex-col">
@@ -128,9 +127,8 @@ export default function Layout({ children }: LayoutProps) {
                 <button
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  type="button"
-                  disabled={isLoggingIn}
-                  className="inline-flex items-center gap-2 bg-white text-black px-4 py-2 rounded text-xs font-semibold hover:bg-gray-100 transition-colors disabled:opacity-60"
+
+                  className="inline-flex items-center gap-2 bg-white text-black px-4 py-2 rounded text-xs font-semibold hover:bg-gray-100 transition-colors disabled:opacity-50"
                 >
                   <Github className="w-4 h-4" />
                   {isLoggingIn ? 'Connecting…' : 'Connect GitHub'}
@@ -160,11 +158,10 @@ export default function Layout({ children }: LayoutProps) {
                     key={item.path}
                     to={item.path}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold ${
-                      isActive
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold ${isActive
                         ? 'bg-white text-black font-bold'
                         : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
+                      }`}
                   >
                     <Icon className="w-4 h-4" />
                     {item.label}
@@ -188,8 +185,7 @@ export default function Layout({ children }: LayoutProps) {
                   onClick={() => { handleLogin(); setMobileMenuOpen(false); }}
                   disabled={isLoggingIn}
                   type="button"
-                  disabled={isLoggingIn}
-                  className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 rounded text-xs font-semibold disabled:opacity-60"
+                  className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 rounded text-xs font-semibold disabled:opacity-50"
                 >
                   <Github className="w-4 h-4" /> {isLoggingIn ? 'Connecting…' : 'Connect GitHub'}
                 </button>

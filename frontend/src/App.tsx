@@ -32,6 +32,7 @@ function App() {
           <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
           <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
           <Route path="/auth/github/callback" element={<AuthCallback />} />
+  <Route path="/api/auth/github/callback" element={<AuthCallback />} />
       </Routes>
   )
 }
