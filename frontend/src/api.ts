@@ -84,7 +84,14 @@ export interface AuthResponse {
   repositories: RepositoryInfo[]
 }
 
-export const getGithubRedirectUri = () => `${window.location.origin}/auth/github/callback`
+export const getGithubRedirectUri = () => {
+  // Allow override via VITE_GITHUB_REDIRECT_URI (useful for dev and Vercel environments)
+  const envRedirect = import.meta.env.VITE_GITHUB_REDIRECT_URI as string | undefined;
+  if (envRedirect && envRedirect.length > 0) {
+    return envRedirect;
+  }
+  return `${window.location.origin}/auth/github/callback`;
+};
 
 export const startGithubLogin = async () => {
   const state = crypto.randomUUID()
