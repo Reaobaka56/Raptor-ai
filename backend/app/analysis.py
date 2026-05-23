@@ -1,4 +1,4 @@
-import os
+mport os
 import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -130,3 +130,4 @@ async def solve_debug(req: DebugRequest):
     # 4️⃣ Call the (mock) LLM
     llm_result = _call_llm(prompt)
     return DebugResponse(**llm_result)
+
