@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Depends, Header, Cookie, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from .analysis import router as analysis_router
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -180,13 +181,8 @@ app = FastAPI(
     version="2.0.0"
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.include_router(analysis_router, prefix="/debug")
+
 
 START_TIME = time.time()
 ACTIVE_QUEUE_COUNT = 0

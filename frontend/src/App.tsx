@@ -14,6 +14,7 @@ import Privacy from './pages/Privacy'
 import './index.css'
 import AuthCallback from './pages/AuthCallback'
 import AuthError from './pages/AuthError'
+import DebugTool from './pages/DebugTool';
 
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
           <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
           <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
           <Route path="/auth/github/callback" element={<AuthCallback />} />
+          <Route path="/debug" element={<DebugTool />} />
 
       </Routes>
   )
