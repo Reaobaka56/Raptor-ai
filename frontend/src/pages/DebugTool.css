@@ -1,0 +1,117 @@
+/* DebugTool.css - styling for the AI Debugging Assistant page */
+
+/* Root container */
+.debug-tool {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  color: #e0e0e0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Dark mode background gradient */
+@media (prefers-color-scheme: dark) {
+  .debug-tool {
+    background: linear-gradient(135deg, #1e1e2f, #3a3a58);
+  }
+}
+
+.debug-tool h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #f5f5f5;
+  font-weight: 600;
+}
+
+.debug-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.debug-form label {
+  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  color: #d0d0d0;
+}
+
+.debug-form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #eaeaea;
+  resize: vertical;
+  font-family: 'Inter', sans-serif;
+}
+
+.debug-form input[type='file'] {
+  margin-top: 0.5rem;
+  color: #e0e0e0;
+}
+
+.debug-form button {
+  align-self: flex-start;
+  padding: 0.6rem 1.2rem;
+  background: #4a90e2;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.debug-form button:disabled {
+  background: #777;
+  cursor: not-allowed;
+}
+
+.debug-form button:hover:not(:disabled) {
+  background: #357ab8;
+}
+
+.error {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff6b6b;
+  border-left: 4px solid #ff4d4d;
+  border-radius: 4px;
+}
+
+.result {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(0, 255, 0, 0.05);
+  border-left: 4px solid #28a745;
+  border-radius: 4px;
+  color: #e0ffe0;
+}
+
+.result h3 {
+  margin-top: 0;
+  color: #b3ffb3;
+}
+
+.result pre {
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  color: #f8f8f2;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .debug-tool {
+    margin: 1rem;
+    padding: 1rem;
+  }
+}
