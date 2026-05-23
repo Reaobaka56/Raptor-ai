@@ -43,7 +43,7 @@ def _call_llm(prompt: str) -> Dict[str, Any]:
     if gemini_key:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_key}"
         payload = {
-            "contents": [{"role": "user", "parts": [{"text": prompt} }]
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}]
         }
         headers = {"Content-Type": "application/json"}
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
