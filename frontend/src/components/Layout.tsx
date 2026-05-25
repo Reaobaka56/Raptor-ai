@@ -27,7 +27,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<UserProfile | null>(null)
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
 
   useEffect(() => {
     const checkAuth = () => {
@@ -48,10 +48,7 @@ export default function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener('auth-change', checkAuth)
   }, [])
 
-  // GitHub login UI removed per user request; function retained as no-op.
-const handleLogin = async () => {
-  // No operation; UI login disabled.
-};
+
 
   const handleLogout = () => {
     localStorage.removeItem('token')

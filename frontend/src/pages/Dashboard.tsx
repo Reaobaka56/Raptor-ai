@@ -10,7 +10,6 @@ import {
   Code2,
   Layout,
   ArrowRight,
-  Github,
   Play,
   Lock,
   Globe
@@ -297,8 +296,6 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        </div>
-      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
