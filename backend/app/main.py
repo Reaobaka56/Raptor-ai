@@ -165,7 +165,7 @@ class SystemTelemetry(BaseModel):
 # =====================================================================
 # FIXED INTERNAL COMPONSENT IMPORTS
 # =====================================================================
-from app.services.github_app import github_app_service
+from .services.github_app import github_app_service
 
 class InlineAIService:
     def analyze_ast(self, prompt: str) -> str:
@@ -342,7 +342,7 @@ def scan_repository(req: ScanRequest):
         repo_name = repo_name.split("github.com/")[-1].strip("/")
     
     try:
-        from app.services.ai_service import ai_service as real_ai_service
+        from .services.ai_service import ai_service as real_ai_service
         
         commits_res = requests.get(f"https://api.github.com/repos/{repo_name}/commits?per_page=1", timeout=10)
         commits_res.raise_for_status()
@@ -398,6 +398,31 @@ def get_review_by_id(review_id: int):
     for r in MOCK_REVIEWS:
         if r.id == review_id:
             return r
+    raise HTTPException(status_code=404, detail="Review not found")
+
+
+@app.post("/api/reviews/{review_id}/pull-request", response_model=CreatePRResponse, tags=["Reviews"])
+def create_fix_pull_request(review_id: int):
+    for review in MOCK_REVIEWS:
+        if review.id == review_id:
+            if review.status == "pr_created":
+                return CreatePRResponse(
+                    status="pr_created",
+                    prNumber=review.prNumber + 1,
+                    prUrl=f"https://github.com/{review.githubRepo}/pull/{review.prNumber + 1}",
+                    message="Fix pull request already created for this review."
+                )
+
+            pr_number = review.prNumber + 1
+            pr_url = f"https://github.com/{review.githubRepo}/pull/{pr_number}"
+            review.status = "pr_created"
+            return CreatePRResponse(
+                status="pr_created",
+                prNumber=pr_number,
+                prUrl=pr_url,
+                message="Automated fix pull request created successfully."
+            )
+
     raise HTTPException(status_code=404, detail="Review not found")
 
 @app.get("/api/stats", response_model=Stats, tags=["Telemetry"])
