@@ -400,6 +400,31 @@ def get_review_by_id(review_id: int):
             return r
     raise HTTPException(status_code=404, detail="Review not found")
 
+
+@app.post("/api/reviews/{review_id}/pull-request", response_model=CreatePRResponse, tags=["Reviews"])
+def create_fix_pull_request(review_id: int):
+    for review in MOCK_REVIEWS:
+        if review.id == review_id:
+            if review.status == "pr_created":
+                return CreatePRResponse(
+                    status="pr_created",
+                    prNumber=review.prNumber + 1,
+                    prUrl=f"https://github.com/{review.githubRepo}/pull/{review.prNumber + 1}",
+                    message="Fix pull request already created for this review."
+                )
+
+            pr_number = review.prNumber + 1
+            pr_url = f"https://github.com/{review.githubRepo}/pull/{pr_number}"
+            review.status = "pr_created"
+            return CreatePRResponse(
+                status="pr_created",
+                prNumber=pr_number,
+                prUrl=pr_url,
+                message="Automated fix pull request created successfully."
+            )
+
+    raise HTTPException(status_code=404, detail="Review not found")
+
 @app.get("/api/stats", response_model=Stats, tags=["Telemetry"])
 def get_stats(repo: Optional[str] = None):
     return Stats(

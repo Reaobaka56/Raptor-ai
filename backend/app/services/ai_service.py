@@ -10,9 +10,11 @@ load_dotenv()
 
 class AIService:
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
-        genai.configure(api_key=api_key)
-        self.client = genai.GenerativeModel("gemini-1.5-pro")
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.client = None
+        if api_key:
+            genai.configure(api_key=api_key)
+            self.client = genai.GenerativeModel("gemini-1.5-pro")
 
     def fetch_diff(self, diff_url: str) -> str:
         """Fetch raw git diff from GitHub PR url."""
