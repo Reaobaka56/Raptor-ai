@@ -15,7 +15,7 @@ class AIService:
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         self.client = None
-        if api_key and genai is not None:
+        if api_key:
             genai.configure(api_key=api_key)
             self.client = genai.GenerativeModel("gemini-1.5-pro")
 
