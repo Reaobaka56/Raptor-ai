@@ -15,7 +15,7 @@ import {
   Lock,
   Globe
 } from 'lucide-react'
-import { authApi, statsApi, reviewsApi, reposApi, type Stats, type Review, type UserProfile } from '../api'
+import { statsApi, reviewsApi, reposApi, type Stats, type Review, type UserProfile } from '../api'
 import { formatDistanceToNow } from 'date-fns'
 
 function StatCard({ 
@@ -177,7 +177,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient()
   const [user, setUser] = useState<UserProfile | null>(null)
   const [scanningRepo, setScanningRepo] = useState<string | null>(null)
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
 
   useEffect(() => {
     const checkAuth = () => {
@@ -213,16 +213,7 @@ export default function Dashboard() {
     enabled: !!user,
   })
 
-  const handleLogin = async () => {
-    setIsLoggingIn(true)
-    try {
-      await authApi.startGithubLogin()
-    } catch (err) {
-      console.error('GitHub authentication failed', err)
-    } finally {
-      setIsLoggingIn(false)
-    }
-  }
+
 
   const handleScan = async (repoName: string) => {
     setScanningRepo(repoName)
@@ -259,38 +250,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* GitHub Auth & Repository Access Banner */}
-      {!user ? (
-        <div className="bg-black border border-white/15 p-8 rounded-xl font-sans">
-          <div className="max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-white/5 text-gray-300 border border-white/10 text-xs font-mono font-bold tracking-wider">
-              <Github className="w-3.5 h-3.5 text-white" /> GITHUB INTEGRATION
-            </div>
-            <h2 className="text-2xl font-bold text-white tracking-tight font-sans">Connect Your GitHub Workspace</h2>
-            <p className="text-gray-400 text-sm leading-relaxed font-sans">
-              Link your repository catalog to enable one-click autonomous AST scanning, inline vulnerability detection, and automated PR generation.
-            </p>
-            <div className="pt-2 font-mono">
-              <button
-                onClick={handleLogin}
-                type="button"
-                disabled={isLoggingIn}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded text-xs font-bold text-black bg-white hover:bg-gray-200 transition-colors tracking-wide disabled:opacity-60"
-              >
-                <Github className="w-4 h-4" />
-                {isLoggingIn ? 'Connecting…' : 'Login with GitHub'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-black border border-white/10 p-6 rounded-xl space-y-5 font-sans">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 font-mono">
-            <h3 className="text-sm uppercase tracking-wider text-white font-bold flex items-center gap-2">
-              <Github className="w-4 h-4 text-white" /> Connected GitHub Repositories
-            </h3>
-            <span className="text-xs bg-white/5 border border-white/10 px-2.5 py-0.5 rounded text-gray-300 font-semibold">{repositories.length} accessible</span>
-          </div>
+
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
             {repositories.map((repo) => (

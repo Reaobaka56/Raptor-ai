@@ -13,7 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
-import GitHubLoginButton from '../components/GitHubLoginButton'
+
 
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -86,13 +86,7 @@ export default function Landing() {
             </Link>
           </div>
           <div className="flex items-center gap-4 font-sans">
-            <Link 
-              to="/dashboard" 
-              className="px-4 py-1.5 rounded text-xs font-semibold bg-white/85 text-black hover:bg-white transition-all duration-200 shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]"
-            >
-              <GitHubLoginButton />
-              Get Started
-            </Link>
+                <Link to="/dashboard" className="px-4 py-1.5 rounded text-xs font-semibold bg-white/85 text-black hover:bg-white transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]">Get Started</Link>
           </div>
         </div>
       </nav>
