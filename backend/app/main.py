@@ -331,3 +331,50 @@ def github_callback(request: Request, code: str = Query(None), state: str = Quer
 @app.get("/api/repos", response_model=List[RepositoryInfo], tags=["Repositories"])
 def get_repositories(session: GitHubSession = Depends(get_required_github_session)):
     return session["repositories"]
+
+import copy
+import random
+
+@app.post("/api/scan", response_model=Review, tags=["Scanning"])
+def scan_repository(req: ScanRequest):
+    repo_name = req.repo
+    if "github.com/" in repo_name:
+        repo_name = repo_name.split("github.com/")[-1].strip("/")
+    
+    new_review = copy.deepcopy(MOCK_REVIEWS[0])
+    new_review.id = random.randint(100, 9999)
+    new_review.githubRepo = repo_name
+    new_review.prUrl = f"https://github.com/{repo_name}/pull/1"
+    
+    MOCK_REVIEWS.insert(0, new_review)
+    return new_review
+
+@app.get("/api/reviews", tags=["Reviews"])
+def get_all_reviews():
+    return {
+        "reviews": MOCK_REVIEWS,
+        "pagination": {
+            "total": len(MOCK_REVIEWS),
+            "limit": 50,
+            "offset": 0
+        }
+    }
+
+@app.get("/api/reviews/{review_id}", response_model=Review, tags=["Reviews"])
+def get_review_by_id(review_id: int):
+    for r in MOCK_REVIEWS:
+        if r.id == review_id:
+            return r
+    raise HTTPException(status_code=404, detail="Review not found")
+
+@app.get("/api/stats", response_model=Stats, tags=["Telemetry"])
+def get_stats(repo: Optional[str] = None):
+    return Stats(
+        totalReviews=len(MOCK_REVIEWS),
+        totalIssues=sum(len(r.issues) for r in MOCK_REVIEWS),
+        avgReviewTime=1500,
+        issuesBySeverity=SeverityStats(critical=1, high=0, medium=0, low=0),
+        issuesByCategory=CategoryStats(security=1, performance=0, quality=0, design=0),
+        reviewsOverTime=[]
+    )
+

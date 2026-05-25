@@ -176,6 +176,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient()
   const [user, setUser] = useState<UserProfile | null>(null)
   const [scanningRepo, setScanningRepo] = useState<string | null>(null)
+  const [customUrl, setCustomUrl] = useState('')
 
 
   useEffect(() => {
@@ -249,10 +250,30 @@ export default function Dashboard() {
         )}
       </div>
 
+      <div className="bg-black border border-white/10 rounded-lg p-6">
+        <h2 className="text-xl font-bold text-white tracking-wide font-mono mb-4">Scan Public Repository</h2>
+        <div className="flex gap-4">
+          <input
+            type="text"
+            value={customUrl}
+            onChange={(e) => setCustomUrl(e.target.value)}
+            placeholder="https://github.com/owner/repo"
+            className="flex-1 bg-white/5 border border-white/10 rounded px-4 py-2 text-white font-mono text-sm focus:outline-none focus:border-white/30"
+            disabled={!!scanningRepo}
+          />
+          <button
+            onClick={() => handleScan(customUrl)}
+            disabled={!customUrl.trim() || !!scanningRepo}
+            className="inline-flex items-center gap-2 bg-white text-black hover:bg-gray-200 px-6 py-2 rounded font-bold transition-colors disabled:opacity-50"
+          >
+            <Play className={`w-4 h-4 ${scanningRepo === customUrl ? 'animate-spin' : ''}`} />
+            {scanningRepo === customUrl ? 'Scanning...' : 'Scan URL'}
+          </button>
+        </div>
+      </div>
 
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
-            {repositories.map((repo) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
+        {repositories.map((repo) => (
               <div 
                 key={repo.id}
                 className="p-5 rounded-lg bg-black border border-white/10 hover:border-white/30 transition-colors flex flex-col justify-between space-y-4"
