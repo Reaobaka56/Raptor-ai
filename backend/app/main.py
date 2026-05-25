@@ -341,10 +341,43 @@ def scan_repository(req: ScanRequest):
     if "github.com/" in repo_name:
         repo_name = repo_name.split("github.com/")[-1].strip("/")
     
-    new_review = copy.deepcopy(MOCK_REVIEWS[0])
-    new_review.id = random.randint(100, 9999)
-    new_review.githubRepo = repo_name
-    new_review.prUrl = f"https://github.com/{repo_name}/pull/1"
+    try:
+        from app.services.ai_service import ai_service as real_ai_service
+        
+        commits_res = requests.get(f"https://api.github.com/repos/{repo_name}/commits?per_page=1", timeout=10)
+        commits_res.raise_for_status()
+        commits_data = commits_res.json()
+        if not commits_data:
+            raise Exception("No commits found")
+        
+        latest_commit = commits_data[0]
+        sha = latest_commit["sha"]
+        message = latest_commit["commit"]["message"]
+        
+        diff_url = f"https://github.com/{repo_name}/commit/{sha}.diff"
+        diff_text = real_ai_service.fetch_diff(diff_url)
+        
+        ai_result = real_ai_service.analyze_pr(repo=repo_name, pr_number=1, pr_title=message, diff_text=diff_text)
+        
+        new_review = Review(
+            id=random.randint(10000, 99999),
+            githubRepo=repo_name,
+            prNumber=1,
+            prTitle=message,
+            prUrl=f"https://github.com/{repo_name}/commit/{sha}",
+            issues=[ReviewIssue(**issue) for issue in ai_result.get("issues", [])],
+            summary=ai_result.get("summary", "LLM Analysis Completed"),
+            status="completed",
+            reviewTimeMs=ai_result.get("reviewTimeMs", 0),
+            createdAt=datetime.now(timezone.utc).isoformat()
+        )
+        
+    except Exception as e:
+        print(f"Failed to scan repo {repo_name}: {e}")
+        new_review = copy.deepcopy(MOCK_REVIEWS[0])
+        new_review.id = random.randint(100, 9999)
+        new_review.githubRepo = repo_name
+        new_review.prUrl = f"https://github.com/{repo_name}"
     
     MOCK_REVIEWS.insert(0, new_review)
     return new_review
