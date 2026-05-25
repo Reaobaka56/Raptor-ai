@@ -7,7 +7,7 @@ import requests
 from urllib.parse import urlencode
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Header, Cookie, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from .analysis import router as analysis_router
@@ -252,18 +252,7 @@ MOCK_REVIEWS: List[Review] = [
     )
 ]
 
-    # Simplified repository endpoint without authentication
-    @app.get("/api/repos", response_model=List[RepositoryInfo], tags=["Repositories"])
-    def get_repositories():
-        """Return mock repositories without requiring auth."""
-        return MOCK_REPOSITORIES
-    if not token:
-        return None
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github.v3+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
+
 
 def get_required_github_session(
     authorization: Optional[str] = Header(default=None),
