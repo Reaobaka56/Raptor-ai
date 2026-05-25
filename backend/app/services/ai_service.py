@@ -2,7 +2,10 @@ import os
 import json
 import time
 import requests
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 

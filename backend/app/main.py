@@ -165,7 +165,7 @@ class SystemTelemetry(BaseModel):
 # =====================================================================
 # FIXED INTERNAL COMPONSENT IMPORTS
 # =====================================================================
-from app.services.github_app import github_app_service
+from .services.github_app import github_app_service
 
 class InlineAIService:
     def analyze_ast(self, prompt: str) -> str:
@@ -342,7 +342,7 @@ def scan_repository(req: ScanRequest):
         repo_name = repo_name.split("github.com/")[-1].strip("/")
     
     try:
-        from app.services.ai_service import ai_service as real_ai_service
+        from .services.ai_service import ai_service as real_ai_service
         
         commits_res = requests.get(f"https://api.github.com/repos/{repo_name}/commits?per_page=1", timeout=10)
         commits_res.raise_for_status()
