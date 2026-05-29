@@ -93,7 +93,7 @@ export default function ReviewDetail() {
     queryFn: () => reviewsApi.getById(Number(id)).then(r => r.data as Review),
   })
 
-  const prMutation = useMutation({
+  const prMutation = useMutation<CreatePullRequestResponse, unknown, void>({
     mutationFn: () => prApi.createPullRequest(Number(id)),
     onMutate: () => {
       setPrError(null)
