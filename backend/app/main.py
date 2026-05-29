@@ -137,7 +137,7 @@ class ScanRequest(BaseModel):
 
 class CreatePRResponse(BaseModel):
     status: str
-    prNumber: int
+    prNumber: Optional[int] = None
     prUrl: str
     message: str
 
@@ -475,10 +475,10 @@ def create_fix_pull_request(review_id: int):
             review.fixPrNumber = pr_number
             review.fixPrUrl = pr_url
             return CreatePRResponse(
-                status="pr_created",
-                prNumber=pr_number,
+                status="pr_ready",
+                prNumber=None,
                 prUrl=pr_url,
-                message="Automated fix pull request created successfully."
+                message="Open the repository pull requests page to create a remediation PR from Raptor's suggested fixes."
             )
 
     raise HTTPException(status_code=404, detail="Review not found")

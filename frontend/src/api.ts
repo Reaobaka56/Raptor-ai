@@ -144,7 +144,7 @@ export const reposApi = {
 
 export const prApi = {
   createPullRequest: (reviewId: number) => 
-    api.post<{ status: string; prNumber: number; prUrl: string; message: string }>(`/reviews/${reviewId}/pull-request`),
+    api.post<{ status: string; prNumber: number | null; prUrl: string; message: string }>(`/reviews/${reviewId}/pull-request`),
 }
 
 export const reviewsApi = {

@@ -230,7 +230,7 @@ export default function ReviewDetail() {
               rel="noopener noreferrer"
               className="px-4 py-2 bg-white text-black font-bold font-mono rounded hover:bg-gray-200 text-xs tracking-wider uppercase transition-colors shrink-0 font-mono font-bold font-mono font-mono"
             >
-              Open PR on GitHub
+              Open Pull Requests
             </a>
           </div>
         )}
