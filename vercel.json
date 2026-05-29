@@ -1,7 +1,7 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "http://localhost:8000/api/$1" },
+    { "source": "/api/(.*)", "destination": "https://raptor-backend.onrender.com/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
