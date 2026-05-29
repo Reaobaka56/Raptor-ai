@@ -150,10 +150,8 @@ export interface CreatePullRequestResponse {
 }
 
 export const prApi = {
-  createPullRequest: async (reviewId: number): Promise<CreatePullRequestResponse> => {
-    const response = await api.post<CreatePullRequestResponse>(`/reviews/${reviewId}/pull-request`)
-    return response.data
-  },
+  createPullRequest: (reviewId: number) => 
+    api.post<{ status: string; prNumber: number | null; prUrl: string; message: string }>(`/reviews/${reviewId}/pull-request`),
 }
 
 export const reviewsApi = {

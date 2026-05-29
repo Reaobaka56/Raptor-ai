@@ -25,28 +25,10 @@ const severityConfig = {
 
 type FixPrInfo = { url: string; number: number | null }
 
-const getSafePullRequestsUrl = (url: string) => {
-  try {
-    const parsedUrl = new URL(url)
-    const [owner, repo] = parsedUrl.pathname.split('/').filter(Boolean)
-
-    if (parsedUrl.hostname === 'github.com' && owner && repo) {
-      return `https://github.com/${owner}/${repo}/pulls`
-    }
-  } catch {
-    return url
-  }
-
-  return url
-}
-
-const toFixPrState = (url: string, number: number | null = null): FixPrInfo => ({
-  url: getSafePullRequestsUrl(url),
-  number,
+const toFixPrInfo = (response: CreatePullRequestResponse): FixPrInfo => ({
+  url: response.prUrl,
+  number: response.prNumber,
 })
-
-const toFixPrInfo = (response: CreatePullRequestResponse): FixPrInfo =>
-  toFixPrState(response.prUrl)
 
 const categoryConfig = {
   security: { icon: Shield, label: 'Security' },
@@ -103,7 +85,7 @@ function IssueCard({ issue }: { issue: Review['issues'][0] }) {
 export default function ReviewDetail() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
-  const [createdPrInfo, setCreatedPrInfo] = useState<FixPrInfo | null>(null)
+  const [createdPrInfo, setCreatedPrInfo] = useState<{ url: string; number: number } | null>(null)
   const [prError, setPrError] = useState<string | null>(null)
 
   const { data: review, isLoading } = useQuery({
@@ -117,7 +99,7 @@ export default function ReviewDetail() {
       setPrError(null)
     },
     onSuccess: (res) => {
-      setCreatedPrInfo(toFixPrInfo(res))
+      setCreatedPrInfo(toFixPrInfo(res.data))
       queryClient.invalidateQueries({ queryKey: ['review', id] })
       queryClient.invalidateQueries({ queryKey: ['reviews-recent'] })
     },
@@ -130,13 +112,13 @@ export default function ReviewDetail() {
   })
 
   useEffect(() => {
-    if (review?.fixPrUrl) {
-      setCreatedPrInfo(toFixPrState(review.fixPrUrl))
+    if (review?.fixPrUrl && review.fixPrNumber) {
+      setCreatedPrInfo({ url: review.fixPrUrl, number: review.fixPrNumber })
     }
   }, [review?.fixPrNumber, review?.fixPrUrl])
 
-  const activeFixPr = createdPrInfo || (review?.fixPrUrl
-    ? toFixPrState(review.fixPrUrl)
+  const activeFixPr = createdPrInfo || (review?.fixPrUrl && review.fixPrNumber
+    ? { url: review.fixPrUrl, number: review.fixPrNumber }
     : null)
 
   if (isLoading) {
@@ -190,7 +172,7 @@ export default function ReviewDetail() {
                     {review.githubRepo} #{review.prNumber}
                   </h1>
                   <span className="text-xs uppercase font-mono px-2.5 py-0.5 rounded font-bold border bg-white/5 text-white border-white/10 font-mono font-bold">
-                    {activeFixPr ? 'PR Ready' : review.status.replace('_', ' ')}
+                    {activeFixPr ? 'PR Created' : review.status.replace('_', ' ')}
                   </span>
                 </div>
                 {review.prTitle && <p className="text-gray-300 text-sm font-sans">{review.prTitle}</p>}
@@ -226,7 +208,7 @@ export default function ReviewDetail() {
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-colors font-mono font-bold font-mono"
                 >
                   <GitBranchPlus className="w-4 h-4 text-black" />
-                  Open Pull Requests
+                  Open Fix PR
                 </a>
               ) : (
                 <button
@@ -247,7 +229,7 @@ export default function ReviewDetail() {
           <div className="p-5 rounded-lg bg-white/5 border border-white/15 flex items-center justify-between font-mono text-sm animate-fadeIn font-sans font-mono font-sans font-mono">
             <div className="flex items-center gap-3 text-white font-bold font-mono">
               <CheckCircle2 className="w-5 h-5 text-[#27c93f] shrink-0 font-mono font-bold font-mono font-mono" />
-              <span>No GitHub PR was auto-created. Open the repository Pull Requests page to create one from the suggested fixes.</span>
+              <span>Automated AI Pull Request #{activeFixPr.number} successfully created with AST vulnerability fixes!</span>
             </div>
             <a 
               href={activeFixPr.url}
