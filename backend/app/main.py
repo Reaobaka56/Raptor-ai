@@ -183,6 +183,27 @@ app = FastAPI(
     version="2.0.0"
 )
 
+configured_origins = [
+    origin.strip()
+    for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
+allowed_origins = configured_origins or [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://raptor-ai.vercel.app",
+    "https://raptor-ai.onrender.com",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(analysis_router, prefix="/debug")
 
 
