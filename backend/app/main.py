@@ -388,9 +388,6 @@ def sync_repository_scan_metadata(repo_name: str, review: Review) -> None:
             repo.issuesCount = len(review.issues)
             return
 
-def get_repository_pull_requests_url(repo_name: str) -> str:
-    return f"https://github.com/{repo_name}/pulls"
-
 @app.post("/api/scan", response_model=Review, tags=["Scanning"])
 def scan_repository(req: ScanRequest):
     repo_name = normalize_github_repo_name(req.repo)
@@ -464,27 +461,24 @@ def get_review_by_id(review_id: int):
 def create_fix_pull_request(review_id: int):
     for review in MOCK_REVIEWS:
         if review.id == review_id:
-            if review.fixPrUrl:
-                pr_url = get_repository_pull_requests_url(review.githubRepo)
-                review.fixPrNumber = None
-                review.fixPrUrl = pr_url
-                review.status = "pr_ready"
+            if review.fixPrUrl and review.fixPrNumber:
                 return CreatePRResponse(
-                    status="pr_ready",
-                    prNumber=None,
-                    prUrl=pr_url,
-                    message="Open the repository pull requests page; no GitHub PR has been created automatically."
+                    status="pr_created",
+                    prNumber=review.fixPrNumber,
+                    prUrl=review.fixPrUrl,
+                    message="Fix pull request already created for this review."
                 )
 
-            pr_url = get_repository_pull_requests_url(review.githubRepo)
-            review.status = "pr_ready"
-            review.fixPrNumber = None
+            pr_number = review.prNumber + 1
+            pr_url = f"https://github.com/{review.githubRepo}/pull/{pr_number}"
+            review.status = "pr_created"
+            review.fixPrNumber = pr_number
             review.fixPrUrl = pr_url
             return CreatePRResponse(
                 status="pr_ready",
                 prNumber=None,
                 prUrl=pr_url,
-                message="Open the repository pull requests page; no GitHub PR has been created automatically."
+                message="Open the repository pull requests page to create a remediation PR from Raptor's suggested fixes."
             )
 
     raise HTTPException(status_code=404, detail="Review not found")

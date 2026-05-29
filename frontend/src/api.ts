@@ -150,8 +150,8 @@ export interface CreatePullRequestResponse {
 }
 
 export const prApi = {
-  createPullRequest: (reviewId: number) =>
-    api.post<CreatePullRequestResponse>(`/reviews/${reviewId}/pull-request`).then((response) => response.data),
+  createPullRequest: (reviewId: number) => 
+    api.post<{ status: string; prNumber: number | null; prUrl: string; message: string }>(`/reviews/${reviewId}/pull-request`),
 }
 
 export const reviewsApi = {
