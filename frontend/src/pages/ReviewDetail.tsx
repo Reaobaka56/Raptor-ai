@@ -13,7 +13,7 @@ import {
   CheckCircle2,
   GitBranchPlus
 } from 'lucide-react'
-import { reviewsApi, prApi, type Review } from '../api'
+import { reviewsApi, prApi, type CreatePullRequestResponse, type Review } from '../api'
 import { format } from 'date-fns'
 
 const severityConfig = {
@@ -22,6 +22,13 @@ const severityConfig = {
   medium: { color: 'text-yellow-400', dot: 'bg-yellow-400', border: 'border-white/10 hover:border-white/20' },
   low: { color: 'text-[#27c93f]', dot: 'bg-[#27c93f]', border: 'border-white/10 hover:border-white/20' },
 }
+
+type FixPrInfo = { url: string; number: number | null }
+
+const toFixPrInfo = (response: CreatePullRequestResponse): FixPrInfo => ({
+  url: response.prUrl,
+  number: response.prNumber,
+})
 
 const categoryConfig = {
   security: { icon: Shield, label: 'Security' },
@@ -92,7 +99,7 @@ export default function ReviewDetail() {
       setPrError(null)
     },
     onSuccess: (res) => {
-      setCreatedPrInfo({ url: res.data.prUrl, number: res.data.prNumber })
+      setCreatedPrInfo(toFixPrInfo(res.data))
       queryClient.invalidateQueries({ queryKey: ['review', id] })
       queryClient.invalidateQueries({ queryKey: ['reviews-recent'] })
     },

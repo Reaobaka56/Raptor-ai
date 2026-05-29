@@ -142,6 +142,13 @@ export const reposApi = {
   scanRepo: (repo: string) => api.post<Review>('/scan', { repo }),
 }
 
+export interface CreatePullRequestResponse {
+  status: string
+  prNumber: number | null
+  prUrl: string
+  message: string
+}
+
 export const prApi = {
   createPullRequest: (reviewId: number) => 
     api.post<{ status: string; prNumber: number | null; prUrl: string; message: string }>(`/reviews/${reviewId}/pull-request`),
