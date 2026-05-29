@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { 
   GitPullRequest, 
   ArrowLeft,
@@ -13,7 +13,7 @@ import {
   CheckCircle2,
   GitBranchPlus
 } from 'lucide-react'
-import { reviewsApi, prApi, type Review } from '../api'
+import { reviewsApi, prApi, type CreatePullRequestResponse, type Review } from '../api'
 import { format } from 'date-fns'
 
 const severityConfig = {
@@ -22,6 +22,28 @@ const severityConfig = {
   medium: { color: 'text-yellow-400', dot: 'bg-yellow-400', border: 'border-white/10 hover:border-white/20' },
   low: { color: 'text-[#27c93f]', dot: 'bg-[#27c93f]', border: 'border-white/10 hover:border-white/20' },
 }
+
+type FixPrInfo = { url: string; number: number | null }
+
+const getSafePullRequestsUrl = (url: string) => {
+  try {
+    const parsedUrl = new URL(url)
+    const [owner, repo] = parsedUrl.pathname.split('/').filter(Boolean)
+
+    if (parsedUrl.hostname === 'github.com' && owner && repo) {
+      return `https://github.com/${owner}/${repo}/pulls`
+    }
+  } catch {
+    return url
+  }
+
+  return url
+}
+
+const toFixPrInfo = (response: CreatePullRequestResponse): FixPrInfo => ({
+  url: getSafePullRequestsUrl(response.prUrl),
+  number: null,
+})
 
 const categoryConfig = {
   security: { icon: Shield, label: 'Security' },
@@ -78,21 +100,41 @@ function IssueCard({ issue }: { issue: Review['issues'][0] }) {
 export default function ReviewDetail() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
-  const [createdPrInfo, setCreatedPrInfo] = useState<{ url: string; number: number } | null>(null)
+  const [createdPrInfo, setCreatedPrInfo] = useState<FixPrInfo | null>(null)
+  const [prError, setPrError] = useState<string | null>(null)
 
   const { data: review, isLoading } = useQuery({
     queryKey: ['review', id],
     queryFn: () => reviewsApi.getById(Number(id)).then(r => r.data as Review),
   })
 
-  const prMutation = useMutation({
+  const prMutation = useMutation<CreatePullRequestResponse, unknown, void>({
     mutationFn: () => prApi.createPullRequest(Number(id)),
+    onMutate: () => {
+      setPrError(null)
+    },
     onSuccess: (res) => {
-      setCreatedPrInfo({ url: res.data.prUrl, number: res.data.prNumber })
+      setCreatedPrInfo(toFixPrInfo(res))
       queryClient.invalidateQueries({ queryKey: ['review', id] })
       queryClient.invalidateQueries({ queryKey: ['reviews-recent'] })
     },
+    onError: (err: unknown) => {
+      const message = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        : undefined
+      setPrError(message || 'Unable to create a fix pull request. Please try again.')
+    },
   })
+
+  useEffect(() => {
+    if (review?.fixPrUrl) {
+      setCreatedPrInfo({ url: getSafePullRequestsUrl(review.fixPrUrl), number: null })
+    }
+  }, [review?.fixPrNumber, review?.fixPrUrl])
+
+  const activeFixPr = createdPrInfo || (review?.fixPrUrl
+    ? { url: getSafePullRequestsUrl(review.fixPrUrl), number: null }
+    : null)
 
   if (isLoading) {
     return (
@@ -145,7 +187,7 @@ export default function ReviewDetail() {
                     {review.githubRepo} #{review.prNumber}
                   </h1>
                   <span className="text-xs uppercase font-mono px-2.5 py-0.5 rounded font-bold border bg-white/5 text-white border-white/10 font-mono font-bold">
-                    {createdPrInfo ? 'PR Created' : review.status.replace('_', ' ')}
+                    {activeFixPr ? 'PR Ready' : review.status.replace('_', ' ')}
                   </span>
                 </div>
                 {review.prTitle && <p className="text-gray-300 text-sm font-sans">{review.prTitle}</p>}
@@ -173,35 +215,54 @@ export default function ReviewDetail() {
 
             {/* Automated PR Creation Trigger Button */}
             {review.issues.length > 0 && (
-              <button
-                onClick={() => prMutation.mutate()}
-                disabled={prMutation.isPending || review.status === 'pr_created' || !!createdPrInfo}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50 font-mono font-bold font-mono"
-              >
-                <GitBranchPlus className={`w-4 h-4 text-black ${prMutation.isPending ? 'animate-spin' : ''}`} />
-                {prMutation.isPending ? 'Generating Fix PR...' : createdPrInfo || review.status === 'pr_created' ? 'Fix PR Active' : 'Create Fix PR'}
-              </button>
+              activeFixPr ? (
+                <a
+                  href={activeFixPr.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-colors font-mono font-bold font-mono"
+                >
+                  <GitBranchPlus className="w-4 h-4 text-black" />
+                  Open Pull Requests
+                </a>
+              ) : (
+                <button
+                  onClick={() => prMutation.mutate()}
+                  disabled={prMutation.isPending}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50 font-mono font-bold font-mono"
+                >
+                  <GitBranchPlus className={`w-4 h-4 text-black ${prMutation.isPending ? 'animate-spin' : ''}`} />
+                  {prMutation.isPending ? 'Generating Fix PR...' : 'Create Fix PR'}
+                </button>
+              )
             )}
           </div>
         </div>
 
         {/* PR Creation Success Toast/Banner */}
-        {createdPrInfo && (
+        {activeFixPr && (
           <div className="p-5 rounded-lg bg-white/5 border border-white/15 flex items-center justify-between font-mono text-sm animate-fadeIn font-sans font-mono font-sans font-mono">
             <div className="flex items-center gap-3 text-white font-bold font-mono">
               <CheckCircle2 className="w-5 h-5 text-[#27c93f] shrink-0 font-mono font-bold font-mono font-mono" />
-              <span>Automated AI Pull Request #{createdPrInfo.number} successfully created with AST vulnerability fixes!</span>
+              <span>No GitHub PR was auto-created. Open the repository Pull Requests page to create one from the suggested fixes.</span>
             </div>
             <a 
-              href={createdPrInfo.url}
+              href={activeFixPr.url}
               target="_blank" 
               rel="noopener noreferrer"
               className="px-4 py-2 bg-white text-black font-bold font-mono rounded hover:bg-gray-200 text-xs tracking-wider uppercase transition-colors shrink-0 font-mono font-bold font-mono font-mono"
             >
-              Open PR on GitHub
+              Open Pull Requests
             </a>
           </div>
         )}
+
+        {prError && (
+          <div className="p-4 rounded-lg bg-[#ff5f56]/10 border border-[#ff5f56]/30 text-[#ffb3ad] font-mono text-sm">
+            {prError}
+          </div>
+        )}
+
 
         {review.summary && (
           <div className="p-5 bg-white/[0.02] rounded-lg border border-white/10 font-sans text-sm text-gray-300 leading-relaxed font-sans font-sans font-sans">
