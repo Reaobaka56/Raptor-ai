@@ -461,17 +461,18 @@ def get_review_by_id(review_id: int):
 def create_fix_pull_request(review_id: int):
     for review in MOCK_REVIEWS:
         if review.id == review_id:
-            if review.fixPrUrl:
+            if review.fixPrUrl and review.fixPrNumber:
                 return CreatePRResponse(
-                    status=review.status,
+                    status="pr_created",
                     prNumber=review.fixPrNumber,
                     prUrl=review.fixPrUrl,
-                    message="Pull request destination already prepared for this review."
+                    message="Fix pull request already created for this review."
                 )
 
-            pr_url = f"https://github.com/{review.githubRepo}/pulls"
-            review.status = "pr_ready"
-            review.fixPrNumber = None
+            pr_number = review.prNumber + 1
+            pr_url = f"https://github.com/{review.githubRepo}/pull/{pr_number}"
+            review.status = "pr_created"
+            review.fixPrNumber = pr_number
             review.fixPrUrl = pr_url
             return CreatePRResponse(
                 status="pr_ready",
