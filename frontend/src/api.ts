@@ -1,8 +1,30 @@
 import axios from 'axios'
 
+const DEFAULT_PRODUCTION_API_URL = 'https://raptor-backend.onrender.com/api'
+
+const normalizeApiBaseUrl = (url: string) => {
+  const trimmedUrl = url.trim().replace(/\/$/, '')
+  if (!trimmedUrl || trimmedUrl === '/api' || trimmedUrl.endsWith('/api')) {
+    return trimmedUrl || '/api'
+  }
+  return `${trimmedUrl}/api`
+}
+
+const getApiBaseUrl = () => {
+  const envApiUrl = import.meta.env.VITE_API_URL
+  if (envApiUrl) {
+    return normalizeApiBaseUrl(envApiUrl)
+  }
+
+  if (import.meta.env.PROD) {
+    return DEFAULT_PRODUCTION_API_URL
+  }
+
+  return '/api'
+}
+
 const api = axios.create({
-// @ts-ignore
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
