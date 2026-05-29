@@ -39,6 +39,8 @@ class Review(BaseModel):
     prNumber: int
     prTitle: Optional[str] = None
     prUrl: Optional[str] = None
+    fixPrNumber: Optional[int] = None
+    fixPrUrl: Optional[str] = None
     issues: List[ReviewIssue] = []
     summary: Optional[str] = None
     status: str = "completed"
@@ -135,7 +137,7 @@ class ScanRequest(BaseModel):
 
 class CreatePRResponse(BaseModel):
     status: str
-    prNumber: int
+    prNumber: Optional[int] = None
     prUrl: str
     message: str
 
@@ -179,6 +181,27 @@ app = FastAPI(
     title="Raptor AI Code Review Backend",
     description="Autonomous live GitHub integration and Gemini AST analysis engine",
     version="2.0.0"
+)
+
+configured_origins = [
+    origin.strip()
+    for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
+allowed_origins = configured_origins or [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://raptor-ai.vercel.app",
+    "https://raptor-ai.onrender.com",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(analysis_router, prefix="/debug")
@@ -334,12 +357,40 @@ def get_repositories(session: GitHubSession = Depends(get_required_github_sessio
 
 import copy
 import random
+from urllib.parse import urlparse
+
+def normalize_github_repo_name(repo: str) -> str:
+    """Return owner/repo from either a GitHub URL or owner/repo input."""
+    repo_name = repo.strip()
+    if not repo_name:
+        raise HTTPException(status_code=400, detail="Repository is required")
+
+    if "://" in repo_name:
+        parsed = urlparse(repo_name)
+        if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
+            raise HTTPException(status_code=400, detail="Only GitHub repository URLs are supported")
+        path_parts = [part for part in parsed.path.strip("/").split("/") if part]
+        if len(path_parts) < 2:
+            raise HTTPException(status_code=400, detail="GitHub repository URL must include owner and repo")
+        repo_name = "/".join(path_parts[:2])
+
+    repo_name = repo_name.removesuffix(".git").strip("/")
+    repo_parts = repo_name.split("/")
+    if len(repo_parts) != 2 or not all(repo_parts):
+        raise HTTPException(status_code=400, detail="Repository must be in owner/repo format")
+    return repo_name
+
+def sync_repository_scan_metadata(repo_name: str, review: Review) -> None:
+    """Keep dashboard repository cards in sync after manual scans."""
+    for repo in MOCK_REPOSITORIES:
+        if repo.fullName.lower() == repo_name.lower():
+            repo.lastScan = review.createdAt
+            repo.issuesCount = len(review.issues)
+            return
 
 @app.post("/api/scan", response_model=Review, tags=["Scanning"])
 def scan_repository(req: ScanRequest):
-    repo_name = req.repo
-    if "github.com/" in repo_name:
-        repo_name = repo_name.split("github.com/")[-1].strip("/")
+    repo_name = normalize_github_repo_name(req.repo)
     
     try:
         from .services.ai_service import ai_service as real_ai_service
@@ -378,7 +429,12 @@ def scan_repository(req: ScanRequest):
         new_review.id = random.randint(100, 9999)
         new_review.githubRepo = repo_name
         new_review.prUrl = f"https://github.com/{repo_name}"
+        new_review.fixPrNumber = None
+        new_review.fixPrUrl = None
+        new_review.status = "completed"
+        new_review.createdAt = datetime.now(timezone.utc).isoformat()
     
+    sync_repository_scan_metadata(repo_name, new_review)
     MOCK_REVIEWS.insert(0, new_review)
     return new_review
 
@@ -405,22 +461,23 @@ def get_review_by_id(review_id: int):
 def create_fix_pull_request(review_id: int):
     for review in MOCK_REVIEWS:
         if review.id == review_id:
-            if review.status == "pr_created":
+            if review.fixPrUrl:
                 return CreatePRResponse(
-                    status="pr_created",
-                    prNumber=review.prNumber + 1,
-                    prUrl=f"https://github.com/{review.githubRepo}/pull/{review.prNumber + 1}",
-                    message="Fix pull request already created for this review."
+                    status=review.status,
+                    prNumber=review.fixPrNumber,
+                    prUrl=review.fixPrUrl,
+                    message="Pull request destination already prepared for this review."
                 )
 
-            pr_number = review.prNumber + 1
-            pr_url = f"https://github.com/{review.githubRepo}/pull/{pr_number}"
-            review.status = "pr_created"
+            pr_url = f"https://github.com/{review.githubRepo}/pulls"
+            review.status = "pr_ready"
+            review.fixPrNumber = None
+            review.fixPrUrl = pr_url
             return CreatePRResponse(
-                status="pr_created",
-                prNumber=pr_number,
+                status="pr_ready",
+                prNumber=None,
                 prUrl=pr_url,
-                message="Automated fix pull request created successfully."
+                message="Open the repository pull requests page to create a remediation PR from Raptor's suggested fixes."
             )
 
     raise HTTPException(status_code=404, detail="Review not found")
@@ -435,4 +492,3 @@ def get_stats(repo: Optional[str] = None):
         issuesByCategory=CategoryStats(security=1, performance=0, quality=0, design=0),
         reviewsOverTime=[]
     )
-
