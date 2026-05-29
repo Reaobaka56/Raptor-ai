@@ -22,6 +22,8 @@ export interface Review {
   prNumber: number
   prTitle: string | null
   prUrl: string | null
+  fixPrNumber: number | null
+  fixPrUrl: string | null
   issues: ReviewIssue[]
   summary: string | null
   status: string

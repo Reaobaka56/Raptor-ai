@@ -177,6 +177,7 @@ export default function Dashboard() {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [scanningRepo, setScanningRepo] = useState<string | null>(null)
   const [customUrl, setCustomUrl] = useState('')
+  const [scanError, setScanError] = useState<string | null>(null)
 
 
   useEffect(() => {
@@ -216,14 +217,23 @@ export default function Dashboard() {
 
 
   const handleScan = async (repoName: string) => {
-    setScanningRepo(repoName)
+    const targetRepo = repoName.trim()
+    if (!targetRepo || scanningRepo) return
+
+    setScanError(null)
+    setScanningRepo(targetRepo)
     try {
-      const res = await reposApi.scanRepo(repoName)
+      const res = await reposApi.scanRepo(targetRepo)
       await queryClient.invalidateQueries({ queryKey: ['reviews-recent'] })
+      await queryClient.invalidateQueries({ queryKey: ['repositories', user?.username] })
       await queryClient.invalidateQueries({ queryKey: ['stats'] })
       navigate(`/reviews/${res.data.id}`)
     } catch (err) {
       console.error('Failed to scan repository', err)
+      const message = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        : undefined
+      setScanError(message || 'Unable to start the repository scan. Please check the repository URL and try again.')
     } finally {
       setScanningRepo(null)
     }
@@ -266,10 +276,15 @@ export default function Dashboard() {
             disabled={!customUrl.trim() || !!scanningRepo}
             className="inline-flex items-center gap-2 bg-white text-black hover:bg-gray-200 px-6 py-2 rounded font-bold transition-colors disabled:opacity-50"
           >
-            <Play className={`w-4 h-4 ${scanningRepo === customUrl ? 'animate-spin' : ''}`} />
-            {scanningRepo === customUrl ? 'Scanning...' : 'Scan URL'}
+            <Play className={`w-4 h-4 ${scanningRepo === customUrl.trim() ? 'animate-spin' : ''}`} />
+            {scanningRepo === customUrl.trim() ? 'Scanning...' : 'Scan URL'}
           </button>
         </div>
+        {scanError && (
+          <div className="mt-4 rounded-lg border border-[#ff5f56]/30 bg-[#ff5f56]/10 px-4 py-3 text-sm text-[#ffb3ad] font-mono">
+            {scanError}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
@@ -307,7 +322,7 @@ export default function Dashboard() {
                   </span>
                   <button
                     onClick={() => handleScan(repo.fullName)}
-                    disabled={scanningRepo === repo.fullName}
+                    disabled={!!scanningRepo}
                     className="inline-flex items-center gap-2 bg-white/5 hover:bg-white text-white hover:text-black px-4 py-2 rounded text-xs font-bold transition-colors border border-white/15 disabled:opacity-50"
                   >
                     <Play className={`w-3.5 h-3.5 ${scanningRepo === repo.fullName ? 'animate-spin' : ''}`} />
