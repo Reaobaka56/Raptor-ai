@@ -1,10 +1,12 @@
 import os
+import random
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, TypedDict, Literal
+from urllib.parse import urlencode, urlparse
+
 import requests
-from urllib.parse import urlencode
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Header, Cookie, Depends, Request
@@ -16,11 +18,6 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-try:
-    import psutil
-    HAS_PSUTIL = True
-except ImportError:
-    HAS_PSUTIL = False
 
 # =====================================================================
 # INTEGRATED PYDANTIC MODELS (No external models.py import needed!)
@@ -170,11 +167,6 @@ class SystemTelemetry(BaseModel):
 # =====================================================================
 from .services.github_app import github_app_service
 
-class InlineAIService:
-    def analyze_ast(self, prompt: str) -> str:
-        return "Raptor local AST validation completed successfully."
-ai_service = InlineAIService()
-
 # =====================================================================
 # FASTAPI APPLICATION SETUP
 # =====================================================================
@@ -252,30 +244,7 @@ MOCK_REPOSITORIES: List[RepositoryInfo] = [
     )
 ]
 
-MOCK_REVIEWS: List[Review] = [
-    Review(
-        id=1,
-        githubRepo="organization/api-gateway",
-        prNumber=88,
-        prTitle="refactor: migrate legacy SQL queries to parameterized helpers",
-        prUrl="https://github.com/organization/api-gateway/pull/88",
-        issues=[
-            ReviewIssue(
-                file="src/controllers/paymentController.ts",
-                line=42,
-                severity="critical",
-                category="security",
-                title="Severe SQL Injection Vulnerability Detected",
-                description="Direct string concatenation detected in raw database query parameter. Unsanitized input from req.body.customerId permits arbitrary query execution.",
-                suggestion="const invoice = await db.query('SELECT * FROM invoices WHERE id = $1', [req.body.customerId]);"
-            )
-        ],
-        summary="Raptor AST analysis completed.",
-        status="completed",
-        reviewTimeMs=1240,
-        createdAt="2026-05-17T14:15:00Z"
-    )
-]
+MOCK_REVIEWS: List[Review] = []
 
 
 
@@ -357,13 +326,10 @@ def github_callback(request: Request, code: str = Query(None), state: str = Quer
 def get_repositories(session: GitHubSession = Depends(get_required_github_session)):
     return session["repositories"]
 
-import copy
-import random
-from urllib.parse import urlparse
-
-def normalize_github_repo_name(repo: str) -> str:
-    """Return owner/repo from either a GitHub URL or owner/repo input."""
-    repo_name = repo.strip()
+def parse_github_scan_target(target: str) -> tuple[str, Optional[int]]:
+    """Return (owner/repo, pull_request_number) from an owner/repo or GitHub PR URL."""
+    repo_name = target.strip()
+    pr_number: Optional[int] = None
     if not repo_name:
         raise HTTPException(status_code=400, detail="Repository is required")
 
@@ -373,14 +339,23 @@ def normalize_github_repo_name(repo: str) -> str:
             raise HTTPException(status_code=400, detail="Only GitHub repository URLs are supported")
         path_parts = [part for part in parsed.path.strip("/").split("/") if part]
         if len(path_parts) < 2:
-            raise HTTPException(status_code=400, detail="GitHub repository URL must include owner and repo")
+            raise HTTPException(status_code=400, detail="GitHub URL must include owner and repo")
+        if len(path_parts) >= 4 and path_parts[2] == "pull":
+            try:
+                pr_number = int(path_parts[3])
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="Pull request number must be numeric") from exc
         repo_name = "/".join(path_parts[:2])
 
     repo_name = repo_name.removesuffix(".git").strip("/")
     repo_parts = repo_name.split("/")
     if len(repo_parts) != 2 or not all(repo_parts):
         raise HTTPException(status_code=400, detail="Repository must be in owner/repo format")
-    return repo_name
+    return repo_name, pr_number
+
+def normalize_github_repo_name(repo: str) -> str:
+    """Return owner/repo from either a GitHub URL or owner/repo input."""
+    return parse_github_scan_target(repo)[0]
 
 def sync_repository_scan_metadata(repo_name: str, review: Review) -> None:
     """Keep dashboard repository cards in sync after manual scans."""
@@ -392,61 +367,80 @@ def sync_repository_scan_metadata(repo_name: str, review: Review) -> None:
 
 @app.post("/api/scan", response_model=Review, tags=["Scanning"])
 def scan_repository(req: ScanRequest):
-    repo_name = normalize_github_repo_name(req.repo)
-    
+    repo_name, requested_pr_number = parse_github_scan_target(req.repo)
+    from .services.ai_service import ai_service as real_ai_service
+
+    github_token = None
     try:
-        from .services.ai_service import ai_service as real_ai_service
-        
-        commits_res = requests.get(f"https://api.github.com/repos/{repo_name}/commits?per_page=1", timeout=10)
-        commits_res.raise_for_status()
-        commits_data = commits_res.json()
-        if not commits_data:
-            raise Exception("No commits found")
-        
-        latest_commit = commits_data[0]
-        sha = latest_commit["sha"]
-        message = latest_commit["commit"]["message"]
-        
-        diff_url = f"https://github.com/{repo_name}/commit/{sha}.diff"
-        diff_text = real_ai_service.fetch_diff(diff_url)
-        
-        ai_result = real_ai_service.analyze_pr(repo=repo_name, pr_number=1, pr_title=message, diff_text=diff_text)
-        
+        github_token = github_app_service.get_installation_token_for_repo(repo_name)
+    except Exception as auth_exc:
+        print(f"GitHub App token unavailable for {repo_name}; falling back to public API: {auth_exc}")
+    github_headers = github_app_service._headers(github_token) if github_token else None
+
+    try:
+        if requested_pr_number:
+            pr_res = requests.get(f"https://api.github.com/repos/{repo_name}/pulls/{requested_pr_number}", headers=github_headers, timeout=15)
+            pr_res.raise_for_status()
+            pr_data = pr_res.json()
+            pr_number = int(pr_data["number"])
+            pr_title = pr_data.get("title") or f"Pull request #{pr_number}"
+            pr_url = pr_data.get("html_url") or f"https://github.com/{repo_name}/pull/{pr_number}"
+            diff_url = pr_data.get("diff_url") or f"{pr_url}.diff"
+        else:
+            pulls_res = requests.get(f"https://api.github.com/repos/{repo_name}/pulls?state=open&sort=updated&direction=desc&per_page=1", headers=github_headers, timeout=15)
+            pulls_res.raise_for_status()
+            pulls_data = pulls_res.json()
+            if pulls_data:
+                pr_data = pulls_data[0]
+                pr_number = int(pr_data["number"])
+                pr_title = pr_data.get("title") or f"Pull request #{pr_number}"
+                pr_url = pr_data.get("html_url") or f"https://github.com/{repo_name}/pull/{pr_number}"
+                diff_url = pr_data.get("diff_url") or f"{pr_url}.diff"
+            else:
+                commits_res = requests.get(f"https://api.github.com/repos/{repo_name}/commits?per_page=1", headers=github_headers, timeout=15)
+                commits_res.raise_for_status()
+                commits_data = commits_res.json()
+                if not commits_data:
+                    raise HTTPException(status_code=404, detail="No pull requests or commits found for this repository")
+                latest_commit = commits_data[0]
+                sha = latest_commit["sha"]
+                pr_number = 0
+                pr_title = latest_commit["commit"]["message"]
+                pr_url = f"https://github.com/{repo_name}/commit/{sha}"
+                diff_url = f"{pr_url}.diff"
+
+        diff_text = real_ai_service.fetch_diff(diff_url, github_token=github_token)
+        ai_result = real_ai_service.analyze_pr(repo=repo_name, pr_number=pr_number, pr_title=pr_title, diff_text=diff_text)
         new_review = Review(
             id=random.randint(10000, 99999),
             githubRepo=repo_name,
-            prNumber=1,
-            prTitle=message,
-            prUrl=f"https://github.com/{repo_name}/commit/{sha}",
+            prNumber=pr_number,
+            prTitle=pr_title,
+            prUrl=pr_url,
             issues=[ReviewIssue(**issue) for issue in ai_result.get("issues", [])],
-            summary=ai_result.get("summary", "LLM Analysis Completed"),
+            summary=ai_result.get("summary", "LLM analysis completed"),
             status="completed",
             reviewTimeMs=ai_result.get("reviewTimeMs", 0),
-            createdAt=datetime.now(timezone.utc).isoformat()
+            createdAt=datetime.now(timezone.utc).isoformat(),
         )
-        
-    except Exception as e:
-        print(f"Failed to scan repo {repo_name}: {e}")
-        new_review = copy.deepcopy(MOCK_REVIEWS[0])
-        new_review.id = random.randint(100, 9999)
-        new_review.githubRepo = repo_name
-        new_review.prUrl = f"https://github.com/{repo_name}"
-        new_review.fixPrNumber = None
-        new_review.fixPrUrl = None
-        new_review.status = "completed"
-        new_review.createdAt = datetime.now(timezone.utc).isoformat()
-    
+    except HTTPException:
+        raise
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 502
+        detail = exc.response.text if exc.response is not None else str(exc)
+        raise HTTPException(status_code=502, detail=f"GitHub API scan failed ({status_code}): {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Repository scan failed: {exc}") from exc
+
     # ── Memory Layer Integration ──────────────────────────────────────
     try:
         from .services.embedding_service import generate_embedding
         from .services import memory_service
 
-        # Build a text blob from the review for embedding
         issue_titles = " | ".join(i.title for i in new_review.issues) or "No issues"
         review_text = f"{new_review.summary or ''} {issue_titles}"
         embedding = generate_embedding(review_text)
 
-        # Store the review embedding for future RAG retrieval
         memory_service.store_review_embedding(
             review_id=new_review.id,
             repo=repo_name,
@@ -456,14 +450,11 @@ def scan_repository(req: ScanRequest):
             embedding=embedding,
         )
 
-        # Retrieve similar past reviews as context
         similar = memory_service.retrieve_similar_reviews(
             embedding=embedding, repo=repo_name, top_k=5
         )
-        # Attach to review metadata (frontend can display this)
         new_review._similar_past_reviews = similar
 
-        # Check convention rules for violations
         relevant_rules = memory_service.find_relevant_rules(
             embedding=embedding, repo=repo_name
         )
@@ -508,27 +499,43 @@ def create_fix_pull_request(review_id: int):
                     message="Fix pull request already created for this review."
                 )
 
-            pr_number = review.prNumber + 1
-            pr_url = f"https://github.com/{review.githubRepo}/pull/{pr_number}"
+            try:
+                pr = github_app_service.create_fix_pull_request(review)
+            except requests.HTTPError as exc:
+                status_code = exc.response.status_code if exc.response is not None else 502
+                detail = exc.response.text if exc.response is not None else str(exc)
+                raise HTTPException(status_code=502, detail=f"GitHub App pull request creation failed ({status_code}): {detail}") from exc
+            except Exception as exc:
+                raise HTTPException(status_code=502, detail=f"GitHub App pull request creation failed: {exc}") from exc
+
             review.status = "pr_created"
-            review.fixPrNumber = pr_number
-            review.fixPrUrl = pr_url
+            review.fixPrNumber = pr["number"]
+            review.fixPrUrl = pr["html_url"]
             return CreatePRResponse(
-                status="pr_ready",
-                prNumber=None,
-                prUrl=pr_url,
-                message="Open the repository pull requests page to create a remediation PR from Raptor's suggested fixes."
+                status="pr_created",
+                prNumber=review.fixPrNumber,
+                prUrl=review.fixPrUrl,
+                message="Created a remediation pull request with the installed GitHub App."
             )
 
     raise HTTPException(status_code=404, detail="Review not found")
 
 @app.get("/api/stats", response_model=Stats, tags=["Telemetry"])
 def get_stats(repo: Optional[str] = None):
+    reviews = [r for r in MOCK_REVIEWS if not repo or r.githubRepo.lower() == repo.lower()]
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    category_counts = {"security": 0, "performance": 0, "quality": 0, "design": 0}
+    for review in reviews:
+        for issue in review.issues:
+            severity_counts[issue.severity] += 1
+            category_counts[issue.category] += 1
+    review_times = [r.reviewTimeMs for r in reviews if r.reviewTimeMs is not None]
+    avg_review_time = int(sum(review_times) / len(review_times)) if review_times else 0
     return Stats(
-        totalReviews=len(MOCK_REVIEWS),
-        totalIssues=sum(len(r.issues) for r in MOCK_REVIEWS),
-        avgReviewTime=1500,
-        issuesBySeverity=SeverityStats(critical=1, high=0, medium=0, low=0),
-        issuesByCategory=CategoryStats(security=1, performance=0, quality=0, design=0),
+        totalReviews=len(reviews),
+        totalIssues=sum(len(r.issues) for r in reviews),
+        avgReviewTime=avg_review_time,
+        issuesBySeverity=SeverityStats(**severity_counts),
+        issuesByCategory=CategoryStats(**category_counts),
         reviewsOverTime=[]
     )
