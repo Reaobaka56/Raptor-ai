@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Minus, 
@@ -19,10 +19,25 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
+import { startGithubLogin } from '../api';
 
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const navigate = useNavigate();
+
+  const handleGithubLogin = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    try {
+      await startGithubLogin();
+    } catch (error) {
+      console.error('Failed to start GitHub login', error);
+      setIsLoggingIn(false);
+      navigate('/auth/error');
+    }
+  };
 
   const faqs = [
     {
@@ -94,9 +109,13 @@ export default function Landing() {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
-            <Link to="/dashboard" className="px-5 py-2 rounded-lg text-xs font-bold font-mono uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)]">
-              Get Started
-            </Link>
+            <button
+              onClick={handleGithubLogin}
+              disabled={isLoggingIn}
+              className="px-5 py-2 rounded-lg text-xs font-bold font-mono uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoggingIn ? 'Connecting...' : 'Get Started'}
+            </button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -117,9 +136,16 @@ export default function Landing() {
             <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-gray-400 hover:text-white py-2">FAQ</a>
             <Link to="/docs" onClick={() => setMobileMenuOpen(false)} className="block text-gray-400 hover:text-white py-2">Docs</Link>
             <div className="pt-4 border-t border-white/5">
-              <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)} className="w-full text-center block px-5 py-3 rounded-lg text-xs font-bold bg-white text-black hover:bg-gray-200 uppercase tracking-wider">
-                Get Started
-              </Link>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false)
+                  handleGithubLogin()
+                }}
+                disabled={isLoggingIn}
+                className="w-full text-center block px-5 py-3 rounded-lg text-xs font-bold bg-white text-black hover:bg-gray-200 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoggingIn ? 'Connecting...' : 'Get Started'}
+              </button>
             </div>
           </div>
         )}
@@ -147,13 +173,14 @@ export default function Landing() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 font-sans">
-            <Link
-              to="/dashboard"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold text-black bg-white hover:bg-gray-200 transition-all duration-200 shadow-[0_0_25px_rgba(255,255,255,0.15)] text-xs uppercase tracking-wider font-mono"
+            <button
+              onClick={handleGithubLogin}
+              disabled={isLoggingIn}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold text-black bg-white hover:bg-gray-200 transition-all duration-200 shadow-[0_0_25px_rgba(255,255,255,0.15)] text-xs uppercase tracking-wider font-mono disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Connect GitHub App
+              {isLoggingIn ? 'Connecting...' : 'Connect GitHub'}
               <ArrowRight className="w-4 h-4" />
-            </Link>
+            </button>
             <a
               href="#demo"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-200 text-xs uppercase tracking-wider font-mono backdrop-blur-md"
