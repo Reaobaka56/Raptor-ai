@@ -1,38 +1,50 @@
-import os
 import json
+import os
+import re
 import time
+from typing import Any, Dict, List
+
 import requests
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
-from typing import List, Dict, Any
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    """Extract and parse the first JSON object returned by Gemini."""
+    stripped = text.strip()
+    if stripped.startswith("```json"):
+        stripped = stripped.split("```json", 1)[1].split("```", 1)[0].strip()
+    elif stripped.startswith("```"):
+        stripped = stripped.split("```", 1)[1].split("```", 1)[0].strip()
+
+    json_start = stripped.find("{")
+    json_end = stripped.rfind("}")
+    if json_start == -1 or json_end == -1 or json_end < json_start:
+        raise ValueError("Gemini response did not contain a JSON object")
+    return json.loads(stripped[json_start:json_end + 1])
+
+
 class AIService:
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        self.client = None
-        if api_key:
-            genai.configure(api_key=api_key)
-            self.client = genai.GenerativeModel("gemini-1.5-pro")
+        self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+        self.client = genai.Client(api_key=self.api_key) if self.api_key else None
 
-    def fetch_diff(self, diff_url: str) -> str:
-        """Fetch raw git diff from GitHub PR url."""
-        try:
-            res = requests.get(diff_url, timeout=10)
-            res.raise_for_status()
-            return res.text
-        except Exception as e:
-            print(f"Error fetching diff: {e}")
-            return "--- a/src/main.py\n+++ b/src/main.py\n@@ -10,2 +10,2 @@\n- query = f'SELECT * FROM users WHERE id = {user_id}'\n+ query = 'SELECT * FROM users WHERE id = %s', (user_id,)"
+    def fetch_diff(self, diff_url: str, github_token: str | None = None) -> str:
+        """Fetch a raw git diff from GitHub without substituting canned examples."""
+        headers = {"Accept": "application/vnd.github.v3.diff"}
+        if github_token:
+            headers["Authorization"] = f"Bearer {github_token}"
+        res = requests.get(diff_url, headers=headers, timeout=30)
+        res.raise_for_status()
+        return res.text
 
     def analyze_pr(self, repo: str, pr_number: int, pr_title: str, diff_text: str) -> Dict[str, Any]:
-        """Run autonomous AI analysis over the PR diff text."""
+        """Run Gemini analysis over the actual PR or commit diff text."""
         start_time = time.time()
-        
         prompt = f"""
 You are Raptor, an expert security and performance AST code review agent.
 Analyze the following pull request or commit diff for:
@@ -46,7 +58,7 @@ Title: {pr_title}
 
 Git Diff Text:
 ```diff
-{diff_text}
+{diff_text[:180000]}
 ```
 
 Return your findings strictly in valid JSON format matching this schema:
@@ -65,64 +77,86 @@ Return your findings strictly in valid JSON format matching this schema:
   ]
 }}
 """
-        try:
-            if not self.client:
-                time.sleep(0.8) # simulate latency
-                mock_issues = [
-                    {
-                        "file": "src/controllers/auth.py",
-                        "line": 28,
+        if self.client:
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0,
+                    response_mime_type="application/json",
+                ),
+            )
+            data = _extract_json_object(response.text or "")
+        else:
+            data = self._analyze_diff_with_local_rules(repo, pr_number, diff_text)
+
+        data["issues"] = self._normalize_issues(data.get("issues", []))
+        data["reviewTimeMs"] = int((time.time() - start_time) * 1000)
+        return data
+
+    def _normalize_issues(self, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        normalized = []
+        allowed_severities = {"critical", "high", "medium", "low"}
+        allowed_categories = {"security", "performance", "quality", "design"}
+        for issue in issues:
+            normalized.append({
+                "file": str(issue.get("file") or "unknown"),
+                "line": max(1, int(issue.get("line") or 1)),
+                "severity": str(issue.get("severity") or "medium").lower()
+                    if str(issue.get("severity") or "medium").lower() in allowed_severities else "medium",
+                "category": str(issue.get("category") or "quality").lower()
+                    if str(issue.get("category") or "quality").lower() in allowed_categories else "quality",
+                "title": str(issue.get("title") or "Review finding"),
+                "description": str(issue.get("description") or "Gemini identified a code review finding."),
+                "suggestion": str(issue.get("suggestion") or "Review the changed code and apply the safest remediation."),
+            })
+        return normalized
+
+    def _analyze_diff_with_local_rules(self, repo: str, pr_number: int, diff_text: str) -> Dict[str, Any]:
+        """Use deterministic rules on the real diff when Gemini is not configured."""
+        issues: List[Dict[str, Any]] = []
+        current_file = "unknown"
+        new_line = 0
+        for raw_line in diff_text.splitlines():
+            if raw_line.startswith("+++ b/"):
+                current_file = raw_line.removeprefix("+++ b/")
+                continue
+            hunk = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw_line)
+            if hunk:
+                new_line = int(hunk.group(1)) - 1
+                continue
+            if raw_line.startswith("+") and not raw_line.startswith("+++"):
+                new_line += 1
+                added = raw_line[1:]
+                lowered = added.lower()
+                if re.search(r"execute\s*\(\s*f?['\"].*\{.*\}", added) or re.search(r"select .*\+", lowered):
+                    issues.append({
+                        "file": current_file,
+                        "line": new_line,
                         "severity": "critical",
                         "category": "security",
-                        "title": "SQL Injection in User Lookup",
-                        "description": "String formatting used directly in database execution string without parameterized query sanitization.",
-                        "suggestion": "cursor.execute('SELECT * FROM users WHERE email = %s', (email,))"
-                    },
-                    {
-                        "file": "src/services/billing.py",
-                        "line": 64,
+                        "title": "Potential SQL injection in added query",
+                        "description": "The added diff appears to interpolate or concatenate values into a SQL statement. Use parameterized query placeholders instead.",
+                        "suggestion": "Replace string interpolation/concatenation with a parameterized query and pass user values separately.",
+                    })
+                if re.search(r"(api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"]{8,}", lowered):
+                    issues.append({
+                        "file": current_file,
+                        "line": new_line,
                         "severity": "high",
-                        "category": "performance",
-                        "title": "N+1 Database Query Loop",
-                        "description": "Executing database select statement inside a for-loop over active subscriptions.",
-                        "suggestion": "subscriptions = Subscription.objects.filter(user_id__in=[u.id for u in users])"
-                    }
-                ]
-                elapsed = int((time.time() - start_time) * 1000)
-                return {
-                    "summary": f"Raptor completed AST analysis across {repo} #{pr_number}. Detected 1 Critical SQL injection vulnerability and 1 N+1 performance bottleneck.",
-                    "issues": mock_issues,
-                    "reviewTimeMs": elapsed
-                }
+                        "category": "security",
+                        "title": "Potential hardcoded secret",
+                        "description": "The added line looks like a credential or token literal. Store secrets in environment-backed secret management instead.",
+                        "suggestion": "Move the value to a secret manager or environment variable and rotate the exposed credential.",
+                    })
+            elif raw_line and not raw_line.startswith("-"):
+                new_line += 1
 
-            response = self.client.generate_content(prompt)
-            text = response.text
-            # Strip optional markdown fences
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0].strip()
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0].strip()
-            data = json.loads(text)
-            elapsed = int((time.time() - start_time) * 1000)
-            data["reviewTimeMs"] = elapsed
-            return data
-        except Exception as e:
-            print(f"Gemini AI execution failure: {e}")
-            elapsed = int((time.time() - start_time) * 1000)
-            return {
-                "summary": f"Autonomous scan of {repo} finished with AST static rules.",
-                "issues": [
-                    {
-                        "file": "src/main.py",
-                        "line": 15,
-                        "severity": "medium",
-                        "category": "quality",
-                        "title": "Missing Error Boundary Catch",
-                        "description": "Unhandled exceptions in async handlers can cause worker thread crashes.",
-                        "suggestion": "try:\n    await process()\nexcept Exception as e:\n    logger.error(e)"
-                    }
-                ],
-                "reviewTimeMs": elapsed
-            }
+        summary = (
+            f"Gemini API key is not configured, so Raptor analyzed the actual diff for {repo} #{pr_number} "
+            f"with deterministic local security rules and found {len(issues)} issue(s)."
+        )
+        return {"summary": summary, "issues": issues}
+
 
 ai_service = AIService()
