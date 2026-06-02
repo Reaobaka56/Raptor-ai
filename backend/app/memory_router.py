@@ -66,6 +66,24 @@ class FeedbackStats(BaseModel):
     suppressionRate: float
 
 
+class OnboardingPattern(BaseModel):
+    title: str
+    count: int
+
+
+class OnboardingStats(BaseModel):
+    reviewCount: int
+    pullRequestCount: int
+    issueCount: int
+    conventionRuleCount: int
+    feedbackTotal: int
+    feedbackAccepted: int
+    feedbackRejected: int
+    suppressionRate: float
+    latestScanAt: Optional[str] = None
+    topPatterns: List[OnboardingPattern]
+
+
 class OnboardingSection(BaseModel):
     title: str
     content: List[str]
@@ -74,6 +92,7 @@ class OnboardingSection(BaseModel):
 class OnboardingGuide(BaseModel):
     repo: str
     generatedAt: str
+    stats: OnboardingStats
     sections: List[OnboardingSection]
 
 

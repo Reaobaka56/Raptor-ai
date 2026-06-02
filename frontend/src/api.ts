@@ -234,6 +234,24 @@ export interface SimilarReview {
   created_at: string
 }
 
+export interface OnboardingPattern {
+  title: string
+  count: number
+}
+
+export interface OnboardingStats {
+  reviewCount: number
+  pullRequestCount: number
+  issueCount: number
+  conventionRuleCount: number
+  feedbackTotal: number
+  feedbackAccepted: number
+  feedbackRejected: number
+  suppressionRate: number
+  latestScanAt: string | null
+  topPatterns: OnboardingPattern[]
+}
+
 export interface OnboardingSection {
   title: string
   content: string[]
@@ -242,6 +260,7 @@ export interface OnboardingSection {
 export interface OnboardingGuideData {
   repo: string
   generatedAt: string
+  stats: OnboardingStats
   sections: OnboardingSection[]
 }
 
