@@ -15,7 +15,7 @@ import {
   ThumbsUp,
   ThumbsDown
 } from 'lucide-react'
-import { reviewsApi, prApi, memoryApi, type CreatePullRequestResponse, type Review } from '../api'
+import { reviewsApi, prApi, memoryApi, type Review } from '../api'
 import { format } from 'date-fns'
 
 const severityConfig = {
@@ -27,7 +27,7 @@ const severityConfig = {
 
 type FixPrInfo = { url: string; number: number | null }
 
-const toFixPrInfo = (response: CreatePullRequestResponse): FixPrInfo => ({
+const toFixPrInfo = (response: { prUrl: string; prNumber: number | null }): FixPrInfo => ({
   url: response.prUrl,
   number: response.prNumber,
 })
@@ -137,7 +137,7 @@ function IssueCard({ issue, reviewId, issueIndex }: { issue: Review['issues'][0]
 export default function ReviewDetail() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
-  const [createdPrInfo, setCreatedPrInfo] = useState<{ url: string; number: number } | null>(null)
+  const [createdPrInfo, setCreatedPrInfo] = useState<{ url: string; number: number | null } | null>(null)
   const [prError, setPrError] = useState<string | null>(null)
 
   const { data: review, isLoading } = useQuery({
@@ -145,7 +145,7 @@ export default function ReviewDetail() {
     queryFn: () => reviewsApi.getById(Number(id)).then(r => r.data as Review),
   })
 
-  const prMutation = useMutation<CreatePullRequestResponse, unknown, void>({
+  const prMutation = useMutation<any, unknown, void>({
     mutationFn: () => prApi.createPullRequest(Number(id)),
     onMutate: () => {
       setPrError(null)
