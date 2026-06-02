@@ -8,3 +8,5 @@ google-genai
 psutil
 pyjwt
 cryptography
+pgvector
+asyncpg
