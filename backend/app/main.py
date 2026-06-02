@@ -362,12 +362,25 @@ def get_github_login_url(state: str = Query(..., min_length=16), redirect_uri: s
     })
     return GitHubLoginUrlResponse(url=f"https://github.com/login/oauth/authorize?{query}")
 
+def get_frontend_origin_from_request(request: Request) -> str:
+    configured_frontend = os.getenv("FRONTEND_URL") or os.getenv("FRONTEND_ORIGIN")
+    if configured_frontend:
+        return configured_frontend.rstrip("/")
+
+    forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+
+    return "http://localhost:5173"
+
+
 @app.get("/api/auth/github/callback")
 def github_callback(request: Request, code: str = Query(None), state: str = Query(None)):
     if not code:
         raise HTTPException(status_code=400, detail="Missing OAuth exchange code")
-    # Forward to frontend AuthCallback route
-    frontend_origin = request.headers.get('origin') or "http://localhost:5174"
+    # Forward API callback redirects to the SPA callback route while preserving code/state.
+    frontend_origin = get_frontend_origin_from_request(request)
     redirect_url = f"{frontend_origin}/auth/github/callback?code={code}&state={state}" if state else f"{frontend_origin}/auth/github/callback?code={code}"
     response = RedirectResponse(url=redirect_url)
     return response
