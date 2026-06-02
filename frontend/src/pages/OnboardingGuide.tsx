@@ -8,7 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
-import { memoryApi, type OnboardingGuideData } from '../api'
+import { memoryApi } from '../api'
 
 export default function OnboardingGuide() {
   const [repoInput, setRepoInput] = useState('')
