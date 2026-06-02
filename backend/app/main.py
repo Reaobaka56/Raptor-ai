@@ -131,6 +131,11 @@ class AuthCallbackRequest(BaseModel):
     state: str
     redirectUri: Optional[str] = None
 
+class GitHubOAuthUser(BaseModel):
+    id: int
+    login: str
+    avatar_url: Optional[str] = None
+
 class ScanRequest(BaseModel):
     repo: str
 
@@ -258,10 +263,21 @@ MOCK_REVIEWS: List[Review] = []
 
 
 
-def get_required_github_session(
+def get_github_auth_headers(access_token: Optional[str]) -> Dict[str, str]:
+    """Build GitHub REST API headers for OAuth, PAT, or installation tokens."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if access_token:
+        headers["Authorization"] = f"Bearer {access_token}"
+    return headers
+
+
+def get_optional_github_session(
     authorization: Optional[str] = Header(default=None),
-    raptor_session: Optional[str] = Cookie(default=None)
-) -> GitHubSession:
+    raptor_session: Optional[str] = Cookie(default=None),
+) -> Optional[GitHubSession]:
     session_token = None
     if authorization and authorization.startswith("Bearer "):
         session_token = authorization.removeprefix("Bearer ").strip()
@@ -269,12 +285,36 @@ def get_required_github_session(
         session_token = raptor_session
 
     if not session_token:
-        raise HTTPException(status_code=401, detail="Missing authentication credentials")
+        return None
+    return USER_SESSIONS.get(session_token)
 
-    session = USER_SESSIONS.get(session_token)
+
+def get_required_github_session(
+    session: Optional[GitHubSession] = Depends(get_optional_github_session),
+) -> GitHubSession:
     if not session:
         raise HTTPException(status_code=401, detail="Invalid or expired session context")
     return session
+
+
+def get_configured_github_token() -> Optional[str]:
+    """Return a configured PAT-style token for authenticated GitHub reads."""
+    token = os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_PAT")
+    if not token:
+        return None
+    token = token.strip()
+    if token.startswith(("your_", "optional_")):
+        return None
+    return token
+
+
+def describe_github_rate_limit_error(status_code: int, detail: str, authenticated: bool) -> str:
+    if status_code == 403 and "rate limit" in detail.lower():
+        if authenticated:
+            return "GitHub API rate limit exceeded for the authenticated token. Wait for the GitHub reset window or use a different GitHub App/OAuth token."
+        return "GitHub API rate limit exceeded for unauthenticated requests. Connect GitHub in the app, configure GITHUB_TOKEN/GITHUB_PAT, or configure the GitHub App credentials so scans use authenticated GitHub API quota."
+    return f"GitHub API scan failed ({status_code}): {detail}"
+
 
 def build_repository_list(access_token: str) -> List[RepositoryInfo]:
     headers = get_github_auth_headers(access_token)
@@ -331,6 +371,57 @@ def github_callback(request: Request, code: str = Query(None), state: str = Quer
     redirect_url = f"{frontend_origin}/auth/github/callback?code={code}&state={state}" if state else f"{frontend_origin}/auth/github/callback?code={code}"
     response = RedirectResponse(url=redirect_url)
     return response
+
+@app.post("/api/auth/github", response_model=AuthResponse, tags=["Auth"])
+def complete_github_login(req: GitHubAuthRequest):
+    client_id = os.getenv("GITHUB_CLIENT_ID")
+    client_secret = os.getenv("GITHUB_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="GitHub OAuth is not configured")
+
+    try:
+        token_res = requests.post(
+            "https://github.com/login/oauth/access_token",
+            json={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": req.code,
+                "redirect_uri": req.redirectUri,
+            },
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
+        token_res.raise_for_status()
+        token_data = token_res.json()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="GitHub OAuth token exchange failed") from exc
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        detail = token_data.get("error_description") or token_data.get("error") or "GitHub did not return an access token"
+        raise HTTPException(status_code=400, detail=detail)
+
+    try:
+        user_res = requests.get("https://api.github.com/user", headers=get_github_auth_headers(access_token), timeout=15)
+        user_res.raise_for_status()
+        user_data = GitHubOAuthUser(**user_res.json())
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Unable to fetch GitHub user profile") from exc
+
+    repositories = build_repository_list(access_token)
+    profile = UserProfile(
+        username=user_data.login,
+        avatarUrl=user_data.avatar_url or "",
+        githubId=user_data.id,
+    )
+    session_token = uuid.uuid4().hex
+    USER_SESSIONS[session_token] = {
+        "access_token": access_token,
+        "user": profile,
+        "repositories": repositories,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return AuthResponse(token=session_token, user=profile, repositories=repositories)
 
 @app.get("/api/repos", response_model=List[RepositoryInfo], tags=["Repositories"])
 def get_repositories(session: GitHubSession = Depends(get_required_github_session)):
