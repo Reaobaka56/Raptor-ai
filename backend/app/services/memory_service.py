@@ -14,6 +14,7 @@ import json
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Tuple
 from dotenv import load_dotenv
+from .embedding_service import EMBEDDING_DIM
 
 load_dotenv()
 

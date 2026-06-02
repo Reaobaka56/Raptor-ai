@@ -6,7 +6,9 @@ import {
   Menu,
   X,
   Github,
-  LogOut
+  LogOut,
+  BookOpen,
+  Compass
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { TRexIcon } from './TRexIcon'
@@ -20,6 +22,8 @@ const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/reviews', label: 'Reviews', icon: List },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { path: '/rules', label: 'Rules', icon: BookOpen },
+  { path: '/onboarding', label: 'Onboarding', icon: Compass },
 ]
 
 export default function Layout({ children }: LayoutProps) {

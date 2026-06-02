@@ -15,6 +15,8 @@ import './index.css'
 
 import AuthError from './pages/AuthError'
 import DebugTool from './pages/DebugTool';
+import RuleManager from './pages/RuleManager'
+import OnboardingGuide from './pages/OnboardingGuide'
 
 
 function App() {
@@ -32,6 +34,8 @@ function App() {
           <Route path="/reviews" element={<Layout><Reviews /></Layout>} />
           <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
           <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
+          <Route path="/rules" element={<Layout><RuleManager /></Layout>} />
+          <Route path="/onboarding" element={<Layout><OnboardingGuide /></Layout>} />
 
           <Route path="/debug" element={<DebugTool />} />
 
