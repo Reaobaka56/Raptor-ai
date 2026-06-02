@@ -467,18 +467,16 @@ def sync_repository_scan_metadata(repo_name: str, review: Review) -> None:
             return
 
 @app.post("/api/scan", response_model=Review, tags=["Scanning"])
-def scan_repository(req: ScanRequest, session: Optional[GitHubSession] = Depends(get_optional_github_session)):
+def scan_repository(req: ScanRequest):
     repo_name, requested_pr_number = parse_github_scan_target(req.repo)
     from .services.ai_service import ai_service as real_ai_service
 
-    github_token = session["access_token"] if session else get_configured_github_token()
-    if not github_token:
-        try:
-            github_token = github_app_service.get_installation_token_for_repo(repo_name)
-        except Exception as auth_exc:
-            print(f"GitHub authenticated token unavailable for {repo_name}; falling back to public API: {auth_exc}")
-    github_headers = get_github_auth_headers(github_token)
-    authenticated_github = bool(github_token)
+    github_token = None
+    try:
+        github_token = github_app_service.get_installation_token_for_repo(repo_name)
+    except Exception as auth_exc:
+        print(f"GitHub App token unavailable for {repo_name}; falling back to public API: {auth_exc}")
+    github_headers = github_app_service._headers(github_token) if github_token else None
 
     try:
         if requested_pr_number:
@@ -488,7 +486,7 @@ def scan_repository(req: ScanRequest, session: Optional[GitHubSession] = Depends
             pr_number = int(pr_data["number"])
             pr_title = pr_data.get("title") or f"Pull request #{pr_number}"
             pr_url = pr_data.get("html_url") or f"https://github.com/{repo_name}/pull/{pr_number}"
-            diff_url = f"https://api.github.com/repos/{repo_name}/pulls/{pr_number}"
+            diff_url = pr_data.get("diff_url") or f"{pr_url}.diff"
         else:
             pulls_res = requests.get(f"https://api.github.com/repos/{repo_name}/pulls?state=open&sort=updated&direction=desc&per_page=1", headers=github_headers, timeout=15)
             pulls_res.raise_for_status()
@@ -498,7 +496,7 @@ def scan_repository(req: ScanRequest, session: Optional[GitHubSession] = Depends
                 pr_number = int(pr_data["number"])
                 pr_title = pr_data.get("title") or f"Pull request #{pr_number}"
                 pr_url = pr_data.get("html_url") or f"https://github.com/{repo_name}/pull/{pr_number}"
-                diff_url = f"https://api.github.com/repos/{repo_name}/pulls/{pr_number}"
+                diff_url = pr_data.get("diff_url") or f"{pr_url}.diff"
             else:
                 commits_res = requests.get(f"https://api.github.com/repos/{repo_name}/commits?per_page=1", headers=github_headers, timeout=15)
                 commits_res.raise_for_status()
@@ -510,7 +508,7 @@ def scan_repository(req: ScanRequest, session: Optional[GitHubSession] = Depends
                 pr_number = 0
                 pr_title = latest_commit["commit"]["message"]
                 pr_url = f"https://github.com/{repo_name}/commit/{sha}"
-                diff_url = f"https://api.github.com/repos/{repo_name}/commits/{sha}"
+                diff_url = f"{pr_url}.diff"
 
         diff_text = real_ai_service.fetch_diff(diff_url, github_token=github_token)
         ai_result = real_ai_service.analyze_pr(repo=repo_name, pr_number=pr_number, pr_title=pr_title, diff_text=diff_text)
@@ -531,8 +529,7 @@ def scan_repository(req: ScanRequest, session: Optional[GitHubSession] = Depends
     except requests.HTTPError as exc:
         status_code = exc.response.status_code if exc.response is not None else 502
         detail = exc.response.text if exc.response is not None else str(exc)
-        message = describe_github_rate_limit_error(status_code, detail, authenticated_github)
-        raise HTTPException(status_code=502, detail=message) from exc
+        raise HTTPException(status_code=502, detail=f"GitHub API scan failed ({status_code}): {detail}") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Repository scan failed: {exc}") from exc
 
