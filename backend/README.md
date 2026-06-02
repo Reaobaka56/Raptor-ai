@@ -19,10 +19,11 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configure Environment
-Set your Gemini API key (optional; if not set, high-fidelity mock analysis is automatically simulated):
+Set your Gemini API key for live model analysis. If it is not set, scans still use the actual GitHub diff, but only deterministic local security rules run:
 
 ```bash
 export GEMINI_API_KEY="your_api_key_here"
+export GEMINI_MODEL="gemini-2.5-pro"
 ```
 
 ### 3. Run Server
@@ -40,4 +41,5 @@ The API will be available at `http://localhost:8000`. You can view interactive O
 - `GET /api/reviews` — Get all paginated reviews
 - `GET /api/reviews/{id}` — Get single PR review details and AST breakdown
 - `GET /api/stats` — Telemetry statistics for analytics charts
-- `POST /api/webhook/github` — Webhook ingestion endpoint for GitHub App
+- `POST /api/scan` — Fetch the latest open PR (or a supplied GitHub PR URL) and analyze its real diff with Gemini
+- `POST /api/reviews/{id}/pull-request` — Create a real remediation PR through the installed GitHub App
