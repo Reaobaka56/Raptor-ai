@@ -35,7 +35,7 @@ class AIService:
 
     def fetch_diff(self, diff_url: str, github_token: str | None = None) -> str:
         """Fetch a raw git diff from GitHub without substituting canned examples."""
-        headers = {"Accept": "application/vnd.github.diff"}
+        headers = {"Accept": "application/vnd.github.v3.diff"}
         if github_token:
             headers["Authorization"] = f"Bearer {github_token}"
         res = requests.get(diff_url, headers=headers, timeout=30)
