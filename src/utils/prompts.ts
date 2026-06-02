@@ -64,19 +64,12 @@ export function buildCommentBody(result: { issues: any[]; summary: string; stats
   const { issues, summary, stats } = result;
 
   if (issues.length === 0) {
-    return `## ✅ AI Code Review Complete
+    return `## AI Code Review Complete
 
 ${summary}
 
-No issues found in this PR. Great work! 🎉`;
+No issues found in this PR. Great work!`;
   }
-
-  const severityEmojis = {
-    critical: '🔴',
-    high: '🟠',
-    medium: '🟡',
-    low: '🔵'
-  };
 
   const severityLabels = {
     critical: 'Critical',
@@ -92,19 +85,19 @@ No issues found in this PR. Great work! 🎉`;
     return acc;
   }, {} as Record<string, typeof issues>);
 
-  const order: (keyof typeof severityEmojis)[] = ['critical', 'high', 'medium', 'low'];
+  const order: (keyof typeof severityLabels)[] = ['critical', 'high', 'medium', 'low'];
 
-  let body = `## 🤖 AI Code Review Complete
+  let body = `## AI Code Review Complete
 
 ${summary}
 
 ### Summary
 | Severity | Count |
 |----------|-------|
-| 🔴 Critical | ${stats.critical} |
-| 🟠 High | ${stats.high} |
-| 🟡 Medium | ${stats.medium} |
-| 🔵 Low | ${stats.low} |
+| Critical | ${stats.critical} |
+| High | ${stats.high} |
+| Medium | ${stats.medium} |
+| Low | ${stats.low} |
 | **Total** | **${stats.total}** |
 
 ---
@@ -115,7 +108,7 @@ ${summary}
     const group = grouped[severity];
     if (!group || group.length === 0) continue;
 
-    body += `### ${severityEmojis[severity]} ${severityLabels[severity]} Issues (${group.length})
+    body += `### ${severityLabels[severity]} Issues (${group.length})
 
 `;
 
