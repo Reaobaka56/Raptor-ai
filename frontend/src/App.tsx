@@ -14,6 +14,7 @@ import Privacy from './pages/Privacy'
 import './index.css'
 
 import AuthError from './pages/AuthError'
+import AuthCallback from './pages/AuthCallback'
 import DebugTool from './pages/DebugTool';
 import RuleManager from './pages/RuleManager'
 import OnboardingGuide from './pages/OnboardingGuide'
@@ -23,6 +24,7 @@ function App() {
   return (
     <Routes>
           <Route path="/auth/error" element={<AuthError />} />
+          <Route path="/auth/github/callback" element={<AuthCallback />} />
           <Route path="/" element={<Landing />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/blog" element={<Blog />} />

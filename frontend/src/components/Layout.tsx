@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { TRexIcon } from './TRexIcon'
-import { type UserProfile } from '../api'
+import { startGithubLogin, type UserProfile } from '../api'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -31,6 +31,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<UserProfile | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
 
   useEffect(() => {
@@ -53,6 +54,18 @@ export default function Layout({ children }: LayoutProps) {
   }, [])
 
 
+
+  const handleGithubLogin = async () => {
+    if (isLoggingIn) return
+    setIsLoggingIn(true)
+    try {
+      await startGithubLogin()
+    } catch (error) {
+      console.error('Failed to start GitHub login', error)
+      setIsLoggingIn(false)
+      navigate('/auth/error')
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -119,9 +132,13 @@ export default function Layout({ children }: LayoutProps) {
                   </button>
                 </div>
               ) : (
-                <button disabled className="inline-flex items-center gap-2 bg-gray-500 text-white px-4 py-2 rounded text-xs font-semibold cursor-not-allowed">
+                <button
+                  onClick={handleGithubLogin}
+                  disabled={isLoggingIn}
+                  className="inline-flex items-center gap-2 bg-white text-black px-4 py-2 rounded text-xs font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <Github className="w-4 h-4" />
-                  GitHub login disabled
+                  {isLoggingIn ? 'Connecting...' : 'Connect GitHub'}
                 </button>
               )}
             </div>
@@ -171,8 +188,12 @@ export default function Layout({ children }: LayoutProps) {
                   </button>
                 </div>
               ) : (
-                <button disabled className="w-full flex items-center justify-center gap-2 bg-gray-500 text-white py-2.5 rounded text-xs font-semibold cursor-not-allowed">
-                  <Github className="w-4 h-4" /> GitHub login disabled
+                <button
+                  onClick={handleGithubLogin}
+                  disabled={isLoggingIn}
+                  className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 rounded text-xs font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Github className="w-4 h-4" /> {isLoggingIn ? 'Connecting...' : 'Connect GitHub'}
                 </button>
               )}
             </div>
