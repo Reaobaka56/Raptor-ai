@@ -194,4 +194,81 @@ export const telemetryApi = {
   getSystemTelemetry: () => api.get('/telemetry'),
 }
 
+// =====================================================================
+// Memory Layer API — Team conventions, feedback, and RAG context
+// =====================================================================
+
+export interface ConventionRule {
+  id: number
+  repo: string
+  org: string
+  rule_text: string
+  enabled: boolean
+  created_at: string
+}
+
+export interface FeedbackEntry {
+  id: number
+  review_id: number
+  issue_index: number
+  thumbs_up: boolean
+  comment: string | null
+  created_at: string
+}
+
+export interface FeedbackStats {
+  total: number
+  positive: number
+  negative: number
+  suppressionRate: number
+}
+
+export interface SimilarReview {
+  id: number
+  review_id: number
+  repo: string
+  pr_number: number
+  issue_titles: string
+  summary: string
+  similarity: number
+  created_at: string
+}
+
+export interface OnboardingSection {
+  title: string
+  content: string[]
+}
+
+export interface OnboardingGuideData {
+  repo: string
+  generatedAt: string
+  sections: OnboardingSection[]
+}
+
+export const memoryApi = {
+  // Convention Rules
+  addRule: (rule_text: string, repo: string = '*', org: string = '*') =>
+    api.post<ConventionRule>('/memory/rules', { rule_text, repo, org }),
+  getRules: (repo: string = '*') =>
+    api.get<ConventionRule[]>('/memory/rules', { params: { repo } }),
+  deleteRule: (ruleId: number) =>
+    api.delete(`/memory/rules/${ruleId}`),
+
+  // Feedback
+  submitFeedback: (review_id: number, issue_index: number, thumbs_up: boolean, comment?: string) =>
+    api.post<FeedbackEntry>('/memory/feedback', { review_id, issue_index, thumbs_up, comment }),
+  getReviewFeedback: (reviewId: number) =>
+    api.get<FeedbackEntry[]>(`/memory/feedback/${reviewId}`),
+  getFeedbackStats: (repo?: string) =>
+    api.get<FeedbackStats>('/memory/feedback-stats', { params: { repo } }),
+
+  // Similar Reviews (RAG)
+  findSimilar: (query: string, repo?: string, top_k: number = 5) =>
+    api.get<SimilarReview[]>('/memory/similar', { params: { query, repo, top_k } }),
+
+  // Onboarding Guide
+  getOnboardingGuide: (repo: string) =>
+    api.get<OnboardingGuideData>(`/memory/onboarding/${repo}`),
+}
+
 export default api
