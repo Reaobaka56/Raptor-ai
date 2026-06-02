@@ -17,11 +17,13 @@ export default function AuthCallback() {
 
     const exchangeCode = async () => {
       try {
-        // call your backend callback endpoint
+        // FIXED: Combined params and withCredentials into a single config object
         const res = await axios.get(
           `${import.meta.env.VITE_API_URL}/api/auth/github/callback`,
-          { params: { code, state } },
-          { withCredentials: true }
+          { 
+            params: { code, state },
+            withCredentials: true 
+          }
         )
 
         // backend sets cookie, but we can also store user if returned later
