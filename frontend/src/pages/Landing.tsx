@@ -3,20 +3,26 @@ import { Link } from 'react-router-dom';
 import { 
   Plus, 
   Minus, 
-  Github, 
   Twitter, 
   Linkedin, 
   ShieldAlert, 
   ArrowRight, 
   CheckCircle2, 
   Terminal, 
-  Check
+  Check,
+  Menu,
+  X,
+  Sparkles,
+  Zap,
+  Layers,
+  Cpu,
+  AlertTriangle
 } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
 
-
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const faqs = [
     {
@@ -70,269 +76,448 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-black text-gray-300 font-sans selection:bg-white/20 selection:text-white overflow-x-hidden">
-      {/* Navbar (Matching Screenshot 1) */}
+      
+      {/* Navbar Section */}
       <nav className="fixed top-0 w-full z-50 bg-black/60 backdrop-blur-xl border-b border-white/10 transition-all">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3">
             <TRexIcon className="w-7 h-7 text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.5)]" />
             <span className="text-white font-bold text-lg tracking-tight">Raptor</span>
-          </div>
-          <div className="hidden md:flex items-center gap-8 text-xs font-medium tracking-wide">
+          </Link>
+          
+          <div className="hidden md:flex items-center gap-8 text-xs font-semibold tracking-wide uppercase font-mono">
+            <a href="#problem" className="text-gray-400 hover:text-white transition-colors">Problem</a>
+            <a href="#features" className="text-gray-400 hover:text-white transition-colors">Features</a>
+            <a href="#pricing" className="text-gray-400 hover:text-white transition-colors">Pricing</a>
+            <a href="#faq" className="text-gray-400 hover:text-white transition-colors">FAQ</a>
             <Link to="/docs" className="text-gray-400 hover:text-white transition-colors">Docs</Link>
-            <Link to="/blog" className="text-gray-400 hover:text-white transition-colors">Blog</Link>
-            <Link to="/changelog" className="text-gray-400 hover:text-white transition-colors">Changelog</Link>
-            <Link to="/discord" className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors">
-              Discord <Github className="w-3.5 h-3.5"/>
+          </div>
+
+          <div className="hidden md:flex items-center gap-4">
+            <Link to="/dashboard" className="px-5 py-2 rounded-lg text-xs font-bold font-mono uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)]">
+              Get Started
             </Link>
           </div>
-          <div className="flex items-center gap-4 font-sans">
-                <Link to="/dashboard" className="px-4 py-1.5 rounded text-xs font-semibold bg-white/85 text-black hover:bg-white transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]">Get Started</Link>
-          </div>
+
+          {/* Mobile Menu Button */}
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 text-gray-400 hover:text-white focus:outline-none"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden absolute top-16 left-0 w-full bg-black border-b border-white/10 px-6 py-6 space-y-4 font-mono text-sm animate-fadeIn">
+            <a href="#problem" onClick={() => setMobileMenuOpen(false)} className="block text-gray-400 hover:text-white py-2">Problem</a>
+            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block text-gray-400 hover:text-white py-2">Features</a>
+            <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block text-gray-400 hover:text-white py-2">Pricing</a>
+            <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-gray-400 hover:text-white py-2">FAQ</a>
+            <Link to="/docs" onClick={() => setMobileMenuOpen(false)} className="block text-gray-400 hover:text-white py-2">Docs</Link>
+            <div className="pt-4 border-t border-white/5">
+              <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)} className="w-full text-center block px-5 py-3 rounded-lg text-xs font-bold bg-white text-black hover:bg-gray-200 uppercase tracking-wider">
+                Get Started
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
-      {/* Hero Section (Inspired by Screenshot 4 Cinematic Glow) */}
-      <main className="relative pt-32 pb-24">
-        {/* Cinematic Ambient Backlighting & Blurred Raptor Background Logo */}
-        <div className="absolute top-[350px] left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-gradient-to-tr from-amber-600/20 via-orange-500/10 to-transparent blur-[140px] -z-10 pointer-events-none rounded-full" />
-        <div className="absolute top-[200px] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-to-br from-indigo-600/15 via-transparent to-transparent blur-[120px] -z-10 pointer-events-none rounded-full" />
-        
-        <div className="absolute top-[120px] sm:top-[160px] left-1/2 -translate-x-1/2 w-[400px] h-[400px] sm:w-[600px] sm:h-[600px] text-white/10 blur-[40px] sm:blur-[60px] -z-10 pointer-events-none select-none flex items-center justify-center">
+      {/* Hero Section */}
+      <section className="relative pt-32 pb-20">
+        <div className="absolute top-[250px] left-1/2 -translate-x-1/2 w-full max-w-4xl h-[400px] bg-gradient-to-tr from-amber-600/10 via-orange-500/5 to-transparent blur-[140px] -z-10 pointer-events-none rounded-full" />
+        <div className="absolute top-[120px] left-1/2 -translate-x-1/2 w-[300px] h-[300px] sm:w-[500px] sm:h-[500px] text-white/5 blur-[50px] sm:blur-[70px] -z-10 pointer-events-none select-none flex items-center justify-center">
           <TRexIcon className="w-full h-full" />
         </div>
 
-        <div className="max-w-4xl mx-auto text-center px-6 pt-12 pb-12">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-6 leading-[1.15]">
+        <div className="max-w-4xl mx-auto text-center px-6">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-white font-mono uppercase tracking-wider mb-6 animate-pulse">
+            <Sparkles className="w-3.5 h-3.5" /> Next-gen Team Memory Layer Added
+          </div>
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-white mb-6 leading-[1.1]">
             Real-time PR diff analysis.<br />
             <span className="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">
               Autonomous code review.
             </span>
           </h1>
-
-          <p className="text-lg md:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed font-normal">
-            Raptor AI is an autonomous code review and static analysis platform. Unlike regex-bound linters, it combines AST-level analysis with semantic reasoning to catch high-impact issues in context and generate reliable, inline fixes.
+          <p className="text-base sm:text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+            Raptor AI is an autonomous code review and static analysis platform. It combines AST-level analysis with a team-specific semantic memory layer to catch high-impact issues and generate reliable, inline fixes automatically.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 font-sans">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 font-sans">
             <Link
               to="/dashboard"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-semibold text-black bg-white/85 hover:bg-white transition-all duration-200 shadow-[0_0_25px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.35)] text-sm tracking-wide"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold text-black bg-white hover:bg-gray-200 transition-all duration-200 shadow-[0_0_25px_rgba(255,255,255,0.15)] text-xs uppercase tracking-wider font-mono"
             >
               Connect GitHub App
               <ArrowRight className="w-4 h-4" />
             </Link>
             <a
               href="#demo"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-semibold text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-200 text-sm tracking-wide backdrop-blur-md"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-200 text-xs uppercase tracking-wider font-mono backdrop-blur-md"
             >
               <Terminal className="w-4 h-4 text-gray-400" />
               View Live Demo
             </a>
           </div>
         </div>
+      </section>
 
-        <div className="max-w-5xl mx-auto px-6 mb-20">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 md:p-10">
-            <p className="text-white text-xl md:text-2xl font-semibold mb-6">“The AI security engineer inside every pull request.”</p>
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-xs font-mono tracking-[0.2em] uppercase text-gray-500 mb-3">Why teams switch</h3>
-                <ul className="space-y-2 text-gray-300 text-sm">
-                  <li>• Trust: precise findings with code-aware explanations.</li>
-                  <li>• Speed: real-time analysis on every pull request diff.</li>
-                  <li>• Precision: AST + semantic hybrid reasoning, not shallow pattern matching.</li>
-                  <li>• Workflow: native GitHub comments, inline suggestions, and automated remediation PRs.</li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-xs font-mono tracking-[0.2em] uppercase text-gray-500 mb-3">Core moat</h3>
-                <ul className="space-y-2 text-gray-300 text-sm">
-                  <li>• Repository context memory.</li>
-                  <li>• AST + semantic hybrid analysis.</li>
-                  <li>• Automated fix generation.</li>
-                  <li>• Org-wide architectural learning.</li>
-                </ul>
-              </div>
+      {/* Product Screenshot / PR review interface mockup */}
+      <section id="demo" className="max-w-5xl mx-auto px-6 mb-24 scroll-mt-24">
+        <div className="relative rounded-2xl border border-white/10 bg-black/80 backdrop-blur-2xl shadow-2xl overflow-hidden font-mono text-left">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/10 bg-black">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
+              <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
+              <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
+              <span className="text-[10px] sm:text-xs text-gray-400 ml-2 sm:ml-4 truncate max-w-[200px] sm:max-w-none">
+                github.com/organization/api-gateway/pull/88
+              </span>
+            </div>
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 text-gray-300 border border-white/10 font-mono">
+                <Check className="w-3 h-3 text-white" /> status: ready
+              </span>
             </div>
           </div>
-        </div>
 
-        {/* High-Fidelity Cinematic PR Review Interface Mockup */}
-        <div id="demo" className="max-w-5xl mx-auto px-6 mt-4 mb-32 relative">
-          <div className="relative rounded-2xl border border-white/10 bg-black/80 backdrop-blur-2xl shadow-2xl overflow-hidden font-mono">
-            {/* Window Controls Bar (Red, Yellow, Green dots preserved) */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
-                <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
-                <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-                <span className="text-xs text-gray-400 ml-4">github.com/organization/api-gateway/pull/88</span>
+          <div className="p-4 sm:p-8 space-y-6 bg-black">
+            <div className="flex items-start gap-3 sm:gap-4 font-sans">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                <TRexIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-white/5 text-gray-300 border border-white/10">
-                  <Check className="w-3.5 h-3.5 text-white" /> status: ready
-                </span>
-              </div>
-            </div>
-
-            {/* Simulated PR Review Content (Monochrome / Terminal Inspired) */}
-            <div className="p-6 sm:p-8 space-y-6 bg-black">
-              {/* Review Header */}
-              <div className="flex items-start gap-4 font-sans">
-                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                  <TRexIcon className="w-6 h-6 text-white" />
+              <div className="flex-1 min-w-0 font-mono">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="font-bold text-white text-sm sm:text-base">Raptor</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-white/10 text-gray-300 border border-white/20">bot</span>
+                  <span className="text-[10px] sm:text-xs text-gray-500">left a review comment 1m ago</span>
                 </div>
-                <div className="flex-1 min-w-0 font-mono">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white text-base">Raptor</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-white/10 text-gray-300 border border-white/20">bot</span>
-                    <span className="text-xs text-gray-500 ml-1">left a review comment 1m ago</span>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2 bg-white/5 px-3 py-1.5 rounded inline-block border border-white/10">
-                    Target diff: <span className="text-white font-semibold">src/controllers/paymentController.ts</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Vulnerability Banner (Monochrome) */}
-              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/15 space-y-2">
-                <div className="flex items-center gap-2 font-mono font-bold">
-                  <ShieldAlert className="w-5 h-5 text-white shrink-0" />
-                  <span className="text-white text-sm tracking-wide">CRITICAL: Severe SQL Injection Vulnerability Detected</span>
-                </div>
-                <p className="text-sm text-gray-400 leading-relaxed font-mono">
-                  Direct string concatenation detected in raw database query parameter. Unsanitized input from <code className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono">req.body.customerId</code> permits arbitrary query execution.
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-2 bg-white/5 px-2.5 py-1 rounded inline-block border border-white/10">
+                  Target: <span className="text-white font-semibold">src/controllers/paymentController.ts</span>
                 </p>
               </div>
+            </div>
 
-              {/* Code Snippet Comparison (Monochrome Terminal Style) */}
-              <div className="rounded-xl border border-white/15 overflow-hidden font-mono text-xs sm:text-sm">
-                <div className="bg-white/[0.05] px-4 py-2 border-b border-white/10 flex items-center justify-between text-xs text-gray-400">
-                  <span>Diff Changes</span>
-                  <span className="text-gray-500 font-mono">Lines 42-45</span>
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-2">
+              <div className="flex items-center gap-2 font-mono font-bold text-white text-xs sm:text-sm">
+                <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                <span>CRITICAL: Severe SQL Injection Detected</span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-400 leading-relaxed font-mono">
+                Direct string concatenation detected in raw database query parameter. Unsanitized input from <code className="bg-white/10 px-1 py-0.5 rounded text-white">req.body.customerId</code> permits arbitrary query execution.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 overflow-hidden font-mono text-[10px] sm:text-xs">
+              <div className="bg-white/[0.04] px-4 py-2 border-b border-white/10 flex items-center justify-between text-[10px] text-gray-400">
+                <span>Diff Changes</span>
+                <span className="text-gray-500">Lines 42-45</span>
+              </div>
+              <div className="bg-black divide-y divide-white/5 overflow-x-auto">
+                <div className="flex items-center px-4 py-2.5 text-gray-500 bg-white/[0.01]">
+                  <span className="w-6 select-none text-gray-600 shrink-0">-</span>
+                  <span className="whitespace-pre">const invoice = await db.raw(`SELECT * FROM invoices WHERE id = '${`req.body.customerId`}'`);</span>
                 </div>
-                <div className="bg-black divide-y divide-white/5 font-mono">
-                  <div className="flex items-center px-4 py-2 text-gray-500 bg-white/[0.02] overflow-x-auto line-through">
-                    <span className="w-8 select-none text-gray-600">-</span>
-                    <span className="text-gray-500 whitespace-nowrap">const invoice = await db.raw(`SELECT * FROM invoices WHERE id = '${`req.body.customerId`}'`);</span>
-                  </div>
-                  <div className="flex items-center px-4 py-2 text-white bg-white/[0.07] font-semibold overflow-x-auto border-l-2 border-white">
-                    <span className="w-8 select-none text-white">+</span>
-                    <span className="text-white whitespace-nowrap">const invoice = await db.query('SELECT * FROM invoices WHERE id = $1', [req.body.customerId]);</span>
-                  </div>
+                <div className="flex items-center px-4 py-2.5 text-white bg-white/[0.05] border-l-2 border-white">
+                  <span className="w-6 select-none text-white shrink-0">+</span>
+                  <span className="whitespace-pre font-bold">const invoice = await db.query('SELECT * FROM invoices WHERE id = $1', [req.body.customerId]);</span>
                 </div>
               </div>
+            </div>
 
-              {/* Action Buttons (Monochrome) */}
-              <div className="flex items-center gap-3 pt-2 font-mono font-semibold">
-                <button className="inline-flex items-center gap-2 px-4 py-2 rounded text-xs bg-white text-black hover:bg-gray-200 transition-colors uppercase tracking-wider">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-black" /> Apply Fix Directly
-                </button>
-                <button className="px-4 py-2 rounded text-xs bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10 transition-colors uppercase tracking-wider">
-                  Explain Issue
-                </button>
-              </div>
+            <div className="flex items-center gap-3 pt-2 font-mono">
+              <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold bg-white text-black hover:bg-gray-200 transition-colors uppercase tracking-wider">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Apply Fix Directly
+              </button>
+              <button className="px-4 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10 transition-colors uppercase tracking-wider">
+                Explain Issue
+              </button>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Community / Testimonial Section (Matching Screenshot 2 precisely) */}
-        <div id="community" className="max-w-6xl mx-auto px-6 mb-32 pt-16">
-          <div className="max-w-2xl mb-16">
-            <div className="flex items-center gap-2 text-xs font-bold tracking-widest text-blue-400 uppercase mb-4 font-mono">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-              From the community
+      {/* Problem Section */}
+      <section id="problem" className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5 scroll-mt-24">
+        <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="space-y-6 text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-xs text-red-400 font-mono uppercase tracking-wider">
+              <AlertTriangle className="w-3.5 h-3.5" /> The Problem
             </div>
-            <h2 className="text-4xl md:text-6xl font-bold text-white mb-6 tracking-tight">
-              It fits into your life.
+            <h2 className="text-3xl sm:text-5xl font-bold text-white tracking-tight leading-tight">
+              Code reviews are slow, shallow, and miss logical flaws.
             </h2>
-            <p className="text-gray-400 text-lg leading-relaxed font-normal">
-              Walking the dog while shipping a feature. Picking up the kids while fixing a bug. At the gym while pushing a startup forward. If inspiration hit away from your desk, it had to wait. Now it doesn't.
+            <p className="text-gray-400 text-base sm:text-lg leading-relaxed">
+              Teams spend hours checking for syntax, styling, and basic bugs. Meanwhile, critical security vulnerabilities, database performance leaks (N+1s), and violations of unique team conventions slip into production unnoticed.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-6 rounded-xl border border-white/5 bg-white/[0.01] space-y-2 text-left">
+              <h4 className="text-white font-semibold font-mono text-sm uppercase">Regex-bound Linters</h4>
+              <p className="text-xs text-gray-500">Traditional linters miss logic-based auth bypasses and generate heavy noise, leading to notification fatigue.</p>
+            </div>
+            <div className="p-6 rounded-xl border border-white/5 bg-white/[0.01] space-y-2 text-left">
+              <h4 className="text-white font-semibold font-mono text-sm uppercase">Overloaded Devs</h4>
+              <p className="text-xs text-gray-500">Human reviewers lack time to check every line thoroughly, leaving architectural landmines in codebase margins.</p>
+            </div>
+            <div className="p-6 rounded-xl border border-white/5 bg-white/[0.01] space-y-2 text-left">
+              <h4 className="text-white font-semibold font-mono text-sm uppercase">No Standards Context</h4>
+              <p className="text-xs text-gray-500">Standard general AI review tools don't understand your team's specific legacy codebase patterns or conventions.</p>
+            </div>
+            <div className="p-6 rounded-xl border border-white/5 bg-white/[0.01] space-y-2 text-left">
+              <h4 className="text-white font-semibold font-mono text-sm uppercase">Manual Fixes Only</h4>
+              <p className="text-xs text-gray-500">Discovering bugs requires manual rewrite, PR re-submission, and secondary validation passes.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Solution Section */}
+      <section id="solution" className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5 text-center">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-mono uppercase tracking-wider">
+            <CheckCircle2 className="w-3.5 h-3.5" /> The Solution
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-bold text-white tracking-tight">
+            An Autonomous Review Brain
+          </h2>
+          <p className="text-base sm:text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            Raptor sits directly inside your GitHub workflows. By combining AST-level deep logic parsing with a vector memory layer that learns your conventions over time, it catches both universal flaws and team-specific code requirements.
+          </p>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section id="features" className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5 scroll-mt-24">
+        <div className="text-center mb-16 space-y-4">
+          <h2 className="text-3xl sm:text-5xl font-bold text-white tracking-tight">Raptor's Feature Engine</h2>
+          <p className="text-gray-400 text-sm max-w-md mx-auto">
+            Everything your engineering team needs to review, secure, and auto-fix code natively in GitHub.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Card 1 */}
+          <div className="bg-black border border-white/10 rounded-2xl p-6 space-y-4 hover:border-white/20 transition-all text-left">
+            <div className="p-3 bg-white/5 w-fit rounded-xl border border-white/10">
+              <Cpu className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-white font-mono">AST-level Code Scans</h3>
+            <p className="text-sm text-gray-400">
+              Parses the Abstract Syntax Tree of code diffs to verify structural security, performance logic, and catch N+1 query patterns instantly.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6 max-w-5xl">
-            {testimonials.map((item, idx) => (
-              <div 
-                key={idx} 
-                className="p-8 rounded-2xl bg-black border border-white/10 hover:border-white/20 transition-colors shadow-none"
-              >
-                <div className="flex items-center gap-3.5 mb-5 font-sans">
-                  <img 
-                    src={item.avatarUrl} 
-                    alt={item.name} 
-                    className="w-10 h-10 rounded-full border border-white/10 shrink-0 bg-white/5 object-cover"
-                  />
-                  <div>
-                    <div className="text-white font-bold text-sm tracking-wide">{item.name}</div>
-                    <div className="text-xs text-gray-500 font-mono">{item.handle}</div>
-                  </div>
+          {/* Card 2 */}
+          <div className="bg-black border border-white/10 rounded-2xl p-6 space-y-4 hover:border-white/20 transition-all text-left">
+            <div className="p-3 bg-white/5 w-fit rounded-xl border border-white/10">
+              <Layers className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-white font-mono">Semantic Team Memory</h3>
+            <p className="text-sm text-gray-400">
+              Saves past pull request feedback and accepted/rejected patterns in pgvector. Learns and adapts automatically to enforce custom guidelines.
+            </p>
+          </div>
+
+          {/* Card 3 */}
+          <div className="bg-black border border-white/10 rounded-2xl p-6 space-y-4 hover:border-white/20 transition-all text-left">
+            <div className="p-3 bg-white/5 w-fit rounded-xl border border-white/10">
+              <Zap className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-white font-mono">Auto Fix PR Generation</h3>
+            <p className="text-sm text-gray-400">
+              Generate fully automated PR branches with correct code fixes. Review details, select issues, and click 'Create Fix PR' to apply them immediately.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section id="community" className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5 scroll-mt-24">
+        <div className="max-w-2xl mb-12 text-left">
+          <div className="flex items-center gap-2 text-xs font-bold tracking-widest text-blue-400 uppercase mb-4 font-mono">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            From the community
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-bold text-white mb-6 tracking-tight">
+            It fits into your life.
+          </h2>
+          <p className="text-gray-400 text-sm sm:text-base leading-relaxed">
+            Reviewing code while walking the dog, or checking live pull request scan telemetry from your phone. Raptor moves wherever you are.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {testimonials.map((item, idx) => (
+            <div 
+              key={idx} 
+              className="p-8 rounded-2xl bg-black border border-white/10 hover:border-white/20 transition-colors text-left"
+            >
+              <div className="flex items-center gap-3.5 mb-5 font-sans">
+                <img 
+                  src={item.avatarUrl} 
+                  alt={item.name} 
+                  className="w-10 h-10 rounded-full border border-white/10 shrink-0 bg-white/5 object-cover"
+                />
+                <div>
+                  <div className="text-white font-bold text-sm tracking-wide">{item.name}</div>
+                  <div className="text-xs text-gray-500 font-mono">{item.handle}</div>
                 </div>
-                <p className="text-sm text-gray-300 leading-relaxed font-normal">
-                  {item.text}
-                </p>
               </div>
-            ))}
+              <p className="text-sm text-gray-300 leading-relaxed">
+                {item.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5 scroll-mt-24">
+        <div className="text-center mb-16 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-400 font-mono uppercase tracking-wider">
+            <Layers className="w-3.5 h-3.5" /> Predictable Pricing
           </div>
+          <h2 className="text-3xl sm:text-5xl font-bold text-white tracking-tight">Simple plans for every size</h2>
+          <p className="text-gray-400 text-sm max-w-md mx-auto">
+            Get started for free or scale your secure reviews with our team plans.
+          </p>
         </div>
 
-        {/* FAQ Section (Matching Screenshot 1 precisely) */}
-        <div id="faq" className="max-w-4xl mx-auto px-6 mb-32 pt-16">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tight">Frequently asked questions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Tier 1 */}
+          <div className="bg-black border border-white/10 rounded-2xl p-8 flex flex-col justify-between text-left hover:border-white/20 transition-all">
+            <div className="space-y-4">
+              <div className="text-xs font-bold text-gray-500 font-mono uppercase">Hobbyist</div>
+              <div className="text-3xl font-bold text-white font-mono">$0 <span className="text-xs text-gray-500 font-sans">/ month</span></div>
+              <p className="text-xs text-gray-400">Great for individual developers scanning public source repositories.</p>
+              <ul className="space-y-2 text-xs text-gray-300 pt-4">
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> 50 scans per month</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> Public repositories</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> Basic AST parsing</li>
+              </ul>
+            </div>
+            <Link to="/dashboard" className="mt-8 block w-full text-center px-4 py-2.5 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/10 hover:bg-white/15 uppercase font-mono tracking-wider">
+              Get Started
+            </Link>
           </div>
 
-          <div className="space-y-3 max-w-3xl mx-auto font-sans">
-            {faqs.map((faq, idx) => (
-              <div 
-                key={idx} 
-                className="border border-white/10 rounded-xl bg-black overflow-hidden transition-colors hover:bg-white/[0.02] shadow-none"
+          {/* Tier 2 */}
+          <div className="bg-black border-2 border-white rounded-2xl p-8 flex flex-col justify-between text-left relative">
+            <div className="absolute top-0 right-6 -translate-y-1/2 bg-white text-black text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full font-mono">Popular</div>
+            <div className="space-y-4">
+              <div className="text-xs font-bold text-white font-mono uppercase">Professional</div>
+              <div className="text-3xl font-bold text-white font-mono">$49 <span className="text-xs text-gray-500 font-sans">/ month</span></div>
+              <p className="text-xs text-gray-400">Perfect for scaling startup teams requiring memory layers and private repos.</p>
+              <ul className="space-y-2 text-xs text-gray-300 pt-4">
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> Unlimited scans</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> Private repositories</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" />pgvector Team Memory</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> Convention Rule management</li>
+              </ul>
+            </div>
+            <Link to="/dashboard" className="mt-8 block w-full text-center px-4 py-2.5 rounded-lg text-xs font-bold bg-white text-black hover:bg-gray-200 uppercase font-mono tracking-wider">
+              Start Pro Trial
+            </Link>
+          </div>
+
+          {/* Tier 3 */}
+          <div className="bg-black border border-white/10 rounded-2xl p-8 flex flex-col justify-between text-left hover:border-white/20 transition-all">
+            <div className="space-y-4">
+              <div className="text-xs font-bold text-gray-500 font-mono uppercase">Enterprise</div>
+              <div className="text-3xl font-bold text-white font-mono">Custom</div>
+              <p className="text-xs text-gray-400">High-security compliance configurations for multi-org development teams.</p>
+              <ul className="space-y-2 text-xs text-gray-300 pt-4">
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> Custom model hosting (self-hosted)</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> Org-wide architectural learning</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-white" /> Dedicated support</li>
+              </ul>
+            </div>
+            <a href="mailto:contact@raptor.dev" className="mt-8 block w-full text-center px-4 py-2.5 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/10 hover:bg-white/15 uppercase font-mono tracking-wider">
+              Contact Sales
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section id="faq" className="max-w-4xl mx-auto px-6 py-16 border-t border-white/5 scroll-mt-24">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-5xl font-bold text-white tracking-tight">Frequently asked questions</h2>
+        </div>
+
+        <div className="space-y-3 max-w-3xl mx-auto text-left">
+          {faqs.map((faq, idx) => (
+            <div 
+              key={idx} 
+              className="border border-white/10 rounded-xl bg-black overflow-hidden transition-colors hover:bg-white/[0.01]"
+            >
+              <button 
+                className="w-full px-6 py-5 flex items-center justify-between text-left focus:outline-none"
+                onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
               >
-                <button 
-                  className="w-full px-6 py-5 flex items-center justify-between text-left focus:outline-none"
-                  onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                >
-                  <span className="text-white font-medium text-sm md:text-base tracking-wide">{faq.question}</span>
-                  {openFaq === idx ? (
-                    <Minus className="w-4 h-4 text-gray-400 shrink-0 ml-4" />
-                  ) : (
-                    <Plus className="w-4 h-4 text-gray-400 shrink-0 ml-4" />
-                  )}
-                </button>
-                {openFaq === idx && (
-                  <div className="px-6 pb-6 text-gray-400 text-sm leading-relaxed border-t border-white/5 pt-4">
-                    {faq.answer}
-                  </div>
+                <span className="text-white font-medium text-sm md:text-base tracking-wide">{faq.question}</span>
+                {openFaq === idx ? (
+                  <Minus className="w-4 h-4 text-gray-400 shrink-0 ml-4" />
+                ) : (
+                  <Plus className="w-4 h-4 text-gray-400 shrink-0 ml-4" />
                 )}
-              </div>
-            ))}
+              </button>
+              {openFaq === idx && (
+                <div className="px-6 pb-6 text-gray-400 text-sm leading-relaxed border-t border-white/5 pt-4">
+                  {faq.answer}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="max-w-5xl mx-auto px-6 py-16 border-t border-white/5 text-center">
+        <div className="bg-gradient-to-tr from-white/[0.02] to-white/[0.04] border border-white/10 rounded-3xl p-8 sm:p-16 relative overflow-hidden space-y-6">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent -z-10" />
+          <h2 className="text-3xl sm:text-5xl font-bold text-white tracking-tight leading-tight">Ready to ship secure code faster?</h2>
+          <p className="text-gray-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
+            Join engineering teams using Raptor to find vulnerabilities, manage standards, and auto-generate pull request fixes.
+          </p>
+          <div className="pt-4 flex flex-col sm:flex-row justify-center items-center gap-4">
+            <Link to="/dashboard" className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold text-black bg-white hover:bg-gray-200 transition-all text-xs uppercase tracking-wider font-mono">
+              Get Started Free <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
-
-      </main>
+      </section>
       
-      {/* Minimalist Premium Footer (Matching Screenshot 3 precisely) */}
+      {/* Footer Section */}
       <footer className="relative border-t border-white/10 bg-black pt-16 pb-16 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-12 mb-20 relative z-10 font-sans">
-          <div>
-            <div className="flex items-center gap-3 mb-6 font-bold">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12 mb-20 relative z-10 text-left">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 font-bold">
               <TRexIcon className="w-6 h-6 text-white" />
               <span className="text-white text-lg tracking-tight font-bold">Raptor</span>
             </div>
+            <p className="text-xs text-gray-500 leading-relaxed max-w-xs">
+              Autonomous Abstract Syntax Tree (AST) code scanning with integrated semantic memory layers.
+            </p>
           </div>
           
           <div className="flex flex-col gap-3 font-medium text-sm">
+            <span className="text-xs font-bold text-white uppercase font-mono tracking-wider">Navigation</span>
             <Link to="/" className="text-gray-400 hover:text-white transition-colors">Home</Link>
             <Link to="/docs" className="text-gray-400 hover:text-white transition-colors">Docs</Link>
             <Link to="/blog" className="text-gray-400 hover:text-white transition-colors">Blog</Link>
             <Link to="/changelog" className="text-gray-400 hover:text-white transition-colors">Changelog</Link>
-            <Link to="/discord" className="text-gray-400 hover:text-white transition-colors">Discord</Link>
           </div>
 
-          <div className="flex flex-col gap-3 font-medium text-xs text-gray-500 pt-1">
-            <Link to="/terms" className="hover:text-gray-400 transition-colors">Terms of Service</Link>
-            <Link to="/privacy" className="hover:text-gray-400 transition-colors">Privacy Policy</Link>
-            <span>All rights reserved</span>
+          <div className="flex flex-col gap-3 font-medium text-sm">
+            <span className="text-xs font-bold text-white uppercase font-mono tracking-wider">Legal</span>
+            <Link to="/terms" className="text-gray-400 hover:text-white transition-colors">Terms of Service</Link>
+            <Link to="/privacy" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</Link>
+            <span className="text-gray-600 text-xs">All rights reserved</span>
           </div>
 
           <div className="flex flex-col gap-6">
@@ -352,12 +537,10 @@ export default function Landing() {
                 </a>
               </div>
             </div>
-            
-            <span className="text-xs text-gray-600 mt-2 font-mono">© 2026 — Raptor AI</span>
           </div>
         </div>
 
-        {/* Massive Watermark Text at the bottom (Matching Screenshot 3 "Omnara" watermark) */}
+        {/* Massive Watermark Text */}
         <div className="absolute bottom-[-60px] left-1/2 -translate-x-1/2 w-full px-4 text-center pointer-events-none select-none overflow-hidden">
           <span className="text-[23vw] font-black text-white/[0.025] tracking-tighter block leading-none font-sans">
             RAPTOR
