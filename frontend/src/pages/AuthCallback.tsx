@@ -40,6 +40,7 @@ export default function AuthCallback() {
         // Store token and user info
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        sessionStorage.removeItem('github_oauth_state');
         window.dispatchEvent(new Event('auth-change'));
         navigate('/dashboard', { replace: true });
       })
