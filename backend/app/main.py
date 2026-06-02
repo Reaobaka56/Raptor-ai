@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from .analysis import router as analysis_router
 from .memory_router import router as memory_router
+from .rate_limit import InMemoryRateLimitMiddleware, build_rate_limit_rules
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -195,7 +196,16 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+        "X-RateLimit-Window",
+        "X-RateLimit-Policy",
+        "Retry-After",
+    ],
 )
+app.add_middleware(InMemoryRateLimitMiddleware, rules=build_rate_limit_rules())
 
 app.include_router(analysis_router, prefix="/debug")
 app.include_router(memory_router, prefix="/api")
