@@ -119,7 +119,7 @@ async function handlePullRequest(payload: WebhookPayload) {
         await postReviewComment(
           octokit,
           context,
-          `## 🛠️ Automated Remediation PR Opened\n\nRaptor opened a remediation draft PR with suggested fixes:\n${remediationPrUrl}`
+          `## Automated Remediation PR Opened\n\nRaptor opened a remediation draft PR with suggested fixes:\n${remediationPrUrl}`
         );
       }
     }

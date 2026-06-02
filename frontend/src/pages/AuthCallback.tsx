@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
+import { AlertTriangle } from "lucide-react"
 import { authApi } from "../api"
 
 export default function AuthCallback() {
@@ -80,7 +81,7 @@ export default function AuthCallback() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="text-center max-w-md">
           <div className="mb-6">
-            <div className="text-5xl mb-4">⚠️</div>
+            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           </div>
           <h1 className="text-2xl font-bold text-red-500 mb-3">Authentication Failed</h1>
           <p className="text-slate-300 mb-6">{error}</p>

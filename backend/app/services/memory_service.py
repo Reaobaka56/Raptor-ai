@@ -176,6 +176,91 @@ def retrieve_similar_reviews(
         return results[:top_k]
 
 
+def list_review_memories(repo: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+    """Return recent stored review memories for generated repo summaries."""
+    conn = _get_conn()
+    if conn:
+        cur = conn.cursor()
+        if repo:
+            cur.execute(
+                """SELECT id, review_id, repo, pr_number, issue_titles, summary, created_at
+                   FROM review_embeddings
+                   WHERE repo = %s
+                   ORDER BY created_at DESC
+                   LIMIT %s""",
+                (repo, limit),
+            )
+        else:
+            cur.execute(
+                """SELECT id, review_id, repo, pr_number, issue_titles, summary, created_at
+                   FROM review_embeddings
+                   ORDER BY created_at DESC
+                   LIMIT %s""",
+                (limit,),
+            )
+        columns = [d[0] for d in cur.description]
+        results = [dict(zip(columns, row)) for row in cur.fetchall()]
+        cur.close()
+        for r in results:
+            if hasattr(r.get("created_at"), "isoformat"):
+                r["created_at"] = r["created_at"].isoformat()
+        return results
+
+    results = []
+    for row in sorted(_MOCK_REVIEW_EMBEDDINGS, key=lambda r: r.get("created_at", ""), reverse=True):
+        if repo and row["repo"] != repo:
+            continue
+        copy = {k: v for k, v in row.items() if k != "embedding"}
+        results.append(copy)
+    return results[:limit]
+
+
+def _split_issue_titles(issue_titles: str) -> List[str]:
+    """Split stored issue title strings while ignoring empty/no-issue markers."""
+    titles = []
+    for title in (issue_titles or "").split(" | "):
+        normalized = title.strip()
+        if normalized and normalized.lower() != "no issues":
+            titles.append(normalized)
+    return titles
+
+
+def get_onboarding_stats(repo: str) -> Dict[str, Any]:
+    """Generate onboarding statistics from stored review memories and feedback."""
+    review_memories = list_review_memories(repo=repo, limit=500)
+    feedback = get_feedback_stats(repo=repo)
+    pattern_counts: Dict[str, int] = {}
+    issue_total = 0
+    pr_numbers = set()
+    latest_scan: Optional[str] = None
+
+    for review in review_memories:
+        pr_numbers.add(review.get("pr_number"))
+        created_at = review.get("created_at")
+        if created_at and (latest_scan is None or created_at > latest_scan):
+            latest_scan = created_at
+        for title in _split_issue_titles(review.get("issue_titles") or ""):
+            issue_total += 1
+            pattern_counts[title] = pattern_counts.get(title, 0) + 1
+
+    top_patterns = [
+        {"title": title, "count": count}
+        for title, count in sorted(pattern_counts.items(), key=lambda item: (-item[1], item[0]))[:10]
+    ]
+    return {
+        "reviewCount": len(review_memories),
+        "pullRequestCount": len([p for p in pr_numbers if p is not None]),
+        "issueCount": issue_total,
+        "conventionRuleCount": len(list_convention_rules(repo=repo)),
+        "feedbackTotal": feedback["total"],
+        "feedbackAccepted": feedback["positive"],
+        "feedbackRejected": feedback["negative"],
+        "suppressionRate": feedback["suppressionRate"],
+        "latestScanAt": latest_scan,
+        "topPatterns": top_patterns,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Convention Rules
 # ---------------------------------------------------------------------------
@@ -401,8 +486,12 @@ def get_feedback_stats(repo: Optional[str] = None) -> Dict[str, Any]:
             "suppressionRate": round(negative / total, 2) if total else 0.0,
         }
     else:
-        total = len(_MOCK_FEEDBACK)
-        positive = sum(1 for f in _MOCK_FEEDBACK if f["thumbs_up"])
+        feedback_rows = _MOCK_FEEDBACK
+        if repo:
+            review_ids = {r["review_id"] for r in _MOCK_REVIEW_EMBEDDINGS if r["repo"] == repo}
+            feedback_rows = [f for f in _MOCK_FEEDBACK if f["review_id"] in review_ids]
+        total = len(feedback_rows)
+        positive = sum(1 for f in feedback_rows if f["thumbs_up"])
         negative = total - positive
         return {
             "total": total,
@@ -416,56 +505,62 @@ def get_feedback_stats(repo: Optional[str] = None) -> Dict[str, Any]:
 # Onboarding Guide Generator
 # ---------------------------------------------------------------------------
 def generate_onboarding_guide(repo: str) -> Dict[str, Any]:
-    """Build an onboarding guide from past review data and convention rules.
-
-    Returns a structured dict that the frontend renders as markdown.
-    """
-    past_reviews = retrieve_similar_reviews(
-        embedding=[0.0] * EMBEDDING_DIM,  # dummy — we just want all reviews for this repo
-        repo=repo,
-        top_k=50,
-    )
+    """Build an onboarding guide from stored scan data, rules, and feedback."""
+    review_memories = list_review_memories(repo=repo, limit=50)
     rules = list_convention_rules(repo=repo)
-    feedback = get_feedback_stats(repo=repo)
+    stats = get_onboarding_stats(repo=repo)
 
-    # Build sections
-    recurring_patterns: List[str] = []
-    seen_titles = set()
-    for rev in past_reviews:
-        for title in (rev.get("issue_titles") or "").split(" | "):
-            title = title.strip()
-            if title and title not in seen_titles:
-                seen_titles.add(title)
-                recurring_patterns.append(title)
+    recurring_patterns = [
+        f"{item['title']} ({item['count']} occurrence{'s' if item['count'] != 1 else ''})"
+        for item in stats["topPatterns"]
+    ]
+    recent_reviews = [
+        f"PR #{review['pr_number']}: {review.get('summary') or 'No summary recorded'}"
+        for review in review_memories[:5]
+    ]
 
     guide = {
         "repo": repo,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "stats": stats,
         "sections": [
             {
-                "title": "📋 Team Convention Rules",
-                "content": [r["rule_text"] for r in rules] if rules else ["No convention rules defined yet. Add rules in the Convention Rules page."],
-            },
-            {
-                "title": "🔁 Recurring Patterns & Landmines",
-                "content": recurring_patterns[:20] if recurring_patterns else ["No recurring issues detected yet. Run more scans to build history."],
-            },
-            {
-                "title": "📊 Feedback Summary",
+                "title": "Repository Scan Summary",
                 "content": [
-                    f"Total feedback entries: {feedback['total']}",
-                    f"Accepted suggestions: {feedback['positive']}",
-                    f"Rejected suggestions: {feedback['negative']}",
-                    f"False-positive suppression rate: {feedback['suppressionRate']:.0%}",
+                    f"Reviews analyzed: {stats['reviewCount']}",
+                    f"Pull requests covered: {stats['pullRequestCount']}",
+                    f"Issues detected: {stats['issueCount']}",
+                    f"Latest scan: {stats['latestScanAt'] or 'No scans recorded'}",
                 ],
             },
             {
-                "title": "🚀 Getting Started",
+                "title": "Team Convention Rules",
+                "content": [r["rule_text"] for r in rules] if rules else ["No convention rules defined yet. Add rules in the Convention Rules page."],
+            },
+            {
+                "title": "Recurring Patterns and Landmines",
+                "content": recurring_patterns if recurring_patterns else ["No recurring issues detected yet. Run more scans to build history."],
+            },
+            {
+                "title": "Feedback Summary",
+                "content": [
+                    f"Total feedback entries: {stats['feedbackTotal']}",
+                    f"Accepted suggestions: {stats['feedbackAccepted']}",
+                    f"Rejected suggestions: {stats['feedbackRejected']}",
+                    f"False-positive suppression rate: {stats['suppressionRate']:.0%}",
+                ],
+            },
+            {
+                "title": "Recent Review Context",
+                "content": recent_reviews if recent_reviews else ["No stored review summaries yet. Run a scan to generate repository-specific context."],
+            },
+            {
+                "title": "Getting Started",
                 "content": [
                     "1. Review detected issues in the Reviews tab",
-                    "2. Use 👍/👎 on each finding to teach Raptor your team's preferences",
+                    "2. Mark each finding as useful or not useful so Raptor learns team preferences",
                     "3. Add convention rules in plain English to enforce team standards",
-                    "4. Raptor will learn from your feedback and improve over time",
+                    "4. Re-run scans after new pull requests to refresh this guide",
                 ],
             },
         ],

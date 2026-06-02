@@ -7,13 +7,70 @@ import {
   Compass,
   ChevronDown,
   ChevronRight,
+  ClipboardList,
+  GitPullRequest,
+  ShieldCheck,
+  MessageSquare,
+  type LucideIcon,
 } from 'lucide-react'
-import { memoryApi } from '../api'
+import { memoryApi, type OnboardingStats } from '../api'
+
+
+const formatPercent = (value: number) => `${Math.round(value * 100)}%`
+
+function StatCard({ label, value, helper, icon: Icon }: {
+  label: string
+  value: string | number
+  helper: string
+  icon: LucideIcon
+}) {
+  return (
+    <div className="bg-black border border-white/10 rounded-xl p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] uppercase tracking-wider text-gray-500 font-mono font-bold">{label}</span>
+        <Icon className="w-4 h-4 text-gray-400" />
+      </div>
+      <div className="text-2xl font-bold text-white font-mono">{value}</div>
+      <p className="text-xs text-gray-500 font-sans">{helper}</p>
+    </div>
+  )
+}
+
+function GuideStats({ stats }: { stats: OnboardingStats }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <StatCard
+        label="Reviews"
+        value={stats.reviewCount}
+        helper={stats.latestScanAt ? `Latest scan ${new Date(stats.latestScanAt).toLocaleString()}` : 'No scans recorded yet'}
+        icon={ClipboardList}
+      />
+      <StatCard
+        label="Pull Requests"
+        value={stats.pullRequestCount}
+        helper="Unique pull requests represented in scan memory"
+        icon={GitPullRequest}
+      />
+      <StatCard
+        label="Issues"
+        value={stats.issueCount}
+        helper="Issues generated from stored scan findings"
+        icon={ShieldCheck}
+      />
+      <StatCard
+        label="Feedback"
+        value={stats.feedbackTotal}
+        helper={`${stats.feedbackAccepted} accepted, ${stats.feedbackRejected} rejected, ${formatPercent(stats.suppressionRate)} suppression`}
+        icon={MessageSquare}
+      />
+    </div>
+  )
+}
 
 export default function OnboardingGuide() {
   const [repoInput, setRepoInput] = useState('')
   const [activeRepo, setActiveRepo] = useState<string | null>(null)
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0, 1, 2, 3]))
+  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0, 1, 2, 3, 4, 5]))
 
   const { data: guide, isLoading, isError } = useQuery({
     queryKey: ['onboarding-guide', activeRepo],
@@ -24,7 +81,7 @@ export default function OnboardingGuide() {
   const handleSearch = () => {
     if (repoInput.trim()) {
       setActiveRepo(repoInput.trim())
-      setExpandedSections(new Set([0, 1, 2, 3]))
+      setExpandedSections(new Set([0, 1, 2, 3, 4, 5]))
     }
   }
 
@@ -67,7 +124,7 @@ export default function OnboardingGuide() {
             value={repoInput}
             onChange={(e) => setRepoInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="owner/repo (e.g. organization/api-gateway)"
+            placeholder="owner/repo or GitHub PR URL"
             className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-gray-500 font-mono focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20 transition-colors"
           />
           <button
@@ -119,6 +176,8 @@ export default function OnboardingGuide() {
               It updates as your team uses the platform.
             </p>
           </div>
+
+          <GuideStats stats={guide.stats} />
 
           {/* Sections */}
           {guide.sections.map((section, idx) => {

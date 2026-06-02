@@ -69,9 +69,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 AI Code Review Agent running on port ${PORT}`);
-  console.log(`📡 Webhook endpoint: http://localhost:${PORT}/webhook/github`);
-  console.log(`🔍 API endpoint: http://localhost:${PORT}/api`);
+  console.log(`AI Code Review Agent running on port ${PORT}`);
+  console.log(`Webhook endpoint: http://localhost:${PORT}/webhook/github`);
+  console.log(`API endpoint: http://localhost:${PORT}/api`);
 });
 
 export default app;
