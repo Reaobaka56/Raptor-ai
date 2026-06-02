@@ -35,6 +35,8 @@ uvicorn app.main:app --reload --port 8000
 
 The API will be available at `http://localhost:8000`. You can view interactive OpenAPI Swagger documentation at `http://localhost:8000/docs`.
 
+Rate limiting is enabled for every backend route. Responses include `X-RateLimit-*` headers, and expensive routes such as scans, debug solves, onboarding generation, similar-review search, and remediation PR creation have stricter route-specific limits.
+
 ## API Endpoints
 
 - `GET /health` — Telemetry health check

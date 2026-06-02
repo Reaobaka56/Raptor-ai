@@ -188,7 +188,7 @@ cd frontend && npm run dev
 
 - Webhook signature verification
 - JWT authentication
-- Rate limiting (100 req/15min)
+- Configurable global, API, auth, webhook, scan, onboarding, and remediation rate limiting
 - Helmet security headers
 - CORS configuration
 - SQL injection prevention (Prisma)
