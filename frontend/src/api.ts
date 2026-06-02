@@ -109,13 +109,15 @@ export interface AuthResponse {
 }
 
 export const getGithubRedirectUri = () => {
-  // Allow override via VITE_GITHUB_REDIRECT_URI (useful for dev and Vercel environments)
-  const envRedirect = import.meta.env.VITE_GITHUB_REDIRECT_URI as string | undefined;
+  // Must match the callback URL registered on the GitHub OAuth/App settings.
+  // The deployed app uses /api/auth/github/callback and the SPA handles that
+  // path before exchanging the code with the backend using the same redirectUri.
+  const envRedirect = import.meta.env.VITE_GITHUB_REDIRECT_URI as string | undefined
   if (envRedirect && envRedirect.length > 0) {
-    return envRedirect;
+    return envRedirect
   }
-  return `${window.location.origin}/auth/github/callback`;
-};
+  return `${window.location.origin}/api/auth/github/callback`
+}
 
 export const startGithubLogin = async () => {
   const state = crypto.randomUUID()
@@ -234,6 +236,24 @@ export interface SimilarReview {
   created_at: string
 }
 
+export interface OnboardingPattern {
+  title: string
+  count: number
+}
+
+export interface OnboardingStats {
+  reviewCount: number
+  pullRequestCount: number
+  issueCount: number
+  conventionRuleCount: number
+  feedbackTotal: number
+  feedbackAccepted: number
+  feedbackRejected: number
+  suppressionRate: number
+  latestScanAt: string | null
+  topPatterns: OnboardingPattern[]
+}
+
 export interface OnboardingSection {
   title: string
   content: string[]
@@ -242,6 +262,7 @@ export interface OnboardingSection {
 export interface OnboardingGuideData {
   repo: string
   generatedAt: string
+  stats: OnboardingStats
   sections: OnboardingSection[]
 }
 
