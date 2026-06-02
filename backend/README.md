@@ -24,10 +24,6 @@ Set your Gemini API key for live model analysis. If it is not set, scans still u
 ```bash
 export GEMINI_API_KEY="your_api_key_here"
 export GEMINI_MODEL="gemini-2.5-pro"
-export RATE_LIMIT_GLOBAL_MAX=300
-export RATE_LIMIT_GLOBAL_WINDOW_SECONDS=900
-export RATE_LIMIT_SCAN_MAX=10
-export RATE_LIMIT_SCAN_WINDOW_SECONDS=3600
 ```
 
 ### 3. Run Server
