@@ -11,9 +11,11 @@ import {
   FileCode,
   ExternalLink,
   CheckCircle2,
-  GitBranchPlus
+  GitBranchPlus,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react'
-import { reviewsApi, prApi, type CreatePullRequestResponse, type Review } from '../api'
+import { reviewsApi, prApi, memoryApi, type CreatePullRequestResponse, type Review } from '../api'
 import { format } from 'date-fns'
 
 const severityConfig = {
@@ -37,10 +39,26 @@ const categoryConfig = {
   design: { icon: Layout, label: 'Design' },
 }
 
-function IssueCard({ issue }: { issue: Review['issues'][0] }) {
+function IssueCard({ issue, reviewId, issueIndex }: { issue: Review['issues'][0]; reviewId: number; issueIndex: number }) {
   const severity = severityConfig[issue.severity]
   const category = categoryConfig[issue.category]
   const CategoryIcon = category.icon
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null)
+  const [feedbackSending, setFeedbackSending] = useState(false)
+
+  const handleFeedback = async (thumbsUp: boolean) => {
+    const value = thumbsUp ? 'up' : 'down'
+    if (feedback === value) return
+    setFeedbackSending(true)
+    try {
+      await memoryApi.submitFeedback(reviewId, issueIndex, thumbsUp)
+      setFeedback(value)
+    } catch (e) {
+      console.error('Feedback submission failed:', e)
+    } finally {
+      setFeedbackSending(false)
+    }
+  }
 
   return (
     <div className={`bg-black p-6 rounded-xl border transition-colors font-sans ${severity.border}`}>
@@ -77,6 +95,40 @@ function IssueCard({ issue }: { issue: Review['issues'][0] }) {
         <code className="block text-xs font-mono text-gray-200 bg-black p-4 rounded-lg border border-white/10 overflow-x-auto">
           {issue.suggestion}
         </code>
+      </div>
+
+      {/* Feedback Buttons — Team Memory */}
+      <div className="flex items-center gap-3 mt-4 pt-4 border-t border-white/10">
+        <span className="text-xs text-gray-500 font-mono uppercase tracking-wider">Was this helpful?</span>
+        <button
+          onClick={() => handleFeedback(true)}
+          disabled={feedbackSending}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 border ${
+            feedback === 'up'
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+              : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          <ThumbsUp className="w-3.5 h-3.5" />
+          {feedback === 'up' ? 'Accepted' : 'Helpful'}
+        </button>
+        <button
+          onClick={() => handleFeedback(false)}
+          disabled={feedbackSending}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 border ${
+            feedback === 'down'
+              ? 'bg-red-500/20 text-red-400 border-red-500/40 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+              : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          <ThumbsDown className="w-3.5 h-3.5" />
+          {feedback === 'down' ? 'Rejected' : 'Not useful'}
+        </button>
+        {feedback && (
+          <span className="text-xs text-gray-600 font-mono ml-auto animate-fadeIn">
+            Feedback recorded — Raptor is learning
+          </span>
+        )}
       </div>
     </div>
   )
@@ -291,7 +343,7 @@ export default function ReviewDetail() {
           </div>
         ) : (
           review.issues.map((issue, index) => (
-            <IssueCard key={index} issue={issue} />
+            <IssueCard key={index} issue={issue} reviewId={review.id} issueIndex={index} />
           ))
         )}
       </div>

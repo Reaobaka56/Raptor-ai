@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from .analysis import router as analysis_router
+from .memory_router import router as memory_router
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -205,6 +206,7 @@ app.add_middleware(
 )
 
 app.include_router(analysis_router, prefix="/debug")
+app.include_router(memory_router, prefix="/api")
 
 
 START_TIME = time.time()
@@ -434,6 +436,43 @@ def scan_repository(req: ScanRequest):
         new_review.status = "completed"
         new_review.createdAt = datetime.now(timezone.utc).isoformat()
     
+    # ── Memory Layer Integration ──────────────────────────────────────
+    try:
+        from .services.embedding_service import generate_embedding
+        from .services import memory_service
+
+        # Build a text blob from the review for embedding
+        issue_titles = " | ".join(i.title for i in new_review.issues) or "No issues"
+        review_text = f"{new_review.summary or ''} {issue_titles}"
+        embedding = generate_embedding(review_text)
+
+        # Store the review embedding for future RAG retrieval
+        memory_service.store_review_embedding(
+            review_id=new_review.id,
+            repo=repo_name,
+            pr_number=new_review.prNumber,
+            issue_titles=issue_titles,
+            summary=new_review.summary or "",
+            embedding=embedding,
+        )
+
+        # Retrieve similar past reviews as context
+        similar = memory_service.retrieve_similar_reviews(
+            embedding=embedding, repo=repo_name, top_k=5
+        )
+        # Attach to review metadata (frontend can display this)
+        new_review._similar_past_reviews = similar
+
+        # Check convention rules for violations
+        relevant_rules = memory_service.find_relevant_rules(
+            embedding=embedding, repo=repo_name
+        )
+        new_review._convention_violations = relevant_rules
+
+    except Exception as mem_err:
+        print(f"[memory] Non-blocking memory layer error: {mem_err}")
+    # ─────────────────────────────────────────────────────────────────
+
     sync_repository_scan_metadata(repo_name, new_review)
     MOCK_REVIEWS.insert(0, new_review)
     return new_review
