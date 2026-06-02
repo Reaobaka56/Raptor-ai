@@ -60,7 +60,7 @@ router.get('/auth/github/login', (req: Request, res: Response) => {
     const githubUrl = new URL('https://github.com/login/oauth/authorize');
     githubUrl.searchParams.set('client_id', process.env.GITHUB_CLIENT_ID || '');
     
-    // ⚠️ CRITICAL: Use the redirectUri sent by frontend
+    // CRITICAL: Use the redirectUri sent by frontend
     // This tells GitHub where to redirect the user after authorization
     githubUrl.searchParams.set('redirect_uri', redirectUri);
     
@@ -114,7 +114,7 @@ router.post('/auth/github', async (req: Request, res: Response) => {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
-        // ⚠️ CRITICAL: redirectUri must match exactly what was used in /auth/github/login
+        // CRITICAL: redirectUri must match exactly what was used in /auth/github/login
         redirect_uri: redirectUri,
       }),
     });
