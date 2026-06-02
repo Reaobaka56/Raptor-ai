@@ -24,12 +24,6 @@ Set your Gemini API key for live model analysis. If it is not set, scans still u
 ```bash
 export GEMINI_API_KEY="your_api_key_here"
 export GEMINI_MODEL="gemini-2.5-pro"
-export GITHUB_TOKEN="optional_pat_for_authenticated_scans"
-export VITE_GITHUB_REDIRECT_URI="https://raptor-agent.vercel.app/api/auth/github/callback"
-export RATE_LIMIT_GLOBAL_MAX=300
-export RATE_LIMIT_GLOBAL_WINDOW_SECONDS=900
-export RATE_LIMIT_SCAN_MAX=10
-export RATE_LIMIT_SCAN_WINDOW_SECONDS=3600
 ```
 
 ### 3. Run Server
@@ -40,10 +34,6 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 The API will be available at `http://localhost:8000`. You can view interactive OpenAPI Swagger documentation at `http://localhost:8000/docs`.
-
-GitHub OAuth login uses `/api/auth/github/callback` by default, which must match the callback URL registered on the GitHub OAuth App/GitHub App (for example, `https://raptor-agent.vercel.app/api/auth/github/callback`).
-
-Repository scans use authenticated GitHub requests when a user is connected, when `GITHUB_TOKEN`/`GITHUB_PAT` is configured, or when the GitHub App can issue an installation token. This avoids the low unauthenticated GitHub API quota that can leave Total Reviews at zero because scans fail before a review is stored.
 
 Rate limiting is enabled for every backend route. Responses include `X-RateLimit-*` headers, and expensive routes such as scans, debug solves, onboarding generation, similar-review search, and remediation PR creation have stricter route-specific limits.
 
