@@ -139,6 +139,16 @@ The frontend application will run live at `http://localhost:5173`.
 
 ---
 
+##  New Features
+
+- **Team Memory Layer**: Stores PR feedback in pgvector for team‑specific conventions.
+- **GitHub OAuth Integration**: Seamless login and repo selection via GitHub app.
+- **Responsive UI**: Mobile‑friendly landing page with dark theme.
+- **Auto‑Fix PR Generation**: One‑click creation of PRs with AI‑generated fixes.
+- **Live Demo**: Interactive demo view in the landing page.
+
+---
+
 ##  License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
