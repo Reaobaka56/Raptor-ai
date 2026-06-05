@@ -31,9 +31,10 @@ export default function Landing() {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     try {
-      await startGithubLogin();
+      // Use Better Auth signIn for GitHub provider
+      await signIn('github');
     } catch (error) {
-      console.error('Failed to start GitHub login', error);
+      console.error('Failed to start GitHub login via Better Auth', error);
       setIsLoggingIn(false);
       navigate('/auth/error');
     }
