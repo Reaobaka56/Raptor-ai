@@ -19,7 +19,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
-import { startGithubLogin } from '../api';
+import { signIn } from 'better-auth/react';
 
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
