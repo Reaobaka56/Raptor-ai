@@ -10,56 +10,55 @@ export default function AuthCallback() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-  const code = params.get("code");
-  const state = params.get("state");
-  const errorMsg = params.get("error");
+    const handleAuth = async () => {
+      const code = params.get("code");
+      const state = params.get("state");
+      const errorMsg = params.get("error");
 
-  // Handle error returned from backend
-  if (errorMsg) {
-    setError(errorMsg);
-    setLoading(false);
-    setTimeout(() => navigate("/"), 3000);
-    return;
-  }
+      // Handle error returned from backend
+      if (errorMsg) {
+        setError(errorMsg);
+        setLoading(false);
+        setTimeout(() => navigate("/"), 3000);
+        return;
+      }
 
-  // If we have an OAuth code, exchange it for token/user info
-  if (code) {
-    // Optional: verify state matches sessionStorage to prevent CSRF
-    const savedState = sessionStorage.getItem('github_oauth_state');
-    if (state && savedState && state !== savedState) {
-      setError('Invalid OAuth state. Please try logging in again.');
+      if (code) {
+        // Optional: verify state matches sessionStorage to prevent CSRF
+        const savedState = sessionStorage.getItem('github_oauth_state');
+        if (state && savedState && state !== savedState) {
+          setError('Invalid OAuth state. Please try logging in again.');
+          setLoading(false);
+          setTimeout(() => navigate('/'), 3000);
+          return;
+        }
+        try {
+          const response = await authApi.completeGithubLogin(code);
+          const data = response.data;
+          // Store token and user info
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          sessionStorage.removeItem('github_oauth_state');
+          window.dispatchEvent(new Event('auth-change'));
+          // Navigate to dashboard after successful login
+          navigate('/dashboard', { replace: true });
+        } catch (err) {
+          const msg = err?.response?.data?.detail || err?.message || 'Authentication failed';
+          setError(msg);
+          setTimeout(() => navigate('/'), 3000);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // No code and no error: something went wrong
+      setError('Missing authentication data. Please try logging in again.');
       setLoading(false);
       setTimeout(() => navigate('/'), 3000);
-      return;
-    }
-
-    // Call backend to complete login
-    authApi.completeGithubLogin(code)
-      .then((response) => {
-        const data = response.data;
-        // Store token and user info
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        sessionStorage.removeItem('github_oauth_state');
-        window.dispatchEvent(new Event('auth-change'));
-        navigate('/dashboard', { replace: true });
-      })
-      .catch((err) => {
-        const msg = err?.response?.data?.detail || err.message || 'Authentication failed';
-        setError(msg);
-        setTimeout(() => navigate('/'), 3000);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-    return; // exit early; async handling will manage loading state
-  }
-
-  // No code and no error: something went wrong
-  setError('Missing authentication data. Please try logging in again.');
-  setLoading(false);
-  setTimeout(() => navigate('/'), 3000);
-}, [params, navigate]);
+    };
+    handleAuth();
+  }, [params, navigate]);
 
   // Loading state
   if (loading) {
