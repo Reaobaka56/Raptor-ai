@@ -350,97 +350,10 @@ def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
-@app.get("/api/auth/github/login", response_model=GitHubLoginUrlResponse, tags=["Auth"])
-def get_github_login_url(state: str = Query(..., min_length=16), redirect_uri: str = Query(..., alias="redirectUri")):
-    client_id = os.getenv("GITHUB_CLIENT_ID")
-    if not client_id:
-        raise HTTPException(status_code=500, detail="GitHub OAuth is not configured")
+# NOTE: GitHub OAuth routes have been deprecated in favor of Better Auth.
+# The authentication flow is now handled by the Better Auth plugin (dash) configured in the frontend.
+# If needed, reimplement equivalent endpoints using Better Auth server‑side utilities.
 
-    query = urlencode({
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "scope": "read:user repo",
-        "state": state,
-    })
-    return GitHubLoginUrlResponse(url=f"https://github.com/login/oauth/authorize?{query}")
-
-def get_frontend_origin_from_request(request: Request) -> str:
-    configured_frontend = os.getenv("FRONTEND_URL") or os.getenv("FRONTEND_ORIGIN")
-    if configured_frontend:
-        return configured_frontend.rstrip("/")
-
-    forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
-    if forwarded_host:
-        return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
-
-    return "http://localhost:5173"
-
-
-@app.get("/api/auth/github/callback")
-def github_callback(request: Request, code: str = Query(None), state: str = Query(None)):
-    if not code:
-        raise HTTPException(status_code=400, detail="Missing OAuth exchange code")
-    # Forward API callback redirects to the SPA callback route while preserving code/state.
-    frontend_origin = get_frontend_origin_from_request(request)
-    redirect_url = f"{frontend_origin}/auth/github/callback?code={code}&state={state}" if state else f"{frontend_origin}/auth/github/callback?code={code}"
-    response = RedirectResponse(url=redirect_url)
-    return response
-
-@app.post("/api/auth/github", response_model=AuthResponse, tags=["Auth"])
-def complete_github_login(req: GitHubAuthRequest):
-    client_id = os.getenv("GITHUB_CLIENT_ID")
-    client_secret = os.getenv("GITHUB_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=500, detail="GitHub OAuth is not configured")
-
-    try:
-        token_res = requests.post(
-            "https://github.com/login/oauth/access_token",
-            json={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "code": req.code,
-                "redirect_uri": req.redirectUri,
-            },
-            headers={"Accept": "application/json"},
-            timeout=15,
-        )
-        token_res.raise_for_status()
-        token_data = token_res.json()
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail="GitHub OAuth token exchange failed") from exc
-
-    access_token = token_data.get("access_token")
-    if not access_token:
-        detail = token_data.get("error_description") or token_data.get("error") or "GitHub did not return an access token"
-        raise HTTPException(status_code=400, detail=detail)
-
-    try:
-        user_res = requests.get("https://api.github.com/user", headers=get_github_auth_headers(access_token), timeout=15)
-        user_res.raise_for_status()
-        user_data = GitHubOAuthUser(**user_res.json())
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail="Unable to fetch GitHub user profile") from exc
-
-    repositories = build_repository_list(access_token)
-    profile = UserProfile(
-        username=user_data.login,
-        avatarUrl=user_data.avatar_url or "",
-        githubId=user_data.id,
-    )
-    session_token = uuid.uuid4().hex
-    USER_SESSIONS[session_token] = {
-        "access_token": access_token,
-        "user": profile,
-        "repositories": repositories,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    return AuthResponse(token=session_token, user=profile, repositories=repositories)
-
-@app.get("/api/repos", response_model=List[RepositoryInfo], tags=["Repositories"])
-def get_repositories(session: GitHubSession = Depends(get_required_github_session)):
-    return session["repositories"]
 
 def parse_github_scan_target(target: str) -> tuple[str, Optional[int]]:
     """Return (owner/repo, pull_request_number) from an owner/repo or GitHub PR URL."""
