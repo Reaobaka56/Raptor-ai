@@ -13,8 +13,9 @@ from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from .analysis import router as analysis_router
-from .memory_router import router as memory_router
+from .router.webhook import router as webhook_router
 from .rate_limit import InMemoryRateLimitMiddleware, build_rate_limit_rules
+# Removed circular import of scan_repository to avoid recursion
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -214,6 +215,7 @@ app.add_middleware(InMemoryRateLimitMiddleware, rules=build_rate_limit_rules())
 
 app.include_router(analysis_router, prefix="/debug")
 app.include_router(memory_router, prefix="/api")
+app.include_router(webhook_router)
 
 
 START_TIME = time.time()
