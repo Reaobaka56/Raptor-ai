@@ -42,7 +42,7 @@ export default function AuthCallback() {
           window.dispatchEvent(new Event('auth-change'));
           // Navigate to dashboard after successful login
           navigate('/dashboard', { replace: true });
-        } catch (err) {
+        } catch (err: any) {
           const msg = err?.response?.data?.detail || err?.message || 'Authentication failed';
           setError(msg);
           setTimeout(() => navigate('/'), 3000);
