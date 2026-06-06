@@ -19,7 +19,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
-import { signIn } from 'better-auth/react';
+
 
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -31,10 +31,16 @@ export default function Landing() {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     try {
-      // Use Better Auth signIn for GitHub provider
-      await signIn('github');
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const redirectUri = `${window.location.origin}/auth/callback`;
+      const res = await fetch(`${apiBaseUrl}/api/auth/github/login?redirectUri=${encodeURIComponent(redirectUri)}`);
+      
+      if (!res.ok) throw new Error('Failed to fetch login url');
+      
+      const data = await res.json();
+      window.location.href = data.url;
     } catch (error) {
-      console.error('Failed to start GitHub login via Better Auth', error);
+      console.error('Failed to start GitHub login', error);
       setIsLoggingIn(false);
       navigate('/auth/error');
     }
