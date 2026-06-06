@@ -1,10 +1,3 @@
-There is a significant structural and syntactic issue inside your `/api/scan` endpoint: the authentication configuration blocks are written completely outside the scope of the function's execution block due to incorrect indentation alignment.
-
-Because `try:` and `if not github_token:` are indented unaligned with the rest of the function, Python will throw an immediate `IndentationError` or parse the logic incorrectly, resulting in unbound variables like `github_token` and `github_headers` when your API attempts to hit the GitHub endpoints.
-
-Here is the fully cleaned up, corrected, and structured `main.py` entrypoint code:
-
-```python
 import os
 import random
 import secrets
