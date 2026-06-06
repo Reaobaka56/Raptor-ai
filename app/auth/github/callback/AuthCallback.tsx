@@ -20,25 +20,29 @@ export default function AuthCallback() {
     const exchangeCode = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-        
-        const res = await axios.get(
-          `${apiUrl}/api/auth/github/callback`,
-          { 
-            params: { code, state },
-            withCredentials: true 
-          }
+
+        // POST to backend exchange endpoint — NOT the callback URL
+        const res = await axios.post(
+          `${apiUrl}/api/auth/github`,
+          { code, state },
+          { withCredentials: true }
         )
 
-        localStorage.setItem('auth', 'true')
-        navigate('/dashboard')
+        // Store real token + user data
+        localStorage.setItem('token', res.data.token)
+        localStorage.setItem('user', JSON.stringify(res.data.user))
+        window.dispatchEvent(new Event('auth-change'))
+
+        navigate('/dashboard', { replace: true })
       } catch (err: any) {
         console.error('OAuth failed', err)
         setError(err.response?.data?.detail || err.message || 'OAuth exchange failed')
+        setTimeout(() => navigate('/'), 3000)
       }
     }
 
     exchangeCode()
-  }, [params, navigate])
+  }, []) // empty deps — run once only
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-900 text-white p-10 font-mono">
