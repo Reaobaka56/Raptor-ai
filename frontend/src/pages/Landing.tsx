@@ -32,7 +32,7 @@ export default function Landing() {
     setIsLoggingIn(true);
     try {
       const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const redirectUri = `${window.location.origin}/auth/callback`;
+      const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/github/callback`;
       const res = await fetch(`${apiBaseUrl}/api/auth/github/login?redirectUri=${encodeURIComponent(redirectUri)}`);
       
       if (!res.ok) throw new Error('Failed to fetch login url');
