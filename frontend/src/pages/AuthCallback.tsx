@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { AlertTriangle } from "lucide-react"
-import { authApi } from "../api"
 
 export default function AuthCallback() {
   const [params] = useSearchParams()
@@ -11,56 +10,46 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleAuth = async () => {
-      const code = params.get("code");
-      const state = params.get("state");
-      const errorMsg = params.get("error");
-
-      // Handle error returned from backend
-      if (errorMsg) {
-        setError(errorMsg);
-        setLoading(false);
-        setTimeout(() => navigate("/"), 3000);
-        return;
+      const code = params.get("code")
+      if (!code) {
+        setError('No code returned from GitHub.')
+        setLoading(false)
+        setTimeout(() => navigate('/'), 3000)
+        return
       }
 
-      if (code) {
-        // Optional: verify state matches sessionStorage to prevent CSRF
-        const savedState = sessionStorage.getItem('github_oauth_state');
-        if (state && savedState && state !== savedState) {
-          setError('Invalid OAuth state. Please try logging in again.');
-          setLoading(false);
-          setTimeout(() => navigate('/'), 3000);
-          return;
+      try {
+        const res = await fetch('https://raptor-ai.onrender.com/api/auth/github', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            code,
+            redirectUri: 'https://raptor-agent.vercel.app/api/auth/github/callback'
+          })
+        })
+
+        if (!res.ok) {
+          const err = await res.json()
+          throw new Error(err.detail || 'Auth failed')
         }
-        try {
-          const response = await authApi.completeGithubLogin(code);
-          const data = response.data;
-          // Store token and user info
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          sessionStorage.removeItem('github_oauth_state');
-          window.dispatchEvent(new Event('auth-change'));
-          // Navigate to dashboard after successful login
-          navigate('/dashboard', { replace: true });
-        } catch (err: any) {
-          const msg = err?.response?.data?.detail || err?.message || 'Authentication failed';
-          setError(msg);
-          setTimeout(() => navigate('/'), 3000);
-        } finally {
-          setLoading(false);
-        }
-        return;
+
+        const data = await res.json()
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        window.dispatchEvent(new Event('auth-change'))
+        navigate('/dashboard', { replace: true })
+      } catch (err: any) {
+        setError(err.message || 'Authentication failed')
+        setLoading(false)
+        setTimeout(() => navigate('/'), 3000)
+      } finally {
+        setLoading(false)
       }
+    }
 
-      // No code and no error: something went wrong
-      setError('Missing authentication data. Please try logging in again.');
-      setLoading(false);
-      setTimeout(() => navigate('/'), 3000);
-    };
-    handleAuth();
-  }, [params, navigate]);
+    handleAuth()
+  }, []) // empty deps — run once only
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
@@ -75,7 +64,6 @@ export default function AuthCallback() {
     )
   }
 
-  // Error state
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
@@ -91,7 +79,6 @@ export default function AuthCallback() {
     )
   }
 
-  // Fallback (shouldn't reach here)
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
       <div className="text-center">
