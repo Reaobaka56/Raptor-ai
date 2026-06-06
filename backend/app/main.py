@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from .analysis import router as analysis_router
 from .router.webhook import router as webhook_router
+from .memory_router import router as memory_router
 from .rate_limit import InMemoryRateLimitMiddleware, build_rate_limit_rules
 # Removed circular import of scan_repository to avoid recursion
 from pydantic import BaseModel, Field
