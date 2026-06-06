@@ -1,9 +1,7 @@
 {
-  "outputDirectory": "frontend/dist",
-  "cleanUrls": true,
   "rewrites": [
     { "source": "/api/auth/github/callback", "destination": "/index.html" },
-    { "source": "/api/(.*)", "destination": "https://raptor-backend.onrender.com/api/$1" },
+    { "source": "/api/(.*)", "destination": "https://raptor-ai.onrender.com/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
