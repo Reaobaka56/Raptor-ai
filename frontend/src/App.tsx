@@ -25,6 +25,7 @@ function App() {
     <Routes>
           <Route path="/auth/error" element={<AuthError />} />
           <Route path="/auth/github/callback" element={<AuthCallback />} />
+          <Route path="/api/auth/github/callback" element={<AuthCallback />} />
           <Route path="/" element={<Landing />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/blog" element={<Blog />} />
