@@ -31,7 +31,7 @@ export default function Landing() {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const apiBaseUrl = (import.meta.env.VITE_API_URL || 'https://raptor-ai.onrender.com').replace(/\/api$/, '');
       const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/github/callback`;
       const res = await fetch(`${apiBaseUrl}/api/auth/github/login?redirectUri=${encodeURIComponent(redirectUri)}`);
       
