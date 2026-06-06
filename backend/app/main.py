@@ -1,5 +1,6 @@
 import os
 import random
+import secrets
 import time
 import uuid
 from datetime import datetime, timezone
@@ -351,9 +352,82 @@ def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
-# NOTE: GitHub OAuth routes have been deprecated in favor of Better Auth.
-# The authentication flow is now handled by the Better Auth plugin (dash) configured in the frontend.
-# If needed, reimplement equivalent endpoints using Better Auth server‑side utilities.
+class OAuthExchangeRequest(BaseModel):
+    code: str
+    state: Optional[str] = None
+    redirectUri: Optional[str] = None
+
+@app.post("/api/auth/github")
+async def exchange_github_code(req: OAuthExchangeRequest):
+    """Exchange GitHub OAuth code for a session token."""
+    client_id = os.getenv("GITHUB_CLIENT_ID")
+    client_secret = os.getenv("GITHUB_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
+
+    # Exchange code for access token
+    token_res = requests.post(
+        "https://github.com/login/oauth/access_token",
+        headers={"Accept": "application/json"},
+        json={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": req.code,
+        },
+        timeout=15,
+    )
+
+    if token_res.status_code != 200:
+        raise HTTPException(status_code=401, detail="Failed to exchange code with GitHub")
+
+    token_data = token_res.json()
+    access_token = token_data.get("access_token")
+
+    if not access_token:
+        error = token_data.get("error_description", "No access token returned")
+        raise HTTPException(status_code=401, detail=error)
+
+    # Get user info from GitHub
+    user_res = requests.get(
+        "https://api.github.com/user",
+        headers=get_github_auth_headers(access_token),
+        timeout=10,
+    )
+
+    if user_res.status_code != 200:
+        raise HTTPException(status_code=401, detail="Failed to fetch GitHub user")
+
+    user_data = user_res.json()
+
+    # Create session
+    session_token = secrets.token_urlsafe(32)
+    USER_SESSIONS[session_token] = GitHubSession(
+        access_token=access_token,
+        user=UserProfile(
+            username=user_data.get("login", ""),
+            avatarUrl=user_data.get("avatar_url", ""),
+            githubId=user_data.get("id", 0),
+        ),
+        repositories=[],
+        created_at=datetime.now(timezone.utc).isoformat()
+    )
+
+    return {
+        "token": session_token,
+        "user": {
+            "username": user_data.get("login"),
+            "avatarUrl": user_data.get("avatar_url"),
+            "githubId": user_data.get("id"),
+        }
+    }
+
+@app.get("/api/auth/github/login")
+async def github_login(state: Optional[str] = None, redirectUri: Optional[str] = None):
+    client_id = os.getenv("GITHUB_CLIENT_ID")
+    redirect = redirectUri or os.getenv("GITHUB_REDIRECT_URI", "")
+    url = f"https://github.com/login/oauth/authorize?client_id={client_id}&scope=read:user+repo&state={state or ''}&redirect_uri={redirect}"
+    return {"url": url}
 
 
 def parse_github_scan_target(target: str) -> tuple[str, Optional[int]]:
