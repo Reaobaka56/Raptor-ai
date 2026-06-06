@@ -475,11 +475,18 @@ def scan_repository(req: ScanRequest):
     from .services.ai_service import ai_service as real_ai_service
 
     github_token = None
-    try:
-        github_token = github_app_service.get_installation_token_for_repo(repo_name)
-    except Exception as auth_exc:
-        print(f"GitHub App token unavailable for {repo_name}; falling back to public API: {auth_exc}")
-    github_headers = github_app_service._headers(github_token) if github_token else None
+
+try:
+    github_token = github_app_service.get_installation_token_for_repo(repo_name)
+except Exception as auth_exc:
+    print(f"GitHub App token unavailable for {repo_name}: {auth_exc}")
+
+if not github_token:
+    github_token = get_configured_github_token()
+
+github_headers = get_github_auth_headers(github_token)
+
+print("GitHub token configured:", bool(github_token))
 
     try:
         if requested_pr_number:
