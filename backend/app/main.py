@@ -1,3 +1,10 @@
+There is a significant structural and syntactic issue inside your `/api/scan` endpoint: the authentication configuration blocks are written completely outside the scope of the function's execution block due to incorrect indentation alignment.
+
+Because `try:` and `if not github_token:` are indented unaligned with the rest of the function, Python will throw an immediate `IndentationError` or parse the logic incorrectly, resulting in unbound variables like `github_token` and `github_headers` when your API attempts to hit the GitHub endpoints.
+
+Here is the fully cleaned up, corrected, and structured `main.py` entrypoint code:
+
+```python
 import os
 import random
 import secrets
@@ -17,14 +24,13 @@ from .analysis import router as analysis_router
 from .router.webhook import router as webhook_router
 from .memory_router import router as memory_router
 from .rate_limit import InMemoryRateLimitMiddleware, build_rate_limit_rules
-# Removed circular import of scan_repository to avoid recursion
 from pydantic import BaseModel, Field
 
 load_dotenv()
 
 
 # =====================================================================
-# INTEGRATED PYDANTIC MODELS (No external models.py import needed!)
+# INTEGRATED PYDANTIC MODELS
 # =====================================================================
 class ReviewIssue(BaseModel):
     file: str = Field(..., description="Target file path")
@@ -172,7 +178,7 @@ class SystemTelemetry(BaseModel):
     webhookLogs: List[WebhookLogItem]
 
 # =====================================================================
-# FIXED INTERNAL COMPONSENT IMPORTS
+# FIXED INTERNAL COMPONENT IMPORTS
 # =====================================================================
 from .services.github_app import github_app_service
 
@@ -264,7 +270,6 @@ MOCK_REPOSITORIES: List[RepositoryInfo] = [
 ]
 
 MOCK_REVIEWS: List[Review] = []
-
 
 
 def get_github_auth_headers(access_token: Optional[str]) -> Dict[str, str]:
@@ -366,7 +371,6 @@ async def exchange_github_code(req: OAuthExchangeRequest):
     if not client_id or not client_secret:
         raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
 
-    # Exchange code for access token
     token_res = requests.post(
         "https://github.com/login/oauth/access_token",
         headers={"Accept": "application/json"},
@@ -388,7 +392,6 @@ async def exchange_github_code(req: OAuthExchangeRequest):
         error = token_data.get("error_description", "No access token returned")
         raise HTTPException(status_code=401, detail=error)
 
-    # Get user info from GitHub
     user_res = requests.get(
         "https://api.github.com/user",
         headers=get_github_auth_headers(access_token),
@@ -400,7 +403,6 @@ async def exchange_github_code(req: OAuthExchangeRequest):
 
     user_data = user_res.json()
 
-    # Create session
     session_token = secrets.token_urlsafe(32)
     USER_SESSIONS[session_token] = GitHubSession(
         access_token=access_token,
@@ -476,17 +478,16 @@ def scan_repository(req: ScanRequest):
 
     github_token = None
 
-try:
-    github_token = github_app_service.get_installation_token_for_repo(repo_name)
-except Exception as auth_exc:
-    print(f"GitHub App token unavailable for {repo_name}: {auth_exc}")
+    try:
+        github_token = github_app_service.get_installation_token_for_repo(repo_name)
+    except Exception as auth_exc:
+        print(f"GitHub App token unavailable for {repo_name}: {auth_exc}")
 
-if not github_token:
-    github_token = get_configured_github_token()
+    if not github_token:
+        github_token = get_configured_github_token()
 
-github_headers = get_github_auth_headers(github_token)
-
-print("GitHub token configured:", bool(github_token))
+    github_headers = get_github_auth_headers(github_token)
+    print("GitHub token configured:", bool(github_token))
 
     try:
         if requested_pr_number:
