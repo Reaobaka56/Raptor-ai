@@ -140,6 +140,10 @@ app.include_router(webhook_router)
 app.include_router(analysis_router, prefix="/debug")
 from .scan_router import router as scan_router
 app.include_router(scan_router)
+from .reviews_router import router as reviews_router
+from .telemetry_router import router as telemetry_router
+app.include_router(reviews_router)
+app.include_router(telemetry_router)
 
 class GitHubSession(TypedDict):
     access_token: str
@@ -150,39 +154,7 @@ class GitHubSession(TypedDict):
 USER_SESSIONS: Dict[str, GitHubSession] = {}
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
 
-LIVE_WEBHOOK_LOGS: List[WebhookLogItem] = [
-    WebhookLogItem(id="wh_98a72b", repo="organization/api-gateway", event="pull_request.synchronize", status=200, time="20s ago"),
-    WebhookLogItem(id="wh_98a72a", repo="organization/auth-service", event="pull_request.opened", status=200, time="3m ago"),
-]
-
-AST_CACHE_STATS: Dict[str, Dict[str, Any]] = {
-    "TypeScript / JavaScript": {"version": "v5.4.2", "hits": 142, "total": 150},
-    "Python": {"version": "v3.12.1", "hits": 98, "total": 106},
-    "Go (Golang)": {"version": "v1.22.0", "hits": 204, "total": 210},
-}
-
-MOCK_REPOSITORIES: List[RepositoryInfo] = [
-    RepositoryInfo(
-        id="repo_1",
-        fullName="organization/api-gateway",
-        private=True,
-        defaultBranch="main",
-        lastScan="2026-05-17T14:15:00Z",
-        issuesCount=2,
-        language="TypeScript"
-    ),
-    RepositoryInfo(
-        id="repo_2",
-        fullName="organization/auth-service",
-        private=False,
-        defaultBranch="main",
-        lastScan="2026-05-17T11:20:00Z",
-        issuesCount=1,
-        language="Go"
-    )
-]
-
-MOCK_REVIEWS: List[Review] = []
+from .state import LIVE_WEBHOOK_LOGS, AST_CACHE_STATS, MOCK_REPOSITORIES, MOCK_REVIEWS
 
 
 def get_github_auth_headers(access_token: Optional[str]) -> Dict[str, str]:
