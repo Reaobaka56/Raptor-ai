@@ -199,7 +199,6 @@ allowed_origins = configured_origins or [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -229,6 +228,7 @@ class GitHubSession(TypedDict):
     created_at: str
 
 USER_SESSIONS: Dict[str, GitHubSession] = {}
+SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
 
 LIVE_WEBHOOK_LOGS: List[WebhookLogItem] = [
     WebhookLogItem(id="wh_98a72b", repo="organization/api-gateway", event="pull_request.synchronize", status=200, time="20s ago"),
@@ -276,6 +276,27 @@ def get_github_auth_headers(access_token: Optional[str]) -> Dict[str, str]:
     return headers
 
 
+def get_internal_api_token(
+    authorization: Optional[str] = Header(default=None),
+) -> bool:
+    if not authorization or not authorization.startswith("Bearer "):
+        return False
+    token = authorization.removeprefix("Bearer ").strip()
+    valid_tokens = {
+        t for t in [os.getenv("INTERNAL_API_TOKEN"), os.getenv("GITHUB_TOKEN"), os.getenv("GITHUB_PAT")]
+        if t
+    }
+    return token in valid_tokens
+
+
+def is_session_expired(session: GitHubSession) -> bool:
+    try:
+        created_at = datetime.fromisoformat(session["created_at"])
+    except Exception:
+        return False
+    return (datetime.now(timezone.utc) - created_at).total_seconds() > SESSION_TTL_SECONDS
+
+
 def get_optional_github_session(
     authorization: Optional[str] = Header(default=None),
     raptor_session: Optional[str] = Cookie(default=None),
@@ -288,15 +309,25 @@ def get_optional_github_session(
 
     if not session_token:
         return None
-    return USER_SESSIONS.get(session_token)
+
+    session = USER_SESSIONS.get(session_token)
+    if not session:
+        return None
+    if is_session_expired(session):
+        USER_SESSIONS.pop(session_token, None)
+        return None
+    return session
 
 
 def get_required_github_session(
     session: Optional[GitHubSession] = Depends(get_optional_github_session),
-) -> GitHubSession:
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session context")
-    return session
+    internal_auth: bool = Depends(get_internal_api_token),
+) -> Optional[GitHubSession]:
+    if session:
+        return session
+    if internal_auth:
+        return None
+    raise HTTPException(status_code=401, detail="Invalid or expired session context")
 
 
 def get_configured_github_token() -> Optional[str]:
@@ -465,14 +496,19 @@ def sync_repository_scan_metadata(repo_name: str, review: Review) -> None:
             return
 
 @app.post("/api/scan", response_model=Review, tags=["Scanning"])
-def scan_repository(req: ScanRequest):
+def scan_repository(
+    req: ScanRequest,
+    session: Optional[GitHubSession] = Depends(get_required_github_session),
+):
     repo_name, requested_pr_number = parse_github_scan_target(req.repo)
     from .services.ai_service import ai_service as real_ai_service
 
-    github_token = None
+    github_token = session["access_token"] if session else None
 
     try:
-        github_token = github_app_service.get_installation_token_for_repo(repo_name)
+        app_token = github_app_service.get_installation_token_for_repo(repo_name)
+        if app_token:
+            github_token = app_token
     except Exception as auth_exc:
         print(f"GitHub App token unavailable for {repo_name}: {auth_exc}")
 

@@ -5,13 +5,18 @@ Mounts under /api/memory in the main app.
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 
 from .services.embedding_service import generate_embedding
 from .services import memory_service
 
 router = APIRouter(prefix="/memory", tags=["Team Memory"])
+
+
+def require_authenticated_session():
+    from .main import get_required_github_session
+    return get_required_github_session()
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +105,7 @@ class OnboardingGuide(BaseModel):
 # Convention Rules Endpoints
 # ---------------------------------------------------------------------------
 @router.post("/rules", response_model=RuleResponse)
-def add_rule(req: AddRuleRequest):
+def add_rule(req: AddRuleRequest, session: Optional[dict] = Depends(require_authenticated_session)):
     """Add a plain-English convention rule. It gets embedded for semantic matching."""
     embedding = generate_embedding(req.rule_text)
     result = memory_service.add_convention_rule(
@@ -119,7 +124,7 @@ def get_rules(repo: str = Query(default="*", description="Filter by repo")):
 
 
 @router.delete("/rules/{rule_id}")
-def remove_rule(rule_id: int):
+def remove_rule(rule_id: int, session: Optional[dict] = Depends(require_authenticated_session)):
     """Disable (soft-delete) a convention rule."""
     success = memory_service.delete_convention_rule(rule_id)
     if not success:
@@ -131,7 +136,7 @@ def remove_rule(rule_id: int):
 # Feedback Endpoints
 # ---------------------------------------------------------------------------
 @router.post("/feedback", response_model=FeedbackResponse)
-def submit_feedback(req: FeedbackRequest):
+def submit_feedback(req: FeedbackRequest, session: Optional[dict] = Depends(require_authenticated_session)):
     """Submit thumbs-up/down feedback on a specific review issue."""
     result = memory_service.store_feedback(
         review_id=req.review_id,

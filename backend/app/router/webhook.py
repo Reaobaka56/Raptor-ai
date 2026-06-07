@@ -66,11 +66,17 @@ async def github_webhook(
             async with httpx.AsyncClient() as client:
                 scan_url = f"http://127.0.0.1:8000/api/scan"
                 payload = {"repo": repo_full_name}
-                # Send request; ignore response errors for background task
+                headers = {}
+                internal_token = os.getenv("INTERNAL_API_TOKEN") or os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_PAT")
+                if internal_token:
+                    headers["Authorization"] = f"Bearer {internal_token}"
+                else:
+                    print("[webhook] No internal auth token configured; scan endpoint may reject the request")
                 try:
-                    await client.post(scan_url, json=payload, timeout=30.0)
+                    await client.post(scan_url, json=payload, headers=headers, timeout=30.0)
                 except Exception as exc:
                     # Log but do not fail webhook response
                     print(f"[webhook] Failed to trigger scan for {repo_full_name}: {exc}")
+        background_tasks.add_task(run_scan)
 
     return {"status": "received"}
