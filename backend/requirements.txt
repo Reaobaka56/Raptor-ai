@@ -11,3 +11,4 @@ cryptography
 pgvector
 asyncpg
 psycopg2-binary
+redis

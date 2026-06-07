@@ -121,11 +121,15 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
         return self.rules[-1]
 
     def _client_key(self, request: Request) -> str:
+        # Only trust X-Forwarded-For when the immediate peer is a configured trusted proxy
         forwarded_for = request.headers.get("x-forwarded-for")
-        if forwarded_for:
+        trusted = os.getenv("TRUSTED_PROXY_IPS", "")
+        trusted_set = {p.strip() for p in trusted.split(",") if p.strip()}
+        peer = request.client.host if request.client and request.client.host else None
+        if forwarded_for and peer and peer in trusted_set:
             return forwarded_for.split(",", 1)[0].strip()
-        if request.client and request.client.host:
-            return request.client.host
+        if peer:
+            return peer
         return "unknown"
 
     def _record_hit(self, rule: RateLimitRule, client_key: str, now: float) -> Tuple[bool, int, int]:

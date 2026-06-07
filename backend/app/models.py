@@ -12,7 +12,7 @@ class ReviewIssue(BaseModel):
     suggestion: str
 
 class Review(BaseModel):
-    id: int
+    id: str
     githubRepo: str
     prNumber: int
     prTitle: Optional[str] = None

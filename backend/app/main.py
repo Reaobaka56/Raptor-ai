@@ -9,6 +9,8 @@ from urllib.parse import urlencode, urlparse
 
 import requests
 from dotenv import load_dotenv
+import hmac
+import hashlib
 
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Body, Header, Cookie, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,9 +19,20 @@ from .analysis import router as analysis_router
 from .router.webhook import router as webhook_router
 from .memory_router import router as memory_router
 from .rate_limit import InMemoryRateLimitMiddleware, build_rate_limit_rules
+from .services.db import get_conn, release_conn
 from pydantic import BaseModel, Field
+from .services.session_store import save_session, get_session, delete_session, refresh_session
+from .auth_dependencies import (
+    get_optional_github_session,
+    get_required_github_session,
+    get_internal_api_token,
+    get_configured_github_token,
+)
 
 load_dotenv()
+import logging
+import contextvars
+import uuid as _uuid
 
 
 # =====================================================================
@@ -35,76 +48,13 @@ class ReviewIssue(BaseModel):
     suggestion: str
 
 class Review(BaseModel):
-    id: int
+    id: str
     githubRepo: str
     prNumber: int
     prTitle: Optional[str] = None
     prUrl: Optional[str] = None
     fixPrNumber: Optional[int] = None
-    fixPrUrl: Optional[str] = None
-    issues: List[ReviewIssue] = []
-    summary: Optional[str] = None
-    status: str = "completed"
-    reviewTimeMs: Optional[int] = None
-    createdAt: str
-
-class Pagination(BaseModel):
-    total: int
-    limit: int
-    offset: int
-
-class ReviewsResponse(BaseModel):
-    reviews: List[Review]
-    pagination: Pagination
-
-class SeverityStats(BaseModel):
-    critical: int
-    high: int
-    medium: int
-    low: int
-
-class CategoryStats(BaseModel):
-    security: int
-    performance: int
-    quality: int
-    design: int
-
-class TimeSeriesPoint(BaseModel):
-    date: str
-    count: int
-    issues: int
-
-class Stats(BaseModel):
-    totalReviews: int
-    totalIssues: int
-    avgReviewTime: int
-    issuesBySeverity: SeverityStats
-    issuesByCategory: CategoryStats
-    reviewsOverTime: List[TimeSeriesPoint]
-
-class PullRequestModel(BaseModel):
-    number: int
-    title: str
-    html_url: str
-    diff_url: str
-    state: str
-
-class RepositoryModel(BaseModel):
-    full_name: str
-    html_url: str
-
-class InstallationModel(BaseModel):
-    id: int
-
-class WebhookPayload(BaseModel):
-    action: Optional[str] = None
-    pull_request: Optional[PullRequestModel] = None
-    repository: Optional[RepositoryModel] = None
-    installation: Optional[InstallationModel] = None
-
-class RepositoryInfo(BaseModel):
-    id: str
-    fullName: str
+    ## session helpers moved to `auth_dependencies.py`
     private: bool
     defaultBranch: str
     lastScan: Optional[str] = None
@@ -175,51 +125,21 @@ class SystemTelemetry(BaseModel):
 # =====================================================================
 from .services.github_app import github_app_service
 
-# =====================================================================
-# FASTAPI APPLICATION SETUP
-# =====================================================================
-app = FastAPI(
-    title="Raptor AI Code Review Backend",
-    description="Autonomous live GitHub integration and Gemini AST analysis engine",
-    version="2.0.0"
-)
+from .state import app, request_id_var, START_TIME
+ACTIVE_QUEUE_COUNT = 0
 
-configured_origins = [
-    origin.strip()
-    for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
-    if origin.strip()
-]
-allowed_origins = configured_origins or [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "https://raptor-ai.vercel.app",
-    "https://raptor-ai.onrender.com",
-]
+# Register routers (avoid importing routers from state to prevent circular imports)
+from .auth_router import router as auth_router
+from .router.webhook import router as webhook_router
+from .memory_router import router as memory_router
+from .analysis import router as analysis_router
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=[
-        "X-RateLimit-Limit",
-        "X-RateLimit-Remaining",
-        "X-RateLimit-Reset",
-        "X-RateLimit-Window",
-        "X-RateLimit-Policy",
-        "Retry-After",
-    ],
-)
-app.add_middleware(InMemoryRateLimitMiddleware, rules=build_rate_limit_rules())
-
-app.include_router(analysis_router, prefix="/debug")
+app.include_router(auth_router)
 app.include_router(memory_router, prefix="/api")
 app.include_router(webhook_router)
-
-
-START_TIME = time.time()
-ACTIVE_QUEUE_COUNT = 0
+app.include_router(analysis_router, prefix="/debug")
+from .scan_router import router as scan_router
+app.include_router(scan_router)
 
 class GitHubSession(TypedDict):
     access_token: str
@@ -310,12 +230,26 @@ def get_optional_github_session(
     if not session_token:
         return None
 
-    session = USER_SESSIONS.get(session_token)
+    # Prefer Redis-backed sessions when available
+    session = None
+    try:
+        session = get_session(session_token)
+    except Exception:
+        session = None
+
+    if not session:
+        # Fallback to in-memory dict for tests/local
+        session = USER_SESSIONS.get(session_token)
+
     if not session:
         return None
-    if is_session_expired(session):
-        USER_SESSIONS.pop(session_token, None)
-        return None
+
+    # Sliding TTL: refresh on active use where supported
+    try:
+        refresh_session(session_token)
+    except Exception:
+        pass
+
     return session
 
 
@@ -386,14 +320,48 @@ class OAuthExchangeRequest(BaseModel):
     state: Optional[str] = None
     redirectUri: Optional[str] = None
 
+
+def _make_signed_state(state: str) -> str:
+    """Return a signed state token including timestamp to store in a cookie."""
+    secret = (os.getenv("APP_SECRET") or os.getenv("SECRET_KEY") or "").encode()
+    ts = str(int(time.time()))
+    payload = f"{state}:{ts}".encode()
+    sig = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+    return f"{state}:{ts}:{sig}"
+
+
+def _verify_signed_state(signed: str, max_age: int = 300) -> Optional[str]:
+    try:
+        secret = (os.getenv("APP_SECRET") or os.getenv("SECRET_KEY") or "").encode()
+        parts = signed.split(":")
+        if len(parts) != 3:
+            return None
+        state, ts_str, sig = parts
+        payload = f"{state}:{ts_str}".encode()
+        expected = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return None
+        ts = int(ts_str)
+        if abs(int(time.time()) - ts) > max_age:
+            return None
+        return state
+    except Exception:
+        return None
+
 @app.post("/api/auth/github")
-async def exchange_github_code(req: OAuthExchangeRequest):
+async def exchange_github_code(req: OAuthExchangeRequest, request: Request):
     """Exchange GitHub OAuth code for a session token."""
     client_id = os.getenv("GITHUB_CLIENT_ID")
     client_secret = os.getenv("GITHUB_CLIENT_SECRET")
 
     if not client_id or not client_secret:
         raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
+
+    # Validate OAuth state against signed cookie to prevent CSRF replay
+    if req.state:
+        signed = request.cookies.get("oauth_state")
+        if not signed or _verify_signed_state(signed) != req.state:
+            raise HTTPException(status_code=401, detail="Invalid or expired OAuth state")
 
     token_res = requests.post(
         "https://github.com/login/oauth/access_token",
@@ -428,150 +396,52 @@ async def exchange_github_code(req: OAuthExchangeRequest):
     user_data = user_res.json()
 
     session_token = secrets.token_urlsafe(32)
-    USER_SESSIONS[session_token] = GitHubSession(
-        access_token=access_token,
-        user=UserProfile(
-            username=user_data.get("login", ""),
-            avatarUrl=user_data.get("avatar_url", ""),
-            githubId=user_data.get("id", 0),
-        ),
-        repositories=[],
-        created_at=datetime.now(timezone.utc).isoformat()
-    )
-
-    return {
-        "token": session_token,
+    session_obj = {
+        "access_token": access_token,
         "user": {
-            "username": user_data.get("login"),
-            "avatarUrl": user_data.get("avatar_url"),
-            "githubId": user_data.get("id"),
-        }
+            "username": user_data.get("login", ""),
+            "avatarUrl": user_data.get("avatar_url", ""),
+            "githubId": user_data.get("id", 0),
+        },
+        "repositories": [],
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    # Persist session (Redis-backed when available)
+    try:
+        save_session(session_token, session_obj)
+    except Exception:
+        USER_SESSIONS[session_token] = session_obj
 
-@app.get("/api/auth/github/login")
-async def github_login(state: Optional[str] = None, redirectUri: Optional[str] = None):
+    # Return token and set session cookie
+    resp = {
+        "token": session_token,
+        "user": session_obj["user"],
+        "repositories": session_obj["repositories"],
+    }
+    return resp
+
+
+@app.get("/api/auth/github/login", response_model=GitHubLoginUrlResponse)
+def github_login(redirectUri: Optional[str] = None, response: Request = None):
+    """Initiate GitHub OAuth: generate signed state cookie and return the GitHub auth URL."""
     client_id = os.getenv("GITHUB_CLIENT_ID")
-    redirect = redirectUri or os.getenv("GITHUB_REDIRECT_URI", "")
-    url = f"https://github.com/login/oauth/authorize?client_id={client_id}&scope=read:user+repo&state={state or ''}&redirect_uri={redirect}"
-    return {"url": url}
-
-
-def parse_github_scan_target(target: str) -> tuple[str, Optional[int]]:
-    """Return (owner/repo, pull_request_number) from an owner/repo or GitHub PR URL."""
-    repo_name = target.strip()
-    pr_number: Optional[int] = None
-    if not repo_name:
-        raise HTTPException(status_code=400, detail="Repository is required")
-
-    if "://" in repo_name:
-        parsed = urlparse(repo_name)
-        if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
-            raise HTTPException(status_code=400, detail="Only GitHub repository URLs are supported")
-        path_parts = [part for part in parsed.path.strip("/").split("/") if part]
-        if len(path_parts) < 2:
-            raise HTTPException(status_code=400, detail="GitHub URL must include owner and repo")
-        if len(path_parts) >= 4 and path_parts[2] == "pull":
-            try:
-                pr_number = int(path_parts[3])
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail="Pull request number must be numeric") from exc
-        repo_name = "/".join(path_parts[:2])
-
-    repo_name = repo_name.removesuffix(".git").strip("/")
-    repo_parts = repo_name.split("/")
-    if len(repo_parts) != 2 or not all(repo_parts):
-        raise HTTPException(status_code=400, detail="Repository must be in owner/repo format")
-    return repo_name, pr_number
-
-def normalize_github_repo_name(repo: str) -> str:
-    """Return owner/repo from either a GitHub URL or owner/repo input."""
-    return parse_github_scan_target(repo)[0]
-
-def sync_repository_scan_metadata(repo_name: str, review: Review) -> None:
-    """Keep dashboard repository cards in sync after manual scans."""
-    for repo in MOCK_REPOSITORIES:
-        if repo.fullName.lower() == repo_name.lower():
-            repo.lastScan = review.createdAt
-            repo.issuesCount = len(review.issues)
-            return
-
-@app.post("/api/scan", response_model=Review, tags=["Scanning"])
-def scan_repository(
-    req: ScanRequest,
-    session: Optional[GitHubSession] = Depends(get_required_github_session),
-):
-    repo_name, requested_pr_number = parse_github_scan_target(req.repo)
-    from .services.ai_service import ai_service as real_ai_service
-
-    github_token = session["access_token"] if session else None
-
-    try:
-        app_token = github_app_service.get_installation_token_for_repo(repo_name)
-        if app_token:
-            github_token = app_token
-    except Exception as auth_exc:
-        print(f"GitHub App token unavailable for {repo_name}: {auth_exc}")
-
-    if not github_token:
-        github_token = get_configured_github_token()
-
-    github_headers = get_github_auth_headers(github_token)
-    print("GitHub token configured:", bool(github_token))
-
-    try:
-        if requested_pr_number:
-            pr_res = requests.get(f"https://api.github.com/repos/{repo_name}/pulls/{requested_pr_number}", headers=github_headers, timeout=15)
-            pr_res.raise_for_status()
-            pr_data = pr_res.json()
-            pr_number = int(pr_data["number"])
-            pr_title = pr_data.get("title") or f"Pull request #{pr_number}"
-            pr_url = pr_data.get("html_url") or f"https://github.com/{repo_name}/pull/{pr_number}"
-            diff_url = pr_data.get("diff_url") or f"{pr_url}.diff"
-        else:
-            pulls_res = requests.get(f"https://api.github.com/repos/{repo_name}/pulls?state=open&sort=updated&direction=desc&per_page=1", headers=github_headers, timeout=15)
-            pulls_res.raise_for_status()
-            pulls_data = pulls_res.json()
-            if pulls_data:
-                pr_data = pulls_data[0]
-                pr_number = int(pr_data["number"])
-                pr_title = pr_data.get("title") or f"Pull request #{pr_number}"
-                pr_url = pr_data.get("html_url") or f"https://github.com/{repo_name}/pull/{pr_number}"
-                diff_url = pr_data.get("diff_url") or f"{pr_url}.diff"
-            else:
-                commits_res = requests.get(f"https://api.github.com/repos/{repo_name}/commits?per_page=1", headers=github_headers, timeout=15)
-                commits_res.raise_for_status()
-                commits_data = commits_res.json()
-                if not commits_data:
-                    raise HTTPException(status_code=404, detail="No pull requests or commits found for this repository")
-                latest_commit = commits_data[0]
-                sha = latest_commit["sha"]
-                pr_number = 0
-                pr_title = latest_commit["commit"]["message"]
-                pr_url = f"https://github.com/{repo_name}/commit/{sha}"
-                diff_url = f"{pr_url}.diff"
-
-        diff_text = real_ai_service.fetch_diff(diff_url, github_token=github_token)
-        ai_result = real_ai_service.analyze_pr(repo=repo_name, pr_number=pr_number, pr_title=pr_title, diff_text=diff_text)
-        new_review = Review(
-            id=random.randint(10000, 99999),
-            githubRepo=repo_name,
-            prNumber=pr_number,
-            prTitle=pr_title,
-            prUrl=pr_url,
-            issues=[ReviewIssue(**issue) for issue in ai_result.get("issues", [])],
-            summary=ai_result.get("summary", "LLM analysis completed"),
-            status="completed",
-            reviewTimeMs=ai_result.get("reviewTimeMs", 0),
-            createdAt=datetime.now(timezone.utc).isoformat(),
-        )
-    except HTTPException:
-        raise
-    except requests.HTTPError as exc:
-        status_code = exc.response.status_code if exc.response is not None else 502
-        detail = exc.response.text if exc.response is not None else str(exc)
-        raise HTTPException(status_code=502, detail=f"GitHub API scan failed ({status_code}): {detail}") from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Repository scan failed: {exc}") from exc
+    if not client_id:
+        raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
+    state = secrets.token_urlsafe(16)
+    signed = _make_signed_state(state)
+    # Build redirect URL
+    params = {"client_id": client_id, "scope": "repo read:user", "state": state}
+    if redirectUri:
+        params["redirect_uri"] = redirectUri
+    url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
+    # FastAPI Request can't set cookies via Request object; return URL and expect frontend to redirect.
+    response_obj = {"url": url}
+    # Also instruct client to set a cookie by including Set-Cookie header via Response
+    from fastapi import Response
+    resp = Response(content=json.dumps(response_obj), media_type="application/json")
+    resp.set_cookie("oauth_state", signed, httponly=True, samesite="lax", max_age=300)
+    return resp
+    
 
     # ── Memory Layer Integration ──────────────────────────────────────
     try:
@@ -602,8 +472,41 @@ def scan_repository(
         new_review._convention_violations = relevant_rules
 
     except Exception as mem_err:
-        print(f"[memory] Non-blocking memory layer error: {mem_err}")
+            logging.exception("[memory] Non-blocking memory layer error")
     # ─────────────────────────────────────────────────────────────────
+
+    # Persist review to Postgres if configured
+    conn = None
+    try:
+        conn = get_conn()
+        if conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO reviews (id, github_repo, pr_number, pr_title, pr_url, fix_pr_number, fix_pr_url, issues, summary, status, review_time_ms, created_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                """,
+                (
+                    new_review.id,
+                    new_review.githubRepo,
+                    new_review.prNumber,
+                    new_review.prTitle,
+                    new_review.prUrl,
+                    new_review.fixPrNumber,
+                    new_review.fixPrUrl,
+                    json.dumps([i.dict() for i in new_review.issues]),
+                    new_review.summary,
+                    new_review.status,
+                    new_review.reviewTimeMs,
+                    new_review.createdAt,
+                ),
+            )
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
+    except Exception as e:
+        # If DB persistence fails, continue with in-memory mock list but log
+            logging.exception("[db] Failed to persist review to Postgres")
 
     sync_repository_scan_metadata(repo_name, new_review)
     MOCK_REVIEWS.insert(0, new_review)
