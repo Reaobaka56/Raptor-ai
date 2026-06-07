@@ -21,38 +21,35 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Postgres connection helpers  (sync via psycopg2 — keeps things simple)
 # ---------------------------------------------------------------------------
-_conn = None
+from ..services.db import get_conn, release_conn
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _get_conn():
-    """Lazy singleton Postgres connection."""
-    global _conn
-    if _conn is not None:
-        try:
-            _conn.cursor().execute("SELECT 1")
-            return _conn
-        except Exception:
-            _conn = None
-
+    """Get a Postgres connection from the pool, or return None for mock mode."""
     db_url = (
         os.getenv("PGVECTOR_CONN_STRING")
         or os.getenv("DATABASE_URL")
-        or "postgresql://postgres:postgres@localhost:5432/ai_code_review"
+        or None
     )
 
+    if not db_url:
+        return None
+
     try:
-        import psycopg2
-        _conn = psycopg2.connect(db_url)
-        _conn.autocommit = True
-        # Ensure pgvector extension and tables exist
-        _run_migrations(_conn)
-        return _conn
-    except ImportError:
-        print("[memory_service] psycopg2 not installed — running in mock mode")
-        return None
-    except Exception as e:
-        print(f"[memory_service] Postgres connection failed: {e} — running in mock mode")
-        return None
+        conn = get_conn()
+        if conn:
+            try:
+                # Ensure migrations run once per connection acquisition path
+                _run_migrations(conn)
+            except Exception:
+                logger.exception("Failed to run memory migrations")
+            return conn
+    except Exception:
+        logger.exception("Failed to acquire Postgres connection for memory_service")
+    return None
 
 
 def _run_migrations(conn):
@@ -67,9 +64,9 @@ def _run_migrations(conn):
             cur = conn.cursor()
             cur.execute(sql)
             cur.close()
-            print("[memory_service] Migration 001_memory_tables applied successfully")
+            logger.info("[memory_service] Migration 001_memory_tables applied successfully")
         except Exception as e:
-            print(f"[memory_service] Migration warning (may already exist): {e}")
+            logger.warning("[memory_service] Migration warning (may already exist): %s", e)
 
 
 # ---------------------------------------------------------------------------
@@ -101,17 +98,23 @@ def store_review_embedding(
     """Persist a review embedding. Returns the row id."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO review_embeddings
-                   (review_id, repo, pr_number, issue_titles, summary, embedding)
-               VALUES (%s, %s, %s, %s, %s, %s::vector)
-               RETURNING id""",
-            (review_id, repo, pr_number, issue_titles, summary, str(embedding)),
-        )
-        row_id = cur.fetchone()[0]
-        cur.close()
-        return row_id
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO review_embeddings
+                       (review_id, repo, pr_number, issue_titles, summary, embedding)
+                   VALUES (%s, %s, %s, %s, %s, %s::vector)
+                   RETURNING id""",
+                (review_id, repo, pr_number, issue_titles, summary, str(embedding)),
+            )
+            row_id = cur.fetchone()[0]
+            cur.close()
+            return row_id
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         row = {
             "id": _next_mock_id(),
@@ -135,37 +138,43 @@ def retrieve_similar_reviews(
     """Return the top-k most similar past reviews by cosine distance."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        if repo:
-            cur.execute(
-                """SELECT id, review_id, repo, pr_number, issue_titles, summary,
-                          1 - (embedding <=> %s::vector) AS similarity,
-                          created_at
-                   FROM review_embeddings
-                   WHERE repo = %s
-                   ORDER BY embedding <=> %s::vector
-                   LIMIT %s""",
-                (str(embedding), repo, str(embedding), top_k),
-            )
-        else:
-            cur.execute(
-                """SELECT id, review_id, repo, pr_number, issue_titles, summary,
-                          1 - (embedding <=> %s::vector) AS similarity,
-                          created_at
-                   FROM review_embeddings
-                   ORDER BY embedding <=> %s::vector
-                   LIMIT %s""",
-                (str(embedding), str(embedding), top_k),
-            )
-        columns = [d[0] for d in cur.description]
-        results = [dict(zip(columns, row)) for row in cur.fetchall()]
-        cur.close()
-        # Serialise datetimes
-        for r in results:
-            if hasattr(r.get("created_at"), "isoformat"):
-                r["created_at"] = r["created_at"].isoformat()
-            r["similarity"] = float(r.get("similarity", 0))
-        return results
+        try:
+            cur = conn.cursor()
+            if repo:
+                cur.execute(
+                    """SELECT id, review_id, repo, pr_number, issue_titles, summary,
+                              1 - (embedding <=> %s::vector) AS similarity,
+                              created_at
+                       FROM review_embeddings
+                       WHERE repo = %s
+                       ORDER BY embedding <=> %s::vector
+                       LIMIT %s""",
+                    (str(embedding), repo, str(embedding), top_k),
+                )
+            else:
+                cur.execute(
+                    """SELECT id, review_id, repo, pr_number, issue_titles, summary,
+                              1 - (embedding <=> %s::vector) AS similarity,
+                              created_at
+                       FROM review_embeddings
+                       ORDER BY embedding <=> %s::vector
+                       LIMIT %s""",
+                    (str(embedding), str(embedding), top_k),
+                )
+            columns = [d[0] for d in cur.description]
+            results = [dict(zip(columns, row)) for row in cur.fetchall()]
+            cur.close()
+            # Serialise datetimes
+            for r in results:
+                if hasattr(r.get("created_at"), "isoformat"):
+                    r["created_at"] = r["created_at"].isoformat()
+                r["similarity"] = float(r.get("similarity", 0))
+            return results
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         # Mock: return all stored embeddings with fake similarity
         results = []
@@ -180,31 +189,37 @@ def list_review_memories(repo: Optional[str] = None, limit: int = 100) -> List[D
     """Return recent stored review memories for generated repo summaries."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        if repo:
-            cur.execute(
-                """SELECT id, review_id, repo, pr_number, issue_titles, summary, created_at
-                   FROM review_embeddings
-                   WHERE repo = %s
-                   ORDER BY created_at DESC
-                   LIMIT %s""",
-                (repo, limit),
-            )
-        else:
-            cur.execute(
-                """SELECT id, review_id, repo, pr_number, issue_titles, summary, created_at
-                   FROM review_embeddings
-                   ORDER BY created_at DESC
-                   LIMIT %s""",
-                (limit,),
-            )
-        columns = [d[0] for d in cur.description]
-        results = [dict(zip(columns, row)) for row in cur.fetchall()]
-        cur.close()
-        for r in results:
-            if hasattr(r.get("created_at"), "isoformat"):
-                r["created_at"] = r["created_at"].isoformat()
-        return results
+        try:
+            cur = conn.cursor()
+            if repo:
+                cur.execute(
+                    """SELECT id, review_id, repo, pr_number, issue_titles, summary, created_at
+                       FROM review_embeddings
+                       WHERE repo = %s
+                       ORDER BY created_at DESC
+                       LIMIT %s""",
+                    (repo, limit),
+                )
+            else:
+                cur.execute(
+                    """SELECT id, review_id, repo, pr_number, issue_titles, summary, created_at
+                       FROM review_embeddings
+                       ORDER BY created_at DESC
+                       LIMIT %s""",
+                    (limit,),
+                )
+            columns = [d[0] for d in cur.description]
+            results = [dict(zip(columns, row)) for row in cur.fetchall()]
+            cur.close()
+            for r in results:
+                if hasattr(r.get("created_at"), "isoformat"):
+                    r["created_at"] = r["created_at"].isoformat()
+            return results
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
 
     results = []
     for row in sorted(_MOCK_REVIEW_EMBEDDINGS, key=lambda r: r.get("created_at", ""), reverse=True):
@@ -273,19 +288,25 @@ def add_convention_rule(
     """Add a plain-English convention rule."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO convention_rules (repo, org, rule_text, embedding)
-               VALUES (%s, %s, %s, %s::vector)
-               RETURNING id, repo, org, rule_text, enabled, created_at""",
-            (repo, org, rule_text, str(embedding)),
-        )
-        columns = [d[0] for d in cur.description]
-        row = dict(zip(columns, cur.fetchone()))
-        cur.close()
-        if hasattr(row.get("created_at"), "isoformat"):
-            row["created_at"] = row["created_at"].isoformat()
-        return row
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO convention_rules (repo, org, rule_text, embedding)
+                   VALUES (%s, %s, %s, %s::vector)
+                   RETURNING id, repo, org, rule_text, enabled, created_at""",
+                (repo, org, rule_text, str(embedding)),
+            )
+            columns = [d[0] for d in cur.description]
+            row = dict(zip(columns, cur.fetchone()))
+            cur.close()
+            if hasattr(row.get("created_at"), "isoformat"):
+                row["created_at"] = row["created_at"].isoformat()
+            return row
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         row = {
             "id": _next_mock_id(),
@@ -303,29 +324,35 @@ def list_convention_rules(repo: str = "*") -> List[Dict[str, Any]]:
     """Return all convention rules, optionally filtered by repo."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        if repo == "*":
-            cur.execute(
-                """SELECT id, repo, org, rule_text, enabled, created_at
-                   FROM convention_rules
-                   WHERE enabled = TRUE
-                   ORDER BY created_at DESC"""
-            )
-        else:
-            cur.execute(
-                """SELECT id, repo, org, rule_text, enabled, created_at
-                   FROM convention_rules
-                   WHERE enabled = TRUE AND (repo = %s OR repo = '*')
-                   ORDER BY created_at DESC""",
-                (repo,),
-            )
-        columns = [d[0] for d in cur.description]
-        results = [dict(zip(columns, row)) for row in cur.fetchall()]
-        cur.close()
-        for r in results:
-            if hasattr(r.get("created_at"), "isoformat"):
-                r["created_at"] = r["created_at"].isoformat()
-        return results
+        try:
+            cur = conn.cursor()
+            if repo == "*":
+                cur.execute(
+                    """SELECT id, repo, org, rule_text, enabled, created_at
+                       FROM convention_rules
+                       WHERE enabled = TRUE
+                       ORDER BY created_at DESC"""
+                )
+            else:
+                cur.execute(
+                    """SELECT id, repo, org, rule_text, enabled, created_at
+                       FROM convention_rules
+                       WHERE enabled = TRUE AND (repo = %s OR repo = '*')
+                       ORDER BY created_at DESC""",
+                    (repo,),
+                )
+            columns = [d[0] for d in cur.description]
+            results = [dict(zip(columns, row)) for row in cur.fetchall()]
+            cur.close()
+            for r in results:
+                if hasattr(r.get("created_at"), "isoformat"):
+                    r["created_at"] = r["created_at"].isoformat()
+            return results
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         if repo == "*":
             return [r for r in _MOCK_CONVENTION_RULES if r.get("enabled", True)]
@@ -339,13 +366,19 @@ def delete_convention_rule(rule_id: int) -> bool:
     """Soft-delete (disable) a convention rule."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE convention_rules SET enabled = FALSE WHERE id = %s", (rule_id,)
-        )
-        affected = cur.rowcount
-        cur.close()
-        return affected > 0
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE convention_rules SET enabled = FALSE WHERE id = %s", (rule_id,)
+            )
+            affected = cur.rowcount
+            cur.close()
+            return affected > 0
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         for r in _MOCK_CONVENTION_RULES:
             if r["id"] == rule_id:
@@ -363,24 +396,30 @@ def find_relevant_rules(
     """Find convention rules that are semantically close to the given embedding."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        cur.execute(
-            """SELECT id, repo, org, rule_text,
-                      1 - (embedding <=> %s::vector) AS similarity
-               FROM convention_rules
-               WHERE enabled = TRUE
-                 AND (repo = %s OR repo = '*')
-                 AND 1 - (embedding <=> %s::vector) >= %s
-               ORDER BY embedding <=> %s::vector
-               LIMIT %s""",
-            (str(embedding), repo, str(embedding), threshold, str(embedding), top_k),
-        )
-        columns = [d[0] for d in cur.description]
-        results = [dict(zip(columns, row)) for row in cur.fetchall()]
-        cur.close()
-        for r in results:
-            r["similarity"] = float(r.get("similarity", 0))
-        return results
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id, repo, org, rule_text,
+                          1 - (embedding <=> %s::vector) AS similarity
+                   FROM convention_rules
+                   WHERE enabled = TRUE
+                     AND (repo = %s OR repo = '*')
+                     AND 1 - (embedding <=> %s::vector) >= %s
+                   ORDER BY embedding <=> %s::vector
+                   LIMIT %s""",
+                (str(embedding), repo, str(embedding), threshold, str(embedding), top_k),
+            )
+            columns = [d[0] for d in cur.description]
+            results = [dict(zip(columns, row)) for row in cur.fetchall()]
+            cur.close()
+            for r in results:
+                r["similarity"] = float(r.get("similarity", 0))
+            return results
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         return [
             {**r, "similarity": 0.70}
@@ -401,19 +440,25 @@ def store_feedback(
     """Record thumbs-up/down feedback for a specific issue in a review."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO review_feedback (review_id, issue_index, thumbs_up, comment)
-               VALUES (%s, %s, %s, %s)
-               RETURNING id, review_id, issue_index, thumbs_up, comment, created_at""",
-            (review_id, issue_index, thumbs_up, comment),
-        )
-        columns = [d[0] for d in cur.description]
-        row = dict(zip(columns, cur.fetchone()))
-        cur.close()
-        if hasattr(row.get("created_at"), "isoformat"):
-            row["created_at"] = row["created_at"].isoformat()
-        return row
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO review_feedback (review_id, issue_index, thumbs_up, comment)
+                   VALUES (%s, %s, %s, %s)
+                   RETURNING id, review_id, issue_index, thumbs_up, comment, created_at""",
+                (review_id, issue_index, thumbs_up, comment),
+            )
+            columns = [d[0] for d in cur.description]
+            row = dict(zip(columns, cur.fetchone()))
+            cur.close()
+            if hasattr(row.get("created_at"), "isoformat"):
+                row["created_at"] = row["created_at"].isoformat()
+            return row
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         row = {
             "id": _next_mock_id(),
@@ -431,21 +476,27 @@ def get_feedback_for_review(review_id: int) -> List[Dict[str, Any]]:
     """Return all feedback entries for a given review."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        cur.execute(
-            """SELECT id, review_id, issue_index, thumbs_up, comment, created_at
-               FROM review_feedback
-               WHERE review_id = %s
-               ORDER BY issue_index""",
-            (review_id,),
-        )
-        columns = [d[0] for d in cur.description]
-        results = [dict(zip(columns, row)) for row in cur.fetchall()]
-        cur.close()
-        for r in results:
-            if hasattr(r.get("created_at"), "isoformat"):
-                r["created_at"] = r["created_at"].isoformat()
-        return results
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id, review_id, issue_index, thumbs_up, comment, created_at
+                   FROM review_feedback
+                   WHERE review_id = %s
+                   ORDER BY issue_index""",
+                (review_id,),
+            )
+            columns = [d[0] for d in cur.description]
+            results = [dict(zip(columns, row)) for row in cur.fetchall()]
+            cur.close()
+            for r in results:
+                if hasattr(r.get("created_at"), "isoformat"):
+                    r["created_at"] = r["created_at"].isoformat()
+            return results
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         return [f for f in _MOCK_FEEDBACK if f["review_id"] == review_id]
 
@@ -454,37 +505,43 @@ def get_feedback_stats(repo: Optional[str] = None) -> Dict[str, Any]:
     """Aggregate feedback stats: total, positive, negative, suppression rate."""
     conn = _get_conn()
     if conn:
-        cur = conn.cursor()
-        if repo:
-            cur.execute(
-                """SELECT
-                     COUNT(*) AS total,
-                     SUM(CASE WHEN f.thumbs_up THEN 1 ELSE 0 END) AS positive,
-                     SUM(CASE WHEN NOT f.thumbs_up THEN 1 ELSE 0 END) AS negative
-                   FROM review_feedback f
-                   JOIN review_embeddings re ON re.review_id = f.review_id
-                   WHERE re.repo = %s""",
-                (repo,),
-            )
-        else:
-            cur.execute(
-                """SELECT
-                     COUNT(*) AS total,
-                     SUM(CASE WHEN thumbs_up THEN 1 ELSE 0 END) AS positive,
-                     SUM(CASE WHEN NOT thumbs_up THEN 1 ELSE 0 END) AS negative
-                   FROM review_feedback"""
-            )
-        row = cur.fetchone()
-        cur.close()
-        total = row[0] or 0
-        positive = row[1] or 0
-        negative = row[2] or 0
-        return {
-            "total": total,
-            "positive": positive,
-            "negative": negative,
-            "suppressionRate": round(negative / total, 2) if total else 0.0,
-        }
+        try:
+            cur = conn.cursor()
+            if repo:
+                cur.execute(
+                    """SELECT
+                         COUNT(*) AS total,
+                         SUM(CASE WHEN f.thumbs_up THEN 1 ELSE 0 END) AS positive,
+                         SUM(CASE WHEN NOT f.thumbs_up THEN 1 ELSE 0 END) AS negative
+                       FROM review_feedback f
+                       JOIN review_embeddings re ON re.review_id = f.review_id
+                       WHERE re.repo = %s""",
+                    (repo,),
+                )
+            else:
+                cur.execute(
+                    """SELECT
+                         COUNT(*) AS total,
+                         SUM(CASE WHEN thumbs_up THEN 1 ELSE 0 END) AS positive,
+                         SUM(CASE WHEN NOT thumbs_up THEN 1 ELSE 0 END) AS negative
+                       FROM review_feedback"""
+                )
+            row = cur.fetchone()
+            cur.close()
+            total = row[0] or 0
+            positive = row[1] or 0
+            negative = row[2] or 0
+            return {
+                "total": total,
+                "positive": positive,
+                "negative": negative,
+                "suppressionRate": round(negative / total, 2) if total else 0.0,
+            }
+        finally:
+            try:
+                release_conn(conn)
+            except Exception:
+                pass
     else:
         feedback_rows = _MOCK_FEEDBACK
         if repo:

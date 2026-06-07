@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS review_embeddings (
     id              SERIAL PRIMARY KEY,
-    review_id       INTEGER NOT NULL,
+    review_id       TEXT NOT NULL,
     repo            TEXT NOT NULL,
     pr_number       INTEGER NOT NULL,
     issue_titles    TEXT NOT NULL DEFAULT '',       -- concatenated issue titles for display
@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_convention_rules_repo
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS review_feedback (
     id              SERIAL PRIMARY KEY,
-    review_id       INTEGER NOT NULL,
+    review_id       TEXT NOT NULL,
     issue_index     INTEGER NOT NULL DEFAULT 0,     -- index within the review's issues list
     thumbs_up       BOOLEAN NOT NULL,
     comment         TEXT DEFAULT NULL,

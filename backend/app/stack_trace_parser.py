@@ -8,6 +8,7 @@ The parser extracts:
 """
 import re
 from typing import Optional, Dict
+import logging
 
 _STACK_TRACE_REGEX = {
     "js": re.compile(r"(?P<type>\w+Error): (?P<message>.+?) at (?P<file>.+?):(?P<line>\d+)", re.MULTILINE),
@@ -56,4 +57,4 @@ def parse_stack_trace(trace: str) -> Dict:
 # Simple test when run directly
 if __name__ == "__main__":
     sample = "TypeError: Cannot read property 'id' of undefined at src/auth.ts:45"
-    print(parse_stack_trace(sample))
+    logging.info(parse_stack_trace(sample))

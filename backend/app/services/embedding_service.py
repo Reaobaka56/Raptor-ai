@@ -7,13 +7,15 @@ Provides a thin caching layer so repeated identical texts don't hit the API.
 import os
 import hashlib
 from typing import List, Optional, Dict
+from collections import OrderedDict
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 
-# In-memory LRU-style cache (keeps last 512 embeddings)
-_CACHE: Dict[str, List[float]] = {}
+# In-memory LRU cache using OrderedDict (keeps last N embeddings)
 _CACHE_MAX = 512
+_CACHE: "OrderedDict[str, List[float]]" = OrderedDict()
 
 EMBEDDING_DIM = 768  # Gemini text-embedding-004 output dimension
 
@@ -33,6 +35,8 @@ def generate_embedding(text: str) -> List[float]:
 
     key = _cache_key(text)
     if key in _CACHE:
+        # mark as recently used
+        _CACHE.move_to_end(key)
         return _CACHE[key]
 
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -49,15 +53,17 @@ def generate_embedding(text: str) -> List[float]:
             )
             embedding = result["embedding"]
 
-            # Cache management
+            # Cache management: evict least-recently-used when full
             if len(_CACHE) >= _CACHE_MAX:
-                oldest = next(iter(_CACHE))
-                del _CACHE[oldest]
+                try:
+                    _CACHE.popitem(last=False)
+                except Exception:
+                    pass
             _CACHE[key] = embedding
             return embedding
 
         except Exception as e:
-            print(f"[embedding_service] Gemini embedding call failed: {e}")
+            logging.exception("[embedding_service] Gemini embedding call failed")
             # Fall through to deterministic fallback
 
     # ---------- deterministic fallback (dev / offline) ----------

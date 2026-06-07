@@ -60,23 +60,10 @@ async def github_webhook(
     if payload.get("pull_request") and payload.get("action") in {"opened", "synchronize", "reopened"}:
         repo_full_name = payload["repository"]["full_name"]
         pr_number = payload["pull_request"]["number"]
-        import httpx
-        async def run_scan():
-            # Call the existing scan endpoint via HTTP to avoid circular imports
-            async with httpx.AsyncClient() as client:
-                scan_url = f"http://127.0.0.1:8000/api/scan"
-                payload = {"repo": repo_full_name}
-                headers = {}
-                internal_token = os.getenv("INTERNAL_API_TOKEN") or os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_PAT")
-                if internal_token:
-                    headers["Authorization"] = f"Bearer {internal_token}"
-                else:
-                    print("[webhook] No internal auth token configured; scan endpoint may reject the request")
-                try:
-                    await client.post(scan_url, json=payload, headers=headers, timeout=30.0)
-                except Exception as exc:
-                    # Log but do not fail webhook response
-                    print(f"[webhook] Failed to trigger scan for {repo_full_name}: {exc}")
-        background_tasks.add_task(run_scan)
+        # Call scan_service.run_scan directly to avoid internal HTTP call which breaks multi-worker setups
+        from ..services.scan_service import run_scan
+
+        # BackgroundTasks supports async callables; schedule the coroutine with the repo argument
+        background_tasks.add_task(run_scan, repo_full_name)
 
     return {"status": "received"}
