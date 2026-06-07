@@ -84,3 +84,35 @@ async def add_request_id_middleware(request: Request, call_next):
 
 # Export start time
 START_TIME = time.time()
+
+
+# In-memory demo state (moved from main.py)
+LIVE_WEBHOOK_LOGS = []
+AST_CACHE_STATS = {
+    "TypeScript / JavaScript": {"version": "v5.4.2", "hits": 142, "total": 150},
+    "Python": {"version": "v3.12.1", "hits": 98, "total": 106},
+    "Go (Golang)": {"version": "v1.22.0", "hits": 204, "total": 210},
+}
+
+MOCK_REPOSITORIES = [
+    {
+        "id": "repo_1",
+        "fullName": "organization/api-gateway",
+        "private": True,
+        "defaultBranch": "main",
+        "lastScan": "2026-05-17T14:15:00Z",
+        "issuesCount": 2,
+        "language": "TypeScript",
+    },
+    {
+        "id": "repo_2",
+        "fullName": "organization/auth-service",
+        "private": False,
+        "defaultBranch": "main",
+        "lastScan": "2026-05-17T11:20:00Z",
+        "issuesCount": 1,
+        "language": "Go",
+    },
+]
+
+MOCK_REVIEWS = []

@@ -43,10 +43,8 @@ async def github_webhook(
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # Basic logging to in‑memory list for demo purposes
-    # Lazy import to avoid circular dependency
-    main_module = importlib.import_module('backend.app.main')
-    LIVE_WEBHOOK_LOGS = getattr(main_module, 'LIVE_WEBHOOK_LOGS')
-    WebhookLogItem = getattr(main_module, 'WebhookLogItem')
+    from ..state import LIVE_WEBHOOK_LOGS
+    from ..models import WebhookLogItem
     event_log = WebhookLogItem(
         id=f"wh_{int(time.time()*1000)}",
         repo=payload.get("repository", {}).get("full_name", "unknown"),
