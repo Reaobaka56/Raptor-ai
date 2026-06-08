@@ -50,6 +50,34 @@ Raptor learns your team's conventions over time:
 React + Vite Frontend ↔ Python FastAPI REST API ↔ GitHub API & Webhooks ↔ Gemini AI
 ```
 
+### Architecture Overview
+Raptor is split into a lightweight frontend and a modular backend:
+
+- **Frontend**
+  - Hosts the user interface and GitHub OAuth flow.
+  - Calls backend REST endpoints for scans, reviews, telemetry, and memory management.
+  - Receives session tokens and persists the user session on the client.
+
+- **Backend**
+  - `backend/app/state.py` initializes the FastAPI app, CORS, middleware, request ID logging, and shared demo state.
+  - `backend/app/main.py` registers routers and exposes the health endpoint.
+  - `backend/app/auth_router.py` handles GitHub OAuth login and token exchange.
+  - `backend/app/scan_router.py` runs repository scan jobs through the AI scan service.
+  - `backend/app/reviews_router.py` exposes review retrieval and fix PR creation.
+  - `backend/app/telemetry_router.py` serves analytics and review stats.
+  - `backend/app/memory_router.py` provides the team memory layer, convention rules, feedback, and RAG search.
+  - `backend/app/router/webhook.py` receives GitHub webhook events and schedules async scan jobs.
+  - `backend/app/services/` contains the core logic for AI analysis, embeddings, GitHub integration, session storage, and database pooling.
+
+- **Persistence**
+  - Redis stores short-lived sessions with sliding TTL.
+  - PostgreSQL persists review records, along with pgvector embeddings for semantic search and memory.
+
+- **Security**
+  - GitHub OAuth state is signed and validated in cookies.
+  - Internal API routes allow bearer tokens and secure session access.
+  - CORS origins are explicit and not regex-based.
+
 ### Tech Stack
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, Recharts
 - **Backend**: Python 3.10+, FastAPI, Uvicorn, Pydantic, Google Generative AI SDK
