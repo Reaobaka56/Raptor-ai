@@ -10,12 +10,12 @@ from pydantic import BaseModel, Field
 
 from .services.embedding_service import generate_embedding
 from .services import memory_service
+from .auth_dependencies import get_required_github_session
 
 router = APIRouter(prefix="/memory", tags=["Team Memory"])
 
 
 def require_authenticated_session():
-    from .main import get_required_github_session
     return get_required_github_session()
 
 
