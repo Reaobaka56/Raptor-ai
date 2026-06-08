@@ -12,13 +12,24 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuth = async () => {
       const code = params.get("code")
-      const state = params.get("state") || undefined
+      const state = params.get("state")
+
       if (!code) {
         setError('No code returned from GitHub.')
         setLoading(false)
         setTimeout(() => navigate('/'), 3000)
         return
       }
+
+      // Validate state to prevent CSRF — replaces the broken cross-origin cookie check
+      const savedState = sessionStorage.getItem('github_oauth_state')
+      if (!state || state !== savedState) {
+        setError('Invalid OAuth state. Please try logging in again.')
+        setLoading(false)
+        setTimeout(() => navigate('/'), 3000)
+        return
+      }
+      sessionStorage.removeItem('github_oauth_state')
 
       try {
         const { data } = await completeGithubLogin(code, state)
@@ -36,7 +47,7 @@ export default function AuthCallback() {
     }
 
     handleAuth()
-  }, []) // empty deps — run once only
+  }, [])
 
   if (loading) {
     return (
