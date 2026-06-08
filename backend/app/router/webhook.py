@@ -5,7 +5,6 @@ import os
 import json
 import time
 from typing import Optional
-import importlib
 from ..services.github_app import github_app_service
 router = APIRouter(prefix="/webhook", tags=["GitHub Webhook"])
 

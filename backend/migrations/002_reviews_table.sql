@@ -29,6 +29,11 @@ DO $$
 BEGIN
     IF EXISTS(SELECT 1 FROM pg_extension WHERE extname='vector') THEN
         BEGIN
+            EXECUTE 'DROP INDEX IF EXISTS idx_review_embeddings_vec';
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END;
+        BEGIN
             EXECUTE 'CREATE INDEX IF NOT EXISTS idx_review_embeddings_hnsw ON review_embeddings USING hnsw (embedding vector_cosine_ops)';
         EXCEPTION WHEN OTHERS THEN
             -- ignore
