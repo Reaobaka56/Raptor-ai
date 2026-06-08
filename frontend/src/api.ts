@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const DEFAULT_PRODUCTION_API_URL = 'https://raptor-backend.onrender.com/api'
+const DEFAULT_PRODUCTION_API_URL = 'https://raptor-ai.onrender.com/api'
 
 const normalizeApiBaseUrl = (url: string) => {
   const trimmedUrl = url.trim().replace(/\/$/, '')
@@ -28,6 +28,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 })
 
 api.interceptors.request.use((config) => {
@@ -128,9 +129,10 @@ export const startGithubLogin = async () => {
   window.location.assign(res.data.url)
 }
 
-export const completeGithubLogin = (code: string) =>
+export const completeGithubLogin = (code: string, state?: string) =>
   api.post<AuthResponse>('/auth/github', {
     code,
+    state,
     redirectUri: getGithubRedirectUri(),
   })
 

@@ -69,14 +69,18 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
         if not signed or _verify_signed_state(signed) != req.state:
             raise HTTPException(status_code=401, detail="Invalid or expired OAuth state")
 
+    token_payload = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": req.code,
+    }
+    if req.redirectUri:
+        token_payload["redirect_uri"] = req.redirectUri
+
     token_res = requests.post(
         "https://github.com/login/oauth/access_token",
         headers={"Accept": "application/json"},
-        json={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": req.code,
-        },
+        json=token_payload,
         timeout=15,
     )
 
@@ -124,7 +128,7 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
 
 
 @router.get("/github/login", response_model=GitHubLoginUrlResponse)
-def github_login(redirectUri: Optional[str] = None):
+def github_login(request: Request, redirectUri: Optional[str] = None):
     client_id = os.getenv("GITHUB_CLIENT_ID")
     if not client_id:
         raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
@@ -137,5 +141,15 @@ def github_login(redirectUri: Optional[str] = None):
     from fastapi import Response
     response_obj = {"url": url}
     resp = Response(content=json.dumps(response_obj), media_type="application/json")
-    resp.set_cookie("oauth_state", signed, httponly=True, samesite="lax", max_age=300)
+    secure = request.url.scheme == "https"
+    same_site = "none" if secure else "lax"
+    resp.set_cookie(
+        "oauth_state",
+        signed,
+        httponly=True,
+        samesite=same_site,
+        secure=secure,
+        max_age=300,
+        path='/',
+    )
     return resp
