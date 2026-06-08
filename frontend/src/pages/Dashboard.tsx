@@ -288,50 +288,59 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
-        {repositories.map((repo) => (
-              <div 
-                key={repo.id}
-                className="p-5 rounded-lg bg-black border border-white/10 hover:border-white/30 transition-colors flex flex-col justify-between space-y-4"
-              >
-                <div className="flex items-start justify-between gap-3 font-sans">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      {repo.private ? <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <Globe className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
-                      <span className="font-bold text-white text-base tracking-tight font-mono">{repo.fullName}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
-                      <span>Branch: <span className="text-gray-300 font-semibold">{repo.defaultBranch}</span></span>
-                      <span>•</span>
-                      <span className="px-1.5 py-0.5 rounded bg-white/5 text-gray-300 border border-white/10">{repo.language}</span>
-                    </div>
-                  </div>
-                  {repo.issuesCount > 0 ? (
-                    <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-white/5 text-[#ff5f56] border border-white/10">
-                      {repo.issuesCount} Flaws
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-white/5 text-[#27c93f] border border-white/10">
-                      Secure
-                    </span>
-                  )}
-                </div>
-
-                <div className="pt-3 border-t border-white/10 flex items-center justify-between font-mono">
-                  <span className="text-xs text-gray-500">
-                    {repo.lastScan ? `Scanned ${formatDistanceToNow(new Date(repo.lastScan), { addSuffix: true })}` : 'Ready'}
-                  </span>
-                  <button
-                    onClick={() => handleScan(repo.fullName)}
-                    disabled={!!scanningRepo}
-                    className="inline-flex items-center gap-2 bg-white/5 hover:bg-white text-white hover:text-black px-4 py-2 rounded text-xs font-bold transition-colors border border-white/15 disabled:opacity-50"
-                  >
-                    <Play className={`w-3.5 h-3.5 ${scanningRepo === repo.fullName ? 'animate-spin' : ''}`} />
-                    {scanningRepo === repo.fullName ? 'Scanning...' : 'Scan Repository'}
-                  </button>
-                </div>
-              </div>
-            ))}
+        {repositories.length === 0 ? (
+          <div className="col-span-full rounded-xl bg-black border border-white/10 p-8 text-center text-gray-400">
+            <p className="text-lg font-semibold text-white mb-2">No connected repositories yet</p>
+            <p className="text-sm text-gray-400 max-w-xl mx-auto">
+              Connect your GitHub account and authorize repositories, or scan a public repository using the form above to see repository state here.
+            </p>
           </div>
+        ) : (
+          repositories.map((repo) => (
+            <div 
+              key={repo.id}
+              className="p-5 rounded-lg bg-black border border-white/10 hover:border-white/30 transition-colors flex flex-col justify-between space-y-4"
+            >
+              <div className="flex items-start justify-between gap-3 font-sans">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    {repo.private ? <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <Globe className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                    <span className="font-bold text-white text-base tracking-tight font-mono">{repo.fullName}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
+                    <span>Branch: <span className="text-gray-300 font-semibold">{repo.defaultBranch}</span></span>
+                    <span>•</span>
+                    <span className="px-1.5 py-0.5 rounded bg-white/5 text-gray-300 border border-white/10">{repo.language}</span>
+                  </div>
+                </div>
+                {repo.issuesCount > 0 ? (
+                  <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-white/5 text-[#ff5f56] border border-white/10">
+                    {repo.issuesCount} Flaws
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-white/5 text-[#27c93f] border border-white/10">
+                    Secure
+                  </span>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-white/10 flex items-center justify-between font-mono">
+                <span className="text-xs text-gray-500">
+                  {repo.lastScan ? `Scanned ${formatDistanceToNow(new Date(repo.lastScan), { addSuffix: true })}` : 'Ready'}
+                </span>
+                <button
+                  onClick={() => handleScan(repo.fullName)}
+                  disabled={!!scanningRepo}
+                  className="inline-flex items-center gap-2 bg-white/5 hover:bg-white text-white hover:text-black px-4 py-2 rounded text-xs font-bold transition-colors border border-white/15 disabled:opacity-50"
+                >
+                  <Play className={`w-3.5 h-3.5 ${scanningRepo === repo.fullName ? 'animate-spin' : ''}`} />
+                  {scanningRepo === repo.fullName ? 'Scanning...' : 'Scan Repository'}
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

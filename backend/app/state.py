@@ -94,25 +94,6 @@ AST_CACHE_STATS = {
     "Go (Golang)": {"version": "v1.22.0", "hits": 204, "total": 210},
 }
 
-MOCK_REPOSITORIES = [
-    {
-        "id": "repo_1",
-        "fullName": "organization/api-gateway",
-        "private": True,
-        "defaultBranch": "main",
-        "lastScan": "2026-05-17T14:15:00Z",
-        "issuesCount": 2,
-        "language": "TypeScript",
-    },
-    {
-        "id": "repo_2",
-        "fullName": "organization/auth-service",
-        "private": False,
-        "defaultBranch": "main",
-        "lastScan": "2026-05-17T11:20:00Z",
-        "issuesCount": 1,
-        "language": "Go",
-    },
-]
+MOCK_REPOSITORIES = []
 
 MOCK_REVIEWS = []
