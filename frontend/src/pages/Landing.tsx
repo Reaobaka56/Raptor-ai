@@ -19,6 +19,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
+import { getGithubRedirectUri } from '../api';
 
 
 export default function Landing() {
@@ -32,8 +33,10 @@ export default function Landing() {
     setIsLoggingIn(true);
     try {
       const apiBaseUrl = (import.meta.env.VITE_API_URL || 'https://raptor-ai.onrender.com').replace(/\/api$/, '');
-      const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/github/callback`;
-      const res = await fetch(`${apiBaseUrl}/api/auth/github/login?redirectUri=${encodeURIComponent(redirectUri)}`);
+      const redirectUri = getGithubRedirectUri();
+      const res = await fetch(`${apiBaseUrl}/api/auth/github/login?redirectUri=${encodeURIComponent(redirectUri)}`, {
+        credentials: 'include',
+      });
       
       if (!res.ok) throw new Error('Failed to fetch login url');
       

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { AlertTriangle } from "lucide-react"
+import { completeGithubLogin } from "../api"
 
 export default function AuthCallback() {
   const [params] = useSearchParams()
@@ -11,6 +12,7 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuth = async () => {
       const code = params.get("code")
+      const state = params.get("state") || undefined
       if (!code) {
         setError('No code returned from GitHub.')
         setLoading(false)
@@ -19,27 +21,13 @@ export default function AuthCallback() {
       }
 
       try {
-        const res = await fetch('https://raptor-ai.onrender.com/api/auth/github', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            code,
-            redirectUri: 'https://raptor-agent.vercel.app/api/auth/github/callback'
-          })
-        })
-
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.detail || 'Auth failed')
-        }
-
-        const data = await res.json()
+        const { data } = await completeGithubLogin(code, state)
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))
         window.dispatchEvent(new Event('auth-change'))
         navigate('/dashboard', { replace: true })
       } catch (err: any) {
-        setError(err.message || 'Authentication failed')
+        setError(err.response?.data?.detail || err.message || 'Authentication failed')
         setLoading(false)
         setTimeout(() => navigate('/'), 3000)
       } finally {
