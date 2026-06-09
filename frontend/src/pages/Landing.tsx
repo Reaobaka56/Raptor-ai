@@ -187,22 +187,22 @@ export default function Landing() {
 
       {/* Hero Section */}
       <section className="relative pt-32 pb-20">
-        <div className="absolute top-[250px] left-1/2 -translate-x-1/2 w-full max-w-4xl h-[400px] bg-gradient-to-tr from-amber-600/10 via-orange-500/5 to-transparent blur-[140px] -z-10 pointer-events-none rounded-full" />
-        <div className="absolute top-[120px] left-1/2 -translate-x-1/2 w-[300px] h-[300px] sm:w-[500px] sm:h-[500px] text-white/5 blur-[50px] sm:blur-[70px] -z-10 pointer-events-none select-none flex items-center justify-center">
+        <div className={`absolute top-[250px] left-1/2 -translate-x-1/2 w-full max-w-4xl h-[400px] ${isDark ? 'bg-gradient-to-tr from-amber-600/10 via-orange-500/5' : 'bg-gradient-to-tr from-indigo-500/5 via-blue-400/5'} to-transparent blur-[140px] -z-10 pointer-events-none rounded-full`} />
+        <div className={`absolute top-[120px] left-1/2 -translate-x-1/2 w-[300px] h-[300px] sm:w-[500px] sm:h-[500px] ${isDark ? 'text-white/5' : 'text-slate-900/5'} blur-[50px] sm:blur-[70px] -z-10 pointer-events-none select-none flex items-center justify-center`}>
           <TRexIcon className="w-full h-full" />
         </div>
 
         <div className="max-w-4xl mx-auto text-center px-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-white font-mono uppercase tracking-wider mb-6 animate-pulse">
+          <div className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-slate-900/5 border-slate-900/10 text-slate-900'} border text-xs font-mono uppercase tracking-wider mb-6 animate-pulse`}>
             <Sparkles className="w-3.5 h-3.5" /> Next-gen Team Memory Layer Added
           </div>
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-white mb-6 leading-[1.1]">
+          <h1 className={`text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'} mb-6 leading-[1.1]`}>
             Real-time PR diff analysis.<br />
-            <span className="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">
+            <span className={`${isDark ? 'bg-gradient-to-r from-white via-gray-300 to-gray-500' : 'bg-gradient-to-r from-slate-900 via-slate-600 to-slate-400'} bg-clip-text text-transparent`}>
               Autonomous code review.
             </span>
           </h1>
-          <p className="text-base sm:text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+          <p className={`text-base sm:text-lg md:text-xl ${isDark ? 'text-gray-400' : 'text-slate-600'} mb-10 max-w-2xl mx-auto leading-relaxed`}>
             Raptor AI is an autonomous code review and static analysis platform. It combines AST-level analysis with a team-specific semantic memory layer to catch high-impact issues and generate reliable, inline fixes automatically.
           </p>
 
@@ -210,16 +210,16 @@ export default function Landing() {
             <button
               onClick={handleGithubLogin}
               disabled={isLoggingIn}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold text-black bg-white hover:bg-gray-200 transition-all duration-200 shadow-[0_0_25px_rgba(255,255,255,0.15)] text-xs uppercase tracking-wider font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold transition-all duration-200 text-xs uppercase tracking-wider font-mono disabled:opacity-50 disabled:cursor-not-allowed ${isDark ? 'text-black bg-white hover:bg-gray-200 shadow-[0_0_25px_rgba(255,255,255,0.15)]' : 'text-white bg-slate-900 hover:bg-slate-700 shadow-[0_0_25px_rgba(0,0,0,0.15)]'}`}
             >
               {isLoggingIn ? 'Connecting...' : 'Connect GitHub'}
               <ArrowRight className="w-4 h-4" />
             </button>
             <a
               href="#demo"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-200 text-xs uppercase tracking-wider font-mono backdrop-blur-md"
+              className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg font-bold transition-all duration-200 text-xs uppercase tracking-wider font-mono backdrop-blur-md ${isDark ? 'text-white bg-white/5 border border-white/10 hover:bg-white/10' : 'text-slate-900 bg-slate-900/5 border border-slate-900/15 hover:bg-slate-900/10'}`}
             >
-              <Terminal className="w-4 h-4 text-gray-400" />
+              <Terminal className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-slate-500'}`} />
               View Live Demo
             </a>
           </div>
@@ -228,7 +228,7 @@ export default function Landing() {
 
       {/* Product Screenshot / PR review interface mockup */}
       <section id="demo" className="max-w-5xl mx-auto px-6 mb-24 scroll-mt-24">
-        <div className="relative rounded-2xl border border-white/10 bg-black/80 backdrop-blur-2xl shadow-2xl overflow-hidden font-mono text-left">
+        <div className="relative rounded-2xl border border-slate-800 bg-[#0a0a0a] backdrop-blur-2xl shadow-2xl overflow-hidden font-mono text-left">
           <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/10 bg-black">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
@@ -302,35 +302,35 @@ export default function Landing() {
       </section>
 
       {/* Problem Section */}
-      <section id="problem" className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5 scroll-mt-24">
+      <section id="problem" className={`max-w-6xl mx-auto px-6 py-16 ${isDark ? 'border-white/5' : 'border-slate-200'} border-t scroll-mt-24`}>
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6 text-left">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-xs text-red-400 font-mono uppercase tracking-wider">
               <AlertTriangle className="w-3.5 h-3.5" /> The Problem
             </div>
-            <h2 className="text-3xl sm:text-5xl font-bold text-white tracking-tight leading-tight">
+            <h2 className={`text-3xl sm:text-5xl font-bold ${isDark ? 'text-white' : 'text-slate-900'} tracking-tight leading-tight`}>
               Code reviews are slow, shallow, and miss logical flaws.
             </h2>
-            <p className="text-gray-400 text-base sm:text-lg leading-relaxed">
+            <p className={`${isDark ? 'text-gray-400' : 'text-slate-600'} text-base sm:text-lg leading-relaxed`}>
               Teams spend hours checking for syntax, styling, and basic bugs. Meanwhile, critical security vulnerabilities, database performance leaks (N+1s), and violations of unique team conventions slip into production unnoticed.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-6 rounded-xl border border-white/5 bg-white/[0.01] space-y-2 text-left">
-              <h4 className="text-white font-semibold font-mono text-sm uppercase">Regex-bound Linters</h4>
-              <p className="text-xs text-gray-500">Traditional linters miss logic-based auth bypasses and generate heavy noise, leading to notification fatigue.</p>
+            <div className={`p-6 rounded-xl border ${isDark ? 'border-white/5 bg-white/[0.01]' : 'border-slate-200 bg-slate-50'} space-y-2 text-left`}>
+              <h4 className={`${isDark ? 'text-white' : 'text-slate-900'} font-semibold font-mono text-sm uppercase`}>Regex-bound Linters</h4>
+              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-600'}`}>Traditional linters miss logic-based auth bypasses and generate heavy noise, leading to notification fatigue.</p>
             </div>
-            <div className="p-6 rounded-xl border border-white/5 bg-white/[0.01] space-y-2 text-left">
-              <h4 className="text-white font-semibold font-mono text-sm uppercase">Overloaded Devs</h4>
-              <p className="text-xs text-gray-500">Human reviewers lack time to check every line thoroughly, leaving architectural landmines in codebase margins.</p>
+            <div className={`p-6 rounded-xl border ${isDark ? 'border-white/5 bg-white/[0.01]' : 'border-slate-200 bg-slate-50'} space-y-2 text-left`}>
+              <h4 className={`${isDark ? 'text-white' : 'text-slate-900'} font-semibold font-mono text-sm uppercase`}>Overloaded Devs</h4>
+              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-600'}`}>Human reviewers lack time to check every line thoroughly, leaving architectural landmines in codebase margins.</p>
             </div>
-            <div className="p-6 rounded-xl border border-white/5 bg-white/[0.01] space-y-2 text-left">
-              <h4 className="text-white font-semibold font-mono text-sm uppercase">No Standards Context</h4>
-              <p className="text-xs text-gray-500">Standard general AI review tools don't understand your team's specific legacy codebase patterns or conventions.</p>
+            <div className={`p-6 rounded-xl border ${isDark ? 'border-white/5 bg-white/[0.01]' : 'border-slate-200 bg-slate-50'} space-y-2 text-left`}>
+              <h4 className={`${isDark ? 'text-white' : 'text-slate-900'} font-semibold font-mono text-sm uppercase`}>No Standards Context</h4>
+              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-600'}`}>Standard general AI review tools don't understand your team's specific legacy codebase patterns or conventions.</p>
             </div>
-            <div className="p-6 rounded-xl border border-white/5 bg-white/[0.01] space-y-2 text-left">
-              <h4 className="text-white font-semibold font-mono text-sm uppercase">Manual Fixes Only</h4>
-              <p className="text-xs text-gray-500">Discovering bugs requires manual rewrite, PR re-submission, and secondary validation passes.</p>
+            <div className={`p-6 rounded-xl border ${isDark ? 'border-white/5 bg-white/[0.01]' : 'border-slate-200 bg-slate-50'} space-y-2 text-left`}>
+              <h4 className={`${isDark ? 'text-white' : 'text-slate-900'} font-semibold font-mono text-sm uppercase`}>Manual Fixes Only</h4>
+              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-600'}`}>Discovering bugs requires manual rewrite, PR re-submission, and secondary validation passes.</p>
             </div>
           </div>
         </div>
