@@ -21,15 +21,14 @@ export default function AuthCallback() {
         return
       }
 
-      // Validate state to prevent CSRF — replaces the broken cross-origin cookie check
-      const savedState = sessionStorage.getItem('github_oauth_state')
+      const savedState = localStorage.getItem('github_oauth_state')
       if (!state || state !== savedState) {
         setError('Invalid OAuth state. Please try logging in again.')
         setLoading(false)
         setTimeout(() => navigate('/'), 3000)
         return
       }
-      sessionStorage.removeItem('github_oauth_state')
+      localStorage.removeItem('github_oauth_state')
 
       try {
         const { data } = await completeGithubLogin(code, state)
