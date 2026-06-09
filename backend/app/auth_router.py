@@ -9,10 +9,9 @@ from fastapi import APIRouter, Request, HTTPException
 
 from .models import GitHubLoginUrlResponse, AuthCallbackRequest, UserProfile, RepositoryInfo
 from .services.session_store import save_session
+from .auth_dependencies import USER_SESSIONS
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
-
-IN_MEMORY_SESSIONS: Dict[str, Any] = {}
 
 
 def _get_github_auth_headers(access_token: Optional[str]) -> Dict[str, str]:
@@ -84,7 +83,7 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
     try:
         save_session(session_token, session_obj)
     except Exception:
-        IN_MEMORY_SESSIONS[session_token] = session_obj
+        USER_SESSIONS[session_token] = session_obj
 
     return {"token": session_token, "user": session_obj["user"], "repositories": session_obj["repositories"]}
 
