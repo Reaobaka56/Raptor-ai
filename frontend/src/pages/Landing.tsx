@@ -162,8 +162,8 @@ export default function Landing() {
               <button
                 type="button"
                 onClick={() => {
-                  setMobileMenuOpen(false)
-                  toggleTheme()
+                  setMobileMenuOpen(false);
+                  toggleTheme();
                 }}
                 className={`w-full p-2 rounded-lg transition-colors border inline-flex items-center justify-center gap-2 text-xs font-semibold ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10 border-white/10 bg-white/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/10 border-slate-300/40 bg-slate-900/5'}`}
               >
@@ -172,23 +172,11 @@ export default function Landing() {
               </button>
               <button
                 onClick={() => {
-                  setMobileMenuOpen(false)
-                  handleGithubLogin()
+                  setMobileMenuOpen(false);
+                  handleGithubLogin();
                 }}
                 disabled={isLoggingIn}
                 className={`w-full text-center block px-5 py-3 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed transition-all ${isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-slate-800'}`}
-              >
-                {isLoggingIn ? 'Connecting...' : 'Get Started'}
-              </button>
-            </div>
-          </div>
-        )}
-      </nav>
-                  setMobileMenuOpen(false)
-                  handleGithubLogin()
-                }}
-                disabled={isLoggingIn}
-                className="w-full text-center block px-5 py-3 rounded-lg text-xs font-bold bg-white text-black hover:bg-gray-200 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoggingIn ? 'Connecting...' : 'Get Started'}
               </button>
