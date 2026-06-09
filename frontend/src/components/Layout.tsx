@@ -8,11 +8,14 @@ import {
   Github,
   LogOut,
   BookOpen,
-  Compass
+  Compass,
+  Moon,
+  Sun
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { TRexIcon } from './TRexIcon'
 import { startGithubLogin, type UserProfile } from '../api'
+import { useTheme } from '../theme'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -29,6 +32,7 @@ const navItems = [
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { theme, toggleTheme } = useTheme()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
@@ -110,7 +114,15 @@ export default function Layout({ children }: LayoutProps) {
             </nav>
 
             {/* Header Right: Auth & Actions */}
-            <div className="hidden md:flex items-center gap-4 font-sans">
+            <div className="hidden md:flex items-center gap-3 font-sans">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors border border-white/10 bg-white/5 text-xs inline-flex items-center gap-1 font-semibold"
+                title="Toggle theme"
+              >
+                {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              </button>
               {user ? (
                 <div className="flex items-center gap-4 pl-4 border-l border-white/10">
                   <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
@@ -176,7 +188,16 @@ export default function Layout({ children }: LayoutProps) {
                 )
               })}
             </nav>
-            <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+            <div className="pt-4 border-t border-white/10 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors border border-white/10 bg-white/5 text-xs inline-flex items-center gap-1 font-semibold flex-1"
+                title="Toggle theme"
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                {theme === 'dark' ? 'Light' : 'Dark'}
+              </button>
               {user ? (
                 <div className="w-full flex items-center justify-between bg-white/5 border border-white/10 p-3 rounded-xl">
                   <div className="flex items-center gap-3">
@@ -189,7 +210,10 @@ export default function Layout({ children }: LayoutProps) {
                 </div>
               ) : (
                 <button
-                  onClick={handleGithubLogin}
+                  onClick={() => {
+                    setMobileMenuOpen(false)
+                    handleGithubLogin()
+                  }}
                   disabled={isLoggingIn}
                   className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 rounded text-xs font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -197,6 +221,7 @@ export default function Layout({ children }: LayoutProps) {
                 </button>
               )}
             </div>
+
           </div>
         )}
       </header>

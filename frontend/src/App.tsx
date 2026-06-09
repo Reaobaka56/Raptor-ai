@@ -13,6 +13,7 @@ import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
 import './index.css'
 import { ThemeToggle } from './components/ThemeToggle'
+import { ProtectedRoute } from './components/ProtectedRoute'
 
 import AuthError from './pages/AuthError'
 import AuthCallback from './pages/AuthCallback'
@@ -34,12 +35,12 @@ function App() {
         <Route path="/discord" element={<Discord />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
-        <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
-        <Route path="/reviews" element={<Layout><Reviews /></Layout>} />
-        <Route path="/reviews/:id" element={<Layout><ReviewDetail /></Layout>} />
-        <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
-        <Route path="/rules" element={<Layout><RuleManager /></Layout>} />
-        <Route path="/onboarding" element={<Layout><OnboardingGuide /></Layout>} />
+        <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+        <Route path="/reviews" element={<ProtectedRoute><Layout><Reviews /></Layout></ProtectedRoute>} />
+        <Route path="/reviews/:id" element={<ProtectedRoute><Layout><ReviewDetail /></Layout></ProtectedRoute>} />
+        <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
+        <Route path="/rules" element={<ProtectedRoute><Layout><RuleManager /></Layout></ProtectedRoute>} />
+        <Route path="/onboarding" element={<ProtectedRoute><Layout><OnboardingGuide /></Layout></ProtectedRoute>} />
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
       <ThemeToggle />
