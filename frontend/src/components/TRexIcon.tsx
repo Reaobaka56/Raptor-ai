@@ -1,11 +1,16 @@
 import React from 'react';
+import { useTheme } from '../theme';
 
 export function TRexIcon(props: React.SVGProps<SVGSVGElement>) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
       viewBox="0 0 24 24" 
-      fill="currentColor" 
+      fill="currentColor"
+      className={isDark ? 'text-white' : 'text-black'}
       {...props}
     >
       <path d="M 11 2 h 8 v 2 h 2 v 2 h -2 v 2 h 2 v 2 h -8 v -2 h -2 v -2 h -2 V 6 h 2 V 4 h 2 V 2 z m -4 6 h 2 v 2 h 2 v 2 h 2 v 2 h -2 v 2 h -2 v 2 H 7 v -2 H 5 v -2 H 3 V 8 h 2 v 2 h 2 V 8 h 2 z" />
