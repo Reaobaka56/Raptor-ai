@@ -1,12 +1,11 @@
 import os
 import time
 import secrets
-import json
 import requests
 from urllib.parse import urlencode
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Request, HTTPException, Response
+from fastapi import APIRouter, Request, HTTPException
 
 from .models import GitHubLoginUrlResponse, AuthCallbackRequest, UserProfile, RepositoryInfo
 from .services.session_store import save_session
@@ -33,9 +32,6 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
 
     if not client_id or not client_secret:
         raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
-
-    # State validation is handled on the frontend via sessionStorage (cross-origin cookie
-    # approach was unreliable with third-party cookie blocking in modern browsers)
 
     token_payload = {
         "client_id": client_id,
@@ -94,11 +90,12 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
 
 
 @router.get("/github/login", response_model=GitHubLoginUrlResponse)
-def github_login(request: Request, redirectUri: Optional[str] = None):
+def github_login(request: Request, redirectUri: Optional[str] = None, state: Optional[str] = None):
     client_id = os.getenv("GITHUB_CLIENT_ID")
     if not client_id:
         raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
-    state = secrets.token_urlsafe(16)
+    if not state:
+        state = secrets.token_urlsafe(16)
     params = {"client_id": client_id, "scope": "repo read:user", "state": state}
     if redirectUri:
         params["redirect_uri"] = redirectUri
