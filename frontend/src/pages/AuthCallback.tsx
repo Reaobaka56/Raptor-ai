@@ -21,17 +21,8 @@ export default function AuthCallback() {
         return
       }
 
-      const savedState = localStorage.getItem('github_oauth_state')
-      if (!state || state !== savedState) {
-        setError('Invalid OAuth state. Please try logging in again.')
-        setLoading(false)
-        setTimeout(() => navigate('/'), 3000)
-        return
-      }
-      localStorage.removeItem('github_oauth_state')
-
       try {
-        const { data } = await completeGithubLogin(code, state)
+        const { data } = await completeGithubLogin(code, state ?? undefined)
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))
         window.dispatchEvent(new Event('auth-change'))
