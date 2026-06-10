@@ -75,7 +75,7 @@ async def run_scan(target: str, github_token: Optional[str] = None) -> Review:
                         raise Exception("No pull requests or commits found for this repository")
                     latest_commit = commits_data[0]
                     sha = latest_commit["sha"]
-                    pr_number = 0
+                    pr_number = 1
                     pr_title = latest_commit["commit"]["message"]
                     pr_url = f"https://github.com/{repo_name}/commit/{sha}"
                     diff_url = f"{pr_url}.diff"
