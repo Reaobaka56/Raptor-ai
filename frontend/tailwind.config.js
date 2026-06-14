@@ -14,7 +14,7 @@ export default {
         design: '#2563eb',
         surface: 'rgb(var(--surface) / <alpha-value>)',
         'surface-2': 'rgb(var(--surface-2) / <alpha-value>)',
-        border-default: 'rgb(var(--border) / <alpha-value>)',
+        'border-default': 'rgb(var(--border) / <alpha-value>)',
         primary: 'rgb(var(--text-primary) / <alpha-value>)',
         secondary: 'rgb(var(--text-secondary) / <alpha-value>)',
         muted: 'rgb(var(--text-muted) / <alpha-value>)',
