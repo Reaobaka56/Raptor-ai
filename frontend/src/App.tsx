@@ -43,7 +43,6 @@ function App() {
         <Route path="/onboarding" element={<ProtectedRoute><Layout><OnboardingGuide /></Layout></ProtectedRoute>} />
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
-      <ThemeToggle />
     </>
   )
 }

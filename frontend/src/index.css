@@ -2,49 +2,467 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────
+   CLAYMORPHISM DESIGN SYSTEM
+   Soft 3D, puffy, bold shadows, thick rounding
+   ───────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
 @layer base {
   :root {
-    --surface: 0 0 0;
-    --surface-2: 10 10 10;
-    --border: 255 255 255;
-    --text-primary: 255 255 255;
-    --text-secondary: 209 213 219;
-    --text-muted: 156 163 175;
+    /* Clay surface colours */
+    --clay-bg:        #0a0a12;
+    --clay-surface:   #111118;
+    --clay-surface-2: #18181f;
+    --clay-border:    rgba(255,255,255,0.08);
+
+    /* Clay accent palette */
+    --clay-indigo:  #6366f1;
+    --clay-violet:  #8b5cf6;
+    --clay-sky:     #38bdf8;
+    --clay-emerald: #34d399;
+    --clay-rose:    #fb7185;
+    --clay-amber:   #fbbf24;
+
+    /* Shadows — the heart of claymorphism */
+    --clay-shadow-sm:
+      0 2px 0 0 rgba(0,0,0,0.8),
+      0 4px 12px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 -1px 0 rgba(0,0,0,0.4);
+
+    --clay-shadow:
+      0 4px 0 0 rgba(0,0,0,0.9),
+      0 8px 24px rgba(0,0,0,0.7),
+      0 16px 40px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      inset 0 -2px 0 rgba(0,0,0,0.5);
+
+    --clay-shadow-lg:
+      0 6px 0 0 rgba(0,0,0,0.9),
+      0 12px 32px rgba(0,0,0,0.7),
+      0 24px 64px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.16),
+      inset 0 -3px 0 rgba(0,0,0,0.6);
+
+    --clay-shadow-pressed:
+      0 1px 0 0 rgba(0,0,0,0.9),
+      0 2px 8px rgba(0,0,0,0.6),
+      inset 0 2px 4px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+
+    /* Coloured clay blobs */
+    --clay-shadow-indigo:
+      0 4px 0 0 rgba(49,46,129,0.9),
+      0 8px 24px rgba(99,102,241,0.3),
+      0 16px 48px rgba(99,102,241,0.15),
+      inset 0 1px 0 rgba(199,210,254,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.4);
+
+    --clay-shadow-violet:
+      0 4px 0 0 rgba(76,29,149,0.9),
+      0 8px 24px rgba(139,92,246,0.35),
+      0 16px 48px rgba(139,92,246,0.15),
+      inset 0 1px 0 rgba(221,214,254,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.4);
+
+    --clay-shadow-sky:
+      0 4px 0 0 rgba(12,74,110,0.9),
+      0 8px 24px rgba(56,189,248,0.3),
+      0 16px 48px rgba(56,189,248,0.12),
+      inset 0 1px 0 rgba(186,230,253,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.4);
+
+    --clay-shadow-emerald:
+      0 4px 0 0 rgba(6,78,59,0.9),
+      0 8px 24px rgba(52,211,153,0.3),
+      0 16px 48px rgba(52,211,153,0.12),
+      inset 0 1px 0 rgba(167,243,208,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.4);
+
+    --clay-shadow-rose:
+      0 4px 0 0 rgba(136,19,55,0.9),
+      0 8px 24px rgba(251,113,133,0.3),
+      0 16px 48px rgba(251,113,133,0.12),
+      inset 0 1px 0 rgba(254,205,211,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.4);
+
+    --clay-shadow-amber:
+      0 4px 0 0 rgba(120,53,15,0.9),
+      0 8px 24px rgba(251,191,36,0.35),
+      0 16px 48px rgba(251,191,36,0.12),
+      inset 0 1px 0 rgba(253,230,138,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.4);
+
+    --clay-shadow-white:
+      0 4px 0 0 rgba(160,160,180,0.5),
+      0 8px 24px rgba(255,255,255,0.18),
+      0 20px 48px rgba(255,255,255,0.08),
+      inset 0 1px 0 rgba(255,255,255,0.9),
+      inset 0 -2px 0 rgba(180,180,200,0.4);
   }
 
-  html.light {
-    --surface: 255 255 255;
-    --surface-2: 248 250 252;
-    --border: 15 23 42;
-    --text-primary: 15 23 42;
-    --text-secondary: 71 85 105;
-    --text-muted: 100 116 139;
-  }
-
-  html { color-scheme: dark; }
-  html.light { color-scheme: light; }
+  html { color-scheme: dark; font-family: 'Inter', sans-serif; }
 
   body {
-    @apply bg-surface text-secondary antialiased min-h-screen selection:bg-white/20 selection:text-white overflow-x-hidden;
-  }
-  html.light body {
-    @apply selection:bg-slate-900/10 selection:text-slate-900;
+    background-color: var(--clay-bg);
+    @apply text-gray-300 antialiased min-h-screen overflow-x-hidden;
+    background-image:
+      radial-gradient(ellipse 120% 80% at 10% -10%, rgba(99,102,241,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 90% 110%, rgba(139,92,246,0.05) 0%, transparent 60%);
   }
 }
 
+/* ─────────────────────────────────────────────
+   CLAY TOKENS — reusable component classes
+   ───────────────────────────────────────────── */
 @layer components {
-  .glass-card, .card {
-    @apply bg-surface border border-default/10 rounded-xl p-6 transition-colors duration-200 hover:border-default/20 shadow-none;
+
+  /* ── Clay Card ── */
+  .clay-card {
+    border-radius: 20px;
+    background: linear-gradient(145deg, #1c1c26 0%, #141419 100%);
+    box-shadow: var(--clay-shadow);
+    border: 1px solid rgba(255,255,255,0.07);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .clay-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--clay-shadow-lg);
   }
 
-  .gradient-btn, .action-btn {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-sm text-black bg-white/90 hover:bg-white transition-all duration-200 shadow-none transform-none;
+  /* ── Clay Button (primary — white clay blob) ── */
+  .clay-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 22px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-family: 'JetBrains Mono', monospace;
+    color: #0a0a14;
+    background: linear-gradient(145deg, #ffffff 0%, #e8e8f0 100%);
+    box-shadow: var(--clay-shadow-white);
+    border: 1.5px solid rgba(255,255,255,0.6);
+    cursor: pointer;
+    transition: transform 0.12s cubic-bezier(0.34,1.56,0.64,1),
+                box-shadow 0.12s ease;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+  }
+  .clay-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 60%);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .clay-btn:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow:
+      0 6px 0 0 rgba(160,160,180,0.5),
+      0 12px 32px rgba(255,255,255,0.22),
+      0 24px 56px rgba(255,255,255,0.1),
+      inset 0 1px 0 rgba(255,255,255,0.95),
+      inset 0 -2px 0 rgba(180,180,200,0.4);
+  }
+  .clay-btn:active {
+    transform: translateY(2px) scale(0.98);
+    box-shadow: var(--clay-shadow-pressed);
+  }
+  .clay-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
   }
 
-  .badge {
-    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border border-default/10 bg-default/5 text-secondary;
+  /* ── Clay Ghost Button ── */
+  .clay-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 22px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(255,255,255,0.85);
+    background: linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
+    box-shadow: var(--clay-shadow-sm);
+    border: 1.5px solid rgba(255,255,255,0.1);
+    cursor: pointer;
+    transition: transform 0.12s cubic-bezier(0.34,1.56,0.64,1),
+                box-shadow 0.12s ease,
+                background 0.12s ease;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
   }
+  .clay-btn-ghost::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 60%);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .clay-btn-ghost:hover {
+    transform: translateY(-2px) scale(1.02);
+    background: linear-gradient(145deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.07) 100%);
+    box-shadow: var(--clay-shadow);
+    border-color: rgba(255,255,255,0.18);
+  }
+  .clay-btn-ghost:active {
+    transform: translateY(2px) scale(0.98);
+    box-shadow: var(--clay-shadow-pressed);
+  }
+  .clay-btn-ghost:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ── Coloured Clay Accent Buttons ── */
+  .clay-btn-indigo {
+    @apply clay-btn;
+    color: #e0e7ff;
+    background: linear-gradient(145deg, #6366f1 0%, #4f46e5 100%);
+    box-shadow: var(--clay-shadow-indigo);
+    border-color: rgba(165,180,252,0.3);
+  }
+  .clay-btn-indigo:hover {
+    background: linear-gradient(145deg, #818cf8 0%, #6366f1 100%);
+    box-shadow:
+      0 6px 0 0 rgba(49,46,129,0.9),
+      0 12px 32px rgba(99,102,241,0.45),
+      0 20px 56px rgba(99,102,241,0.2),
+      inset 0 1px 0 rgba(199,210,254,0.3),
+      inset 0 -2px 0 rgba(0,0,0,0.4);
+  }
+
+  /* ── Clay Pill Badge ── */
+  .clay-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-family: 'JetBrains Mono', monospace;
+    background: linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+    box-shadow: var(--clay-shadow-sm);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  /* ── Clay Input ── */
+  .clay-input {
+    border-radius: 14px;
+    background: linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%);
+    box-shadow:
+      inset 0 2px 6px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 1px 0 rgba(255,255,255,0.06);
+    border: 1.5px solid rgba(255,255,255,0.08);
+    color: white;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .clay-input:focus {
+    outline: none;
+    border-color: rgba(99,102,241,0.5);
+    box-shadow:
+      inset 0 2px 6px rgba(0,0,0,0.5),
+      0 0 0 3px rgba(99,102,241,0.15),
+      0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ── Skeleton shimmer ── */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%);
+    box-shadow: var(--clay-shadow-sm);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255,255,255,0.06) 40%,
+      rgba(255,255,255,0.10) 50%,
+      rgba(255,255,255,0.06) 60%,
+      transparent 100%);
+    animation: skeleton-shimmer 1.8s ease-in-out infinite;
+  }
+
+  /* ── Section modal overlay ── */
+  .section-modal-overlay {
+    @apply fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8;
+    background: rgba(5,5,12,0.85);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    animation: fadeIn 0.22s ease-out;
+  }
+  .section-modal-card {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-radius: 28px;
+    background: linear-gradient(145deg, #1a1a24 0%, #101018 100%);
+    box-shadow:
+      0 8px 0 0 rgba(0,0,0,0.9),
+      0 20px 60px rgba(0,0,0,0.8),
+      0 40px 100px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 -3px 0 rgba(0,0,0,0.6);
+    border: 1.5px solid rgba(255,255,255,0.09);
+    animation: modalSlideIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+  }
+  .section-modal-card::-webkit-scrollbar { width: 4px; }
+  .section-modal-card::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  /* ── Glass nav blur ── */
+  .clay-nav {
+    background: rgba(10,10,18,0.75);
+    backdrop-filter: blur(28px) saturate(1.6);
+    -webkit-backdrop-filter: blur(28px) saturate(1.6);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(255,255,255,0.05);
+  }
+
+  /* ── Scrollbar ── */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.08) transparent;
+  }
+  *::-webkit-scrollbar { width: 5px; height: 5px; }
+  *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
 }
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.animate-fadeIn { animation: fadeIn 0.2s ease-out forwards; }
+/* ─────────────────────────────────────────────
+   SECTION BACKGROUNDS — each has unique clay tint
+   ───────────────────────────────────────────── */
+
+.section-hero {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% -5%, rgba(99,102,241,0.18) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 40% at 85% 90%, rgba(139,92,246,0.1) 0%, transparent 55%),
+    var(--clay-bg);
+}
+.section-demo {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 50%, rgba(56,189,248,0.1) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 30% at 15% 20%, rgba(99,102,241,0.07) 0%, transparent 55%),
+    #0b0b14;
+}
+.section-problem {
+  background:
+    radial-gradient(ellipse 70% 60% at 5% 50%, rgba(251,113,133,0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 95% 20%, rgba(239,68,68,0.07) 0%, transparent 55%),
+    linear-gradient(180deg, #0c0c14 0%, #0a0a12 100%);
+}
+.section-solution {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 60%, rgba(52,211,153,0.1) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 30% at 10% 10%, rgba(56,189,248,0.06) 0%, transparent 50%),
+    #0b0b13;
+}
+.section-features {
+  background:
+    radial-gradient(ellipse 60% 50% at 90% 30%, rgba(139,92,246,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 5% 70%, rgba(99,102,241,0.08) 0%, transparent 55%),
+    linear-gradient(180deg, #0d0d16 0%, #0b0b14 100%);
+}
+.section-community {
+  background:
+    radial-gradient(ellipse 70% 60% at 15% 50%, rgba(56,189,248,0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 85% 80%, rgba(52,211,153,0.07) 0%, transparent 55%),
+    #0a0a13;
+}
+.section-pricing {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 20%, rgba(251,191,36,0.09) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 40% at 95% 80%, rgba(99,102,241,0.08) 0%, transparent 55%),
+    linear-gradient(180deg, #0c0c15 0%, #0a0a12 100%);
+}
+.section-faq {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 80%, rgba(139,92,246,0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 5% 20%, rgba(56,189,248,0.06) 0%, transparent 50%),
+    #0b0b14;
+}
+.section-cta {
+  background:
+    radial-gradient(ellipse 90% 80% at 50% 50%, rgba(99,102,241,0.15) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 40% at 90% 10%, rgba(139,92,246,0.1) 0%, transparent 55%),
+    linear-gradient(180deg, #0c0c16 0%, #0a0a12 100%);
+}
+.section-footer {
+  background: linear-gradient(180deg, #0a0a12 0%, #060610 100%);
+}
+
+/* ─────────────────────────────────────────────
+   ANIMATIONS
+   ───────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fadeIn { animation: fadeIn 0.22s ease-out forwards; }
+
+@keyframes skeleton-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: scale(0.88) translateY(28px) rotate(-0.5deg); }
+  to   { opacity: 1; transform: scale(1)    translateY(0)    rotate(0deg); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px)   rotate(0deg); }
+  33%       { transform: translateY(-10px) rotate(0.8deg); }
+  66%       { transform: translateY(-6px)  rotate(-0.5deg); }
+}
+.animate-float { animation: float 5s ease-in-out infinite; }
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.7) translateY(12px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
+.animate-popIn { animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+@keyframes clayBounce {
+  0%,100% { transform: translateY(0); }
+  40%     { transform: translateY(-8px) scaleY(1.04) scaleX(0.97); }
+  60%     { transform: translateY(-4px) scaleY(0.98) scaleX(1.01); }
+}
+.animate-clay-bounce { animation: clayBounce 2.4s ease-in-out infinite; }
+
+/* Utility: clay-depth adds the 3-D floor shadow */
+.clay-depth {
+  box-shadow: var(--clay-shadow);
+}
+.clay-depth-lg {
+  box-shadow: var(--clay-shadow-lg);
+}
