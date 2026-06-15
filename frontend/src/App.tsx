@@ -12,7 +12,8 @@ import Discord from './pages/Discord'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
 import './index.css'
-import { ThemeToggle } from './components/ThemeToggle'
+
+// Removed the unused ThemeToggle import here!
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 import AuthError from './pages/AuthError'
@@ -20,7 +21,6 @@ import AuthCallback from './pages/AuthCallback'
 import DebugTool from './pages/DebugTool';
 import RuleManager from './pages/RuleManager'
 import OnboardingGuide from './pages/OnboardingGuide'
-
 
 function App() {
   return (
