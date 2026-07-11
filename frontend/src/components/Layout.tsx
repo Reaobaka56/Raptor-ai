@@ -8,14 +8,11 @@ import {
   Github,
   LogOut,
   BookOpen,
-  Compass,
-  Moon,
-  Sun
+  Compass
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { TRexIcon } from './TRexIcon'
 import { startGithubLogin, type UserProfile } from '../api'
-import { useTheme } from '../theme'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -32,7 +29,6 @@ const navItems = [
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { theme, toggleTheme } = useTheme()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
