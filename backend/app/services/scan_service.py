@@ -18,7 +18,7 @@ async def run_scan(target: str, github_token: Optional[str] = None) -> Review:
     can be called directly from the webhook handler and the /api/scan endpoint.
     """
     # parse target (owner/repo or URL)
-    from ..main import parse_github_scan_target, get_github_auth_headers
+    from ..github_utils import parse_github_scan_target, get_github_auth_headers
 
     repo_name, requested_pr_number = parse_github_scan_target(target)
 
@@ -31,7 +31,7 @@ async def run_scan(target: str, github_token: Optional[str] = None) -> Review:
 
     if not github_token:
         # fallback to configured PAT/GITHUB_TOKEN
-        from ..main import get_configured_github_token
+        from ..github_utils import get_configured_github_token
 
         github_token = get_configured_github_token()
 
