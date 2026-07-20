@@ -1,0 +1,84 @@
+{
+  "name": "raptor-ai",
+  "productName": "Raptor AI",
+  "version": "1.0.0",
+  "description": "AI-powered GitHub PR code review — desktop app",
+  "author": {
+    "name": "Reaobaka Mogajane",
+    "email": "your@email.com"
+  },
+  "homepage": "https://github.com/Reaobaka56/raptor-ai",
+  "license": "MIT",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "dev": "NODE_ENV=development electron .",
+    "build:frontend": "cd frontend && npm install && npm run build",
+    "build": "npm run build:frontend && electron-builder",
+    "build:win": "npm run build:frontend && electron-builder --win",
+    "build:mac": "npm run build:frontend && electron-builder --mac",
+    "build:linux": "npm run build:frontend && electron-builder --linux",
+    "dist": "npm run build"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.0"
+  },
+  "build": {
+    "appId": "com.raptorAI.app",
+    "productName": "Raptor AI",
+    "copyright": "Copyright © 2025 Reaobaka Mogajane",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "electron/assets"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "electron/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Raptor AI"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "electron/assets/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "electron/assets/entitlements.mac.plist",
+      "entitlementsInherit": "electron/assets/entitlements.mac.plist"
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ],
+      "icon": "electron/assets/icon.png",
+      "category": "Development"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Reaobaka56",
+      "repo": "raptor-ai"
+    }
+  }
+}
