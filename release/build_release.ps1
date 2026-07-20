@@ -6,8 +6,8 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "=== Installing backend Python dependencies ==="
-python -m pip install --upgrade pip
-python -m pip install -r backend/requirements.txt
+py -m pip install --upgrade pip
+py -m pip install -r backend/requirements.txt
 
 Write-Host "=== Building frontend assets ==="
 Push-Location frontend
@@ -21,13 +21,11 @@ if (Test-Path $backendStatic) { Remove-Item -Recurse -Force $backendStatic }
 Copy-Item -Path frontend/dist -Destination $backendStatic -Recurse
 
 Write-Host "=== Installing PyInstaller ==="
-python -m pip install --upgrade pyinstaller
+py -m pip install --upgrade pyinstaller
 
 Write-Host "=== Creating executable with PyInstaller ==="
 # Build the exe; include the static assets as data
-pyinstaller --onefile --name backend \
-    --add-data "${backendStatic};static" \
-    backend/app/main.py
+pyinstaller --onefile --name backend --add-data "${backendStatic};static" backend/app/main.py
 
 Write-Host "=== Packaging release archive ==="
 $releaseDir = Join-Path -Path (Resolve-Path .) -ChildPath "release"
