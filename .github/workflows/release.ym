@@ -1,0 +1,87 @@
+name: Build & Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build:frontend
+
+      - name: Build Windows
+        if: matrix.platform == 'win'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build:win
+
+      - name: Build macOS
+        if: matrix.platform == 'mac'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run build:mac
+
+      - name: Build Linux
+        if: matrix.platform == 'linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build:linux
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist-electron/**/*.exe
+            dist-electron/**/*.dmg
+            dist-electron/**/*.AppImage
+            dist-electron/**/*.deb
+          draft: false
+          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts (non-release)
+        uses: actions/upload-artifact@v4
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        with:
+          name: raptor-ai-${{ matrix.platform }}
+          path: |
+            dist-electron/**/*.exe
+            dist-electron/**/*.dmg
+            dist-electron/**/*.AppImage
+            dist-electron/**/*.deb
+          retention-days: 7
