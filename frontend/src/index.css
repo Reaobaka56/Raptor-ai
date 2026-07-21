@@ -527,11 +527,11 @@
   height: 120vh;
   pointer-events: none;
   background:
-    radial-gradient(circle at 48% 46%, rgba(31, 70, 154, 0.95), rgba(31, 70, 154, 0.32) 20%, transparent 45%),
-    radial-gradient(circle at 62% 40%, rgba(59, 130, 246, 0.45), transparent 28%),
-    conic-gradient(from 140deg at 50% 45%, #1f469a, #000 33%, #06142e 48%, #000 70%, #1f469a);
-  filter: blur(18px) saturate(1.15);
-  opacity: 0.8;
+    radial-gradient(circle at 48% 46%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08) 20%, transparent 45%),
+    radial-gradient(circle at 62% 40%, rgba(255, 255, 255, 0.12), transparent 28%),
+    conic-gradient(from 140deg at 50% 45%, #ffffff, #000 30%, #1a1a1a 48%, #000 70%, #ffffff);
+  filter: blur(18px) grayscale(1);
+  opacity: 0.42;
   animation: landingShaderDrift 16s ease-in-out infinite;
 }
 
