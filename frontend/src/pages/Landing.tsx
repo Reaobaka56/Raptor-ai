@@ -1,18 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Check, Menu, ShieldAlert, X, Zap } from 'lucide-react';
+import { Check, Github, Mail, MapPin, Menu, Phone, X } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
 import { getGithubRedirectUri } from '../api';
 
 const navItems = [
-  { label: 'Products', to: '/docs' },
-  { label: 'Leaderboards', to: '/reviews' },
-  { label: 'Enterprise', to: '/docs' },
-  { label: 'Government', to: '/privacy' },
-  { label: 'Customers', to: '/blog' },
+  { label: 'Official Documentation', to: '/docs' },
+  { label: 'Privacy Policy', to: '/privacy' },
+  { label: 'Blog', to: '/blog' },
 ];
 
-const customerLogos = ['GitHub', 'Vercel', 'Linear', 'Stripe'];
+const customerLogos = ['Naspers', 'Discovery', 'Takealot', 'Capitec'];
+
+const contactItems = [
+  { icon: Mail, label: 'hello@raptor-ai.dev' },
+  { icon: Phone, label: '+27 10 500 2472' },
+  { icon: MapPin, label: 'Cape Town, South Africa' },
+];
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false);
@@ -66,7 +70,7 @@ function MotionDrawer({ children, width = 300, isOpen, onToggle }: MotionDrawerP
   return (
     <>
       <button
-        className="relative z-20 rounded-sm bg-white p-2 text-black transition hover:bg-neutral-200"
+        className="relative z-20 rounded-sm border border-white bg-black p-2 text-white transition hover:bg-white hover:text-black"
         onClick={() => onToggle(true)}
         aria-label="Open menu"
       >
@@ -80,11 +84,12 @@ function MotionDrawer({ children, width = 300, isOpen, onToggle }: MotionDrawerP
             aria-label="Close menu overlay"
           />
           <aside
-            className="landing-drawer absolute left-0 top-0 h-full border-r border-neutral-900 bg-black px-8 py-16 text-white shadow-2xl"
+            className="landing-drawer absolute left-0 top-0 h-full overflow-hidden border-r border-white bg-black px-8 py-16 text-white shadow-2xl"
             style={{ width }}
           >
+            <TRexIcon className="pointer-events-none absolute -right-16 top-24 h-48 w-48 text-white/10" />
             <button
-              className="absolute right-6 top-4 rounded bg-neutral-800 p-2 text-white"
+              className="absolute right-6 top-4 rounded border border-white bg-black p-2 text-white transition hover:bg-white hover:text-black"
               onClick={() => onToggle(false)}
               aria-label="Close menu"
             >
@@ -95,6 +100,15 @@ function MotionDrawer({ children, width = 300, isOpen, onToggle }: MotionDrawerP
         </div>
       )}
     </>
+  );
+}
+
+
+function WindowsIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+      <path d="M3 5.2 10.8 4v7.4H3V5.2Zm8.8-1.35L21 2.5v8.9h-9.2V3.85ZM3 12.6h7.8V20L3 18.8v-6.2Zm8.8 0H21v8.9l-9.2-1.35V12.6Z" />
+    </svg>
   );
 }
 
@@ -139,7 +153,7 @@ export default function Landing() {
       className="relative flex min-h-screen w-full flex-col overflow-hidden bg-black text-white"
     >
       <div className="landing-shader" aria-hidden="true" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(31,70,154,0.25),transparent_38%),linear-gradient(180deg,rgba(0,0,0,0.05),#000_92%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(255,255,255,0.10),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.03),#000_92%)]" />
 
       {isMobile ? (
         <div className="relative z-10 flex items-center justify-between gap-4 px-6 pt-4 sm:px-10">
@@ -161,18 +175,20 @@ export default function Landing() {
           <button
             onClick={handleGithubLogin}
             disabled={isLoggingIn}
-            className="cursor-pointer rounded border border-white/10 bg-white/10 px-3 py-2 text-sm font-medium backdrop-blur-md transition hover:bg-white/20 disabled:opacity-60"
+            className="inline-flex cursor-pointer items-center gap-2 rounded border border-white bg-black px-3 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white hover:text-black disabled:opacity-60"
           >
-            {isLoggingIn ? 'Connecting…' : 'Register For Free'}
+            <Github className="h-4 w-4" />
+            {isLoggingIn ? 'Connecting…' : 'Login with GitHub'}
           </button>
         </div>
       ) : (
-        <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between px-8 py-6">
+        <header className="relative z-10 mx-auto mt-4 flex w-[calc(100%-4rem)] max-w-7xl items-center justify-between overflow-hidden rounded-2xl border border-white bg-black/85 px-8 py-5 shadow-[0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur">
+          <TRexIcon className="pointer-events-none absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 text-white/10" />
           <TimelineAnimation animationNum={1} className="flex items-center gap-8">
             <LogoMark />
-            <nav className="hidden items-center gap-6 text-md text-neutral-300 md:flex">
+            <nav className="hidden items-center gap-6 text-md text-neutral-200 md:flex">
               {navItems.map((item) => (
-                <Link key={item.label} to={item.to} className="transition hover:text-white">
+                <Link key={item.label} to={item.to} className="transition hover:text-white underline-offset-4 hover:underline">
                   {item.label}
                 </Link>
               ))}
@@ -183,30 +199,27 @@ export default function Landing() {
             animationNum={2}
             onClick={handleGithubLogin}
             disabled={isLoggingIn}
-            className="cursor-pointer rounded border border-white/10 bg-white/10 px-3 py-2 text-sm font-medium backdrop-blur-md transition hover:bg-white/20 disabled:opacity-60"
+            className="inline-flex cursor-pointer items-center gap-2 rounded border border-white bg-black px-3 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white hover:text-black disabled:opacity-60"
           >
-            {isLoggingIn ? 'Connecting…' : 'Register For Free'}
+            <Github className="h-4 w-4" />
+            {isLoggingIn ? 'Connecting…' : 'Login with GitHub'}
           </TimelineAnimation>
         </header>
       )}
 
       <div className="relative z-10 mb-10 flex grow flex-col items-center justify-center px-4 pt-24 text-center">
-        <TimelineAnimation animationNum={3} className="flex items-center gap-2 rounded-2xl border border-blue-800 bg-blue-800/50 p-1 pr-3 text-sm backdrop-blur-lg">
-          <span className="rounded-lg bg-blue-600 px-2 py-0.5 text-white">New</span>
-          <span>Trusted by fast-moving engineering teams</span>
-        </TimelineAnimation>
         <TimelineAnimation as="h1" animationNum={4} className="my-5 max-w-5xl text-5xl font-medium leading-[120%] tracking-tight md:text-7xl">
           Powering the Next <br /> Generation of AI <br /> Code Review
         </TimelineAnimation>
-        <TimelineAnimation as="p" animationNum={5} className="mb-10 max-w-xl text-lg font-light text-neutral-300 md:text-xl">
+        <TimelineAnimation as="p" animationNum={5} className="mb-10 max-w-xl text-lg font-light text-neutral-200 md:text-xl">
           High-signal AI reviews that catch security risks, performance regressions, and team-standard violations before they merge.
         </TimelineAnimation>
         <div className="flex flex-col items-center gap-4 sm:flex-row">
-          <TimelineAnimation as="button" animationNum={6} onClick={handleGithubLogin} disabled={isLoggingIn} className="flex cursor-pointer items-center gap-2 rounded-sm bg-white px-6 py-3 font-semibold text-black transition hover:bg-neutral-200 disabled:opacity-60">
-            Book a Free Demo <ArrowRight size={18} />
+          <TimelineAnimation as="button" animationNum={6} onClick={handleGithubLogin} disabled={isLoggingIn} className="flex cursor-pointer items-center gap-2 rounded-sm border border-white bg-white px-6 py-3 font-semibold text-black transition hover:bg-black hover:text-white disabled:opacity-60">
+            Get for Desktop <WindowsIcon />
           </TimelineAnimation>
           <TimelineAnimation animationNum={7}>
-            <Link to="/docs" className="relative block cursor-pointer rounded-sm border border-white/20 bg-white/10 px-8 py-3 font-semibold backdrop-blur-md transition hover:bg-white/20">
+            <Link to="/docs" className="relative block cursor-pointer rounded-sm border border-white bg-black px-8 py-3 font-semibold text-white backdrop-blur-md transition hover:bg-white hover:text-black">
               Build With AI
             </Link>
           </TimelineAnimation>
@@ -219,7 +232,7 @@ export default function Landing() {
         </TimelineAnimation>
         <div className="flex flex-wrap items-center justify-center gap-6 opacity-75 md:gap-12">
           {customerLogos.map((logo, index) => (
-            <TimelineAnimation key={logo} animationNum={8 + index} className="rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-xl font-semibold tracking-tight text-white/80">
+            <TimelineAnimation key={logo} animationNum={8 + index} className="rounded-xl border border-white bg-black px-5 py-3 text-xl font-semibold tracking-tight text-white/80">
               {logo}
             </TimelineAnimation>
           ))}
@@ -230,18 +243,30 @@ export default function Landing() {
             'Security and performance checks',
             'Team convention memory',
           ].map((item) => (
-            <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-md">
-              <Check className="h-5 w-5 text-blue-300" />
+            <div key={item} className="flex items-center gap-3 rounded-2xl border border-white bg-black p-4 backdrop-blur-md">
+              <Check className="h-5 w-5 text-white" />
               <span>{item}</span>
             </div>
           ))}
         </TimelineAnimation>
       </div>
 
-      <div className="absolute bottom-6 left-6 z-10 hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-neutral-300 backdrop-blur md:flex">
-        <ShieldAlert className="h-4 w-4 text-blue-300" /> SOC2-minded architecture
-        <Zap className="ml-2 h-4 w-4 text-blue-300" /> 30-second GitHub setup
-      </div>
+      <nav className="relative z-10 mx-auto mb-8 mt-2 w-[calc(100%-2rem)] max-w-5xl overflow-hidden rounded-3xl border border-white bg-black px-6 py-6 text-sm text-white shadow-[0_0_0_1px_rgba(255,255,255,0.18)] md:px-8">
+        <TRexIcon className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 text-white/10" />
+        <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-semibold uppercase tracking-[0.3em] text-white/60">Contact</p>
+            <p className="mt-2 text-lg font-semibold">Build with Raptor AI from South Africa.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {contactItems.map(({ icon: Icon, label }) => (
+              <span key={label} className="inline-flex items-center gap-2 rounded-full border border-white px-3 py-2">
+                <Icon className="h-4 w-4" /> {label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </nav>
     </section>
   );
 }
