@@ -1,6 +1,8 @@
 import time
 from datetime import datetime, timezone
 from fastapi import Request
+from fastapi.staticfiles import StaticFiles
+import sys, os
 
 from .state import app, START_TIME
 
@@ -20,6 +22,12 @@ app.include_router(analysis_router, prefix="/debug")
 app.include_router(scan_router)
 app.include_router(reviews_router)
 app.include_router(telemetry_router)
+
+# Serve static files (frontend) bundled with PyInstaller
+static_dir = os.path.join(
+    sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
+)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/health", tags=["Telemetry"])
