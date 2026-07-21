@@ -500,3 +500,49 @@
 .clay-depth-lg {
   box-shadow: var(--clay-shadow-lg);
 }
+
+@keyframes landingReveal {
+  from { opacity: 0; filter: blur(20px); transform: translateY(10px); }
+  to { opacity: 1; filter: blur(0); transform: translateY(0); }
+}
+
+@keyframes landingShaderDrift {
+  0%, 100% { transform: translate3d(-8%, -8%, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(8%, 3%, 0) rotate(18deg) scale(1.08); }
+}
+
+@keyframes landingDrawerIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.landing-reveal {
+  opacity: 0;
+  animation: landingReveal 0.55s ease forwards;
+}
+
+.landing-shader {
+  position: absolute;
+  inset: -20vh -10vw auto -10vw;
+  height: 120vh;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 48% 46%, rgba(31, 70, 154, 0.95), rgba(31, 70, 154, 0.32) 20%, transparent 45%),
+    radial-gradient(circle at 62% 40%, rgba(59, 130, 246, 0.45), transparent 28%),
+    conic-gradient(from 140deg at 50% 45%, #1f469a, #000 33%, #06142e 48%, #000 70%, #1f469a);
+  filter: blur(18px) saturate(1.15);
+  opacity: 0.8;
+  animation: landingShaderDrift 16s ease-in-out infinite;
+}
+
+.landing-shader::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+}
+
+.landing-drawer {
+  animation: landingDrawerIn 0.28s ease-out;
+}
