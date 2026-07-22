@@ -197,11 +197,20 @@ export default api
 // ── Legacy exports preserved for existing pages ────────────────────────────────
 
 export interface OnboardingStats {
-  totalRules: number
-  totalFeedback: number
-  thumbsUp: number
-  thumbsDown: number
-  accuracy: number
+  reviewCount: number
+  latestScanAt: string | null
+  pullRequestCount: number
+  issueCount: number
+  feedbackTotal: number
+  feedbackAccepted: number
+  feedbackRejected: number
+  suppressionRate: number
+  // legacy fields kept for compatibility
+  totalRules?: number
+  totalFeedback?: number
+  thumbsUp?: number
+  thumbsDown?: number
+  accuracy?: number
 }
 
 export const prApi = {
