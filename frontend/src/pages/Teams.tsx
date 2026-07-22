@@ -29,7 +29,6 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
   const [detail, setDetail] = useState<(Team & { members: TeamMember[] }) | null>(null);
   const [inviteInput, setInviteInput] = useState('');
   const [inviteMode, setInviteMode] = useState<'github' | 'email'>('github');
-  const [invitations, setInvitations] = useState<{invite_token: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
@@ -57,7 +56,6 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
       const token = res.data.invite_token;
       const link = `${window.location.origin}/teams/accept/${token}`;
       setInviteLink(link);
-      setInvitations(prev => [res.data, ...prev]);
       setInviteInput('');
     } catch {
       alert('Failed to create invitation. Make sure you have admin permissions.');
