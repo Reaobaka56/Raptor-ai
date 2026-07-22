@@ -193,3 +193,27 @@ export const memoryApi = {
 }
 
 export default api
+
+// ── Legacy exports preserved for existing pages ────────────────────────────────
+
+export interface OnboardingStats {
+  reviewCount: number
+  latestScanAt: string | null
+  pullRequestCount: number
+  issueCount: number
+  feedbackTotal: number
+  feedbackAccepted: number
+  feedbackRejected: number
+  suppressionRate: number
+  // legacy fields kept for compatibility
+  totalRules?: number
+  totalFeedback?: number
+  thumbsUp?: number
+  thumbsDown?: number
+  accuracy?: number
+}
+
+export const prApi = {
+  createPullRequest: (reviewId: number) =>
+    api.post<{ pr_url: string; pr_number: number }>(`/reviews/${reviewId}/create-fix-pr`),
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, Github, Mail, MapPin, Menu, Phone, X, GitPullRequest, Shield, Zap, Users } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
@@ -11,13 +11,16 @@ const navItems = [
 ];
 
 // SA companies as text badges (no trademark issues, same as before but styled better)
+// Real SA companies with sector — displayed as professional wordmark badges
 const saPartners = [
-  { name: 'Naspers', sector: 'Technology' },
-  { name: 'Discovery', sector: 'Financial' },
-  { name: 'Takealot', sector: 'E-commerce' },
-  { name: 'Capitec', sector: 'Banking' },
-  { name: 'Vodacom', sector: 'Telecom' },
-  { name: 'Standard Bank', sector: 'Banking' },
+  { name: 'Naspers', sector: 'Technology', icon: '🌍' },
+  { name: 'Discovery', sector: 'Financial Services', icon: '💡' },
+  { name: 'Takealot', sector: 'E-commerce', icon: '🛒' },
+  { name: 'Capitec', sector: 'Banking', icon: '🏦' },
+  { name: 'Vodacom', sector: 'Telecom', icon: '📡' },
+  { name: 'Standard Bank', sector: 'Banking', icon: '🏛' },
+  { name: 'FNB', sector: 'Banking', icon: '💳' },
+  { name: 'Investec', sector: 'Finance', icon: '📈' },
 ];
 
 const contactItems = [
@@ -327,9 +330,12 @@ export default function Landing() {
         <TA animationNum={9} className="flex flex-wrap items-center justify-center gap-3">
           {saPartners.map((p) => (
             <div key={p.name}
-              className="flex flex-col items-center rounded-xl border border-white/10 bg-black px-5 py-3 hover:border-white/20 transition-colors">
-              <span className="text-base font-bold tracking-tight text-white/80">{p.name}</span>
-              <span className="text-[10px] font-mono text-gray-600 mt-0.5">{p.sector}</span>
+              className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-black px-4 py-3 hover:border-white/20 transition-colors">
+              <span className="text-lg">{p.icon}</span>
+              <div>
+                <span className="text-sm font-bold tracking-tight text-white/90 block">{p.name}</span>
+                <span className="text-[10px] font-mono text-gray-600">{p.sector}</span>
+              </div>
             </div>
           ))}
         </TA>
@@ -344,34 +350,44 @@ export default function Landing() {
         </TA>
       </div>
 
-      {/* ── Contact ── */}
-      <div className="relative z-10 mx-auto mb-8 mt-2 w-[calc(100%-2rem)] max-w-5xl">
-        <TA animationNum={12}>
-          <div className="overflow-hidden rounded-3xl bg-[#f7f7f9] px-8 py-8 md:px-10">
-            <TRexIcon className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 text-black/5" />
-            <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-xs font-mono uppercase tracking-[0.3em] text-gray-400">Contact</p>
-                <p className="mt-2 text-xl font-bold text-gray-900">Build with Raptor AI from South Africa.</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {contactItems.map(({ icon: Icon, label, href }) => (
-                  href ? (
-                    <a key={label} href={href}
-                      className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:border-gray-400 transition-colors">
-                      <Icon className="h-4 w-4 text-gray-500" /> {label}
-                    </a>
-                  ) : (
-                    <span key={label}
-                      className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
-                      <Icon className="h-4 w-4 text-gray-500" /> {label}
-                    </span>
-                  )
-                ))}
-              </div>
+      {/* ── Contact / Footer ── */}
+      <div className="relative z-10 w-full bg-black border-t border-white/10 mt-8">
+        <div className="mx-auto max-w-5xl px-6 py-10">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-mono uppercase tracking-[0.3em] text-gray-600">Contact</p>
+              <p className="mt-2 text-lg font-bold text-white">Build with Raptor AI from South Africa.</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {contactItems.map(({ icon: Icon, label, href }) => (
+                href ? (
+                  <a key={label} href={href}
+                    className="inline-flex items-center gap-2 rounded border border-white/10 px-4 py-2 text-sm text-gray-400 hover:border-white/30 hover:text-white transition-colors">
+                    <Icon className="h-4 w-4" /> {label}
+                  </a>
+                ) : (
+                  <span key={label}
+                    className="inline-flex items-center gap-2 rounded border border-white/10 px-4 py-2 text-sm text-gray-400">
+                    <Icon className="h-4 w-4" /> {label}
+                  </span>
+                )
+              ))}
             </div>
           </div>
-        </TA>
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/5 pt-6">
+            <div className="flex items-center gap-2.5">
+              <TRexIcon className="h-5 w-5 text-white" />
+              <span className="text-sm font-bold text-white">Raptor AI</span>
+            </div>
+            <div className="flex gap-6 text-xs text-gray-600">
+              <Link to="/docs" className="hover:text-white transition-colors">Docs</Link>
+              <Link to="/blog" className="hover:text-white transition-colors">Blog</Link>
+              <Link to="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+              <Link to="/terms" className="hover:text-white transition-colors">Terms</Link>
+            </div>
+            <p className="text-xs text-gray-700">© 2026 Raptor AI · Cape Town, SA</p>
+          </div>
+        </div>
       </div>
 
       {/* ── Sticky CTA ── */}

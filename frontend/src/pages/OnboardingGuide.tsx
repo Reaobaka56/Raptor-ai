@@ -180,7 +180,7 @@ export default function OnboardingGuide() {
           <GuideStats stats={guide.stats} />
 
           {/* Sections */}
-          {guide.sections.map((section, idx) => {
+          {guide.sections.map((section: { title: string; content: string[] }, idx: number) => {
             const isExpanded = expandedSections.has(idx)
             return (
               <div
@@ -202,7 +202,7 @@ export default function OnboardingGuide() {
                 </button>
                 {isExpanded && (
                   <div className="px-5 pb-5 space-y-2 border-t border-white/5 pt-4 animate-fadeIn">
-                    {section.content.map((item, i) => (
+                    {section.content.map((item: string, i: number) => (
                       <div
                         key={i}
                         className="flex items-start gap-2.5 text-sm text-gray-300 font-sans leading-relaxed"
