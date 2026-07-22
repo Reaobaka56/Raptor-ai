@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus, Users, UserPlus, Trash2, Copy, Check, Loader2, Crown, Shield, User } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
-import { teamsApi, type Team, type TeamMember, type Invitation } from '../api';
+import { teamsApi, type Team, type TeamMember } from '../api';
 
 const ROLE_ICONS: Record<string, React.ReactNode> = {
   owner: <Crown className="h-3 w-3 text-amber-400" />,
@@ -29,7 +29,7 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
   const [detail, setDetail] = useState<(Team & { members: TeamMember[] }) | null>(null);
   const [inviteInput, setInviteInput] = useState('');
   const [inviteMode, setInviteMode] = useState<'github' | 'email'>('github');
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [invitations, setInvitations] = useState<{invite_token: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
