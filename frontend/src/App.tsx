@@ -13,6 +13,7 @@ import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
 import Teams from './pages/Teams'
 import AcceptInvite from './pages/AcceptInvite'
+import CalendarPage from './pages/Calendar'
 import './index.css'
 
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -44,6 +45,7 @@ function App() {
         <Route path="/onboarding" element={<ProtectedRoute><Layout><OnboardingGuide /></Layout></ProtectedRoute>} />
         <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
         <Route path="/teams/accept/:token" element={<AcceptInvite />} />
+        <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
     </>
