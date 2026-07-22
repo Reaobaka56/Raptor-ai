@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request, HTTPException
 
 from .models import GitHubLoginUrlResponse, AuthCallbackRequest, UserProfile, RepositoryInfo
 from .services.session_store import save_session
+from .services.user_service import upsert_user
 from .auth_dependencies import USER_SESSIONS
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
@@ -68,14 +69,36 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
 
     user_data = user_res.json()
 
+    github_login = user_data.get("login", "")
+    github_id    = user_data.get("id", 0)
+    avatar_url   = user_data.get("avatar_url", "")
+    name         = user_data.get("name")
+    email        = user_data.get("email")
+
+    # Persist / update the user record in PostgreSQL (non-fatal if DB is down)
+    db_user = upsert_user(
+        github_id=github_id,
+        username=github_login,
+        name=name,
+        email=email,
+        avatar_url=avatar_url,
+    )
+
+    user_profile = {
+        "username":  github_login,
+        "avatarUrl": avatar_url,
+        "githubId":  github_id,
+        # Attach DB fields when available
+        "id":        db_user["id"]   if db_user else None,
+        "role":      db_user["role"] if db_user else "user",
+        "name":      name,
+        "email":     email,
+    }
+
     session_token = secrets.token_urlsafe(32)
     session_obj = {
         "access_token": access_token,
-        "user": {
-            "username": user_data.get("login", ""),
-            "avatarUrl": user_data.get("avatar_url", ""),
-            "githubId": user_data.get("id", 0),
-        },
+        "user": user_profile,
         "repositories": [],
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
@@ -85,7 +108,7 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
     except Exception:
         USER_SESSIONS[session_token] = session_obj
 
-    return {"token": session_token, "user": session_obj["user"], "repositories": session_obj["repositories"]}
+    return {"token": session_token, "user": user_profile, "repositories": session_obj["repositories"]}
 
 
 @router.get("/github/login", response_model=GitHubLoginUrlResponse)

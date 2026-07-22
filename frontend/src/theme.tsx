@@ -22,9 +22,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setThemeState(storedTheme)
       return
     }
-
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    setThemeState(prefersDark ? 'dark' : 'light')
+    // Default to dark on first visit
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'dark')
+    setThemeState('dark')
   }, [])
 
   useEffect(() => {

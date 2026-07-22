@@ -11,9 +11,10 @@ import Changelog from './pages/Changelog'
 import Discord from './pages/Discord'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
+import Teams from './pages/Teams'
+import AcceptInvite from './pages/AcceptInvite'
 import './index.css'
 
-// Removed the unused ThemeToggle import here!
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 import AuthError from './pages/AuthError'
@@ -41,6 +42,8 @@ function App() {
         <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
         <Route path="/rules" element={<ProtectedRoute><Layout><RuleManager /></Layout></ProtectedRoute>} />
         <Route path="/onboarding" element={<ProtectedRoute><Layout><OnboardingGuide /></Layout></ProtectedRoute>} />
+        <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
+        <Route path="/teams/accept/:token" element={<AcceptInvite />} />
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
     </>

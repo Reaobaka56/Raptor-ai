@@ -14,8 +14,14 @@ from .analysis import router as analysis_router
 from .scan_router import router as scan_router
 from .reviews_router import router as reviews_router
 from .telemetry_router import router as telemetry_router
+from .user_router import router as user_router
+from .blog_router import router as blog_router
+from .team_router import router as team_router
 
 app.include_router(auth_router)
+app.include_router(user_router)
+app.include_router(blog_router)
+app.include_router(team_router)
 app.include_router(memory_router, prefix="/api")
 app.include_router(webhook_router)
 app.include_router(analysis_router, prefix="/debug")
