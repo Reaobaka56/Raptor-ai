@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, Github, Mail, MapPin, Menu, Phone, X, GitPullRequest, Shield, Zap, Users } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
-import { TakealotLogo, DiscoveryLogo, NaspersLogo, CapitecLogo } from '../components/SALogos';
 import { getGithubRedirectUri } from '../api';
 
 const navItems = [
@@ -309,28 +308,6 @@ export default function Landing() {
               </div>
               <p className="font-semibold text-white text-sm">{title}</p>
               <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>
-            </div>
-          ))}
-        </TA>
-      </div>
-
-      {/* ── SA Company Logos ── */}
-      <div className="relative z-10 flex flex-col items-center px-6 py-12">
-        <TA as="p" animationNum={8} className="mb-8 text-center text-xs font-mono uppercase tracking-widest text-gray-600">
-          Trusted by engineering teams across South Africa
-        </TA>
-        <TA animationNum={9} className="flex flex-wrap items-center justify-center gap-12">
-          <NaspersLogo className="h-8 opacity-60 hover:opacity-100 transition-opacity" />
-          <DiscoveryLogo className="h-8 opacity-60 hover:opacity-100 transition-opacity" />
-          <TakealotLogo className="h-8 opacity-60 hover:opacity-100 transition-opacity" />
-          <CapitecLogo className="h-8 opacity-60 hover:opacity-100 transition-opacity" />
-        </TA>
-
-        <TA animationNum={11} className="mt-12 grid max-w-3xl gap-3 text-left sm:grid-cols-3">
-          {['Inline GitHub PR reviews', 'Security & performance checks', 'Team convention memory'].map((item) => (
-            <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black p-4 backdrop-blur-md">
-              <Check className="h-5 w-5 flex-none text-white" />
-              <span className="text-sm">{item}</span>
             </div>
           ))}
         </TA>
