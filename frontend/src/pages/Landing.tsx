@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, Github, Mail, MapPin, Menu, Phone, X, GitPullRequest, Shield, Zap, Users } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
-import { NaspersLogo, DiscoveryLogo, TakealotLogo, CapitecLogo, VodacomLogo, StandardBankLogo, FNBLogo, InvestecLogo } from '../components/SALogos';
+import { TakealotLogo, DiscoveryLogo, NaspersLogo, CapitecLogo } from '../components/SALogos';
 import { getGithubRedirectUri } from '../api';
 
 const navItems = [
@@ -319,15 +319,11 @@ export default function Landing() {
         <TA as="p" animationNum={8} className="mb-8 text-center text-xs font-mono uppercase tracking-widest text-gray-600">
           Trusted by engineering teams across South Africa
         </TA>
-        <TA animationNum={9} className="flex flex-wrap items-center justify-center gap-8">
-          <NaspersLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
-          <DiscoveryLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
-          <TakealotLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
-          <CapitecLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
-          <VodacomLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
-          <StandardBankLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
-          <FNBLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
-          <InvestecLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
+        <TA animationNum={9} className="flex flex-wrap items-center justify-center gap-12">
+          <NaspersLogo className="h-8 opacity-60 hover:opacity-100 transition-opacity" />
+          <DiscoveryLogo className="h-8 opacity-60 hover:opacity-100 transition-opacity" />
+          <TakealotLogo className="h-8 opacity-60 hover:opacity-100 transition-opacity" />
+          <CapitecLogo className="h-8 opacity-60 hover:opacity-100 transition-opacity" />
         </TA>
 
         <TA animationNum={11} className="mt-12 grid max-w-3xl gap-3 text-left sm:grid-cols-3">
