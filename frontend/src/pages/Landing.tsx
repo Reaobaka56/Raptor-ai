@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -23,9 +24,21 @@ const navItems = [
 ];
 
 const contactItems = [
-  { icon: Mail, label: 'hello@raptor-ai.dev', href: 'mailto:hello@raptor-ai.dev' },
-  { icon: Phone, label: '+27 10 500 2472', href: 'tel:+27105002472' },
-  { icon: MapPin, label: 'Cape Town, South Africa', href: null },
+  {
+    icon: Mail,
+    label: 'hello@raptor-ai.dev',
+    href: 'mailto:hello@raptor-ai.dev',
+  },
+  {
+    icon: Phone,
+    label: '+27 10 500 2472',
+    href: 'tel:+27105002472',
+  },
+  {
+    icon: MapPin,
+    label: 'Cape Town, South Africa',
+    href: null,
+  },
 ];
 
 const faqs = [
@@ -65,6 +78,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
         className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors"
       >
         {q}
+
         <ChevronDown
           className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${
             open ? 'rotate-180' : ''
@@ -87,6 +101,7 @@ function ProductMockup() {
       <div className="absolute -inset-12 bg-white/3 blur-3xl rounded-full" />
 
       <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14] shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
+        {/* Title bar */}
         <div className="flex items-center gap-2 border-b border-white/8 bg-[#08080f] px-4 py-3">
           <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
           <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
@@ -103,27 +118,54 @@ function ProductMockup() {
         </div>
 
         <div className="grid grid-cols-3 min-h-[340px]">
+          {/* Sidebar */}
           <div className="border-r border-white/8 bg-[#06060c] p-4 space-y-1">
             <p className="text-[9px] font-mono uppercase tracking-widest text-gray-700 mb-3">
               Open PRs
             </p>
 
             {[
-              { repo: 'api-gateway', pr: '#142', dot: 'bg-red-400', label: '2 critical', active: true },
-              { repo: 'auth-service', pr: '#139', dot: 'bg-amber-400', label: '5 high', active: false },
-              { repo: 'billing-api', pr: '#131', dot: 'bg-green-400', label: 'Clean', active: false },
+              {
+                repo: 'api-gateway',
+                pr: '#142',
+                dot: 'bg-red-400',
+                label: '2 critical',
+                active: true,
+              },
+              {
+                repo: 'auth-service',
+                pr: '#139',
+                dot: 'bg-amber-400',
+                label: '5 high',
+                active: false,
+              },
+              {
+                repo: 'billing-api',
+                pr: '#131',
+                dot: 'bg-green-400',
+                label: 'Clean',
+                active: false,
+              },
             ].map((r) => (
               <div
                 key={r.repo}
                 className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs transition-colors ${
-                  r.active ? 'bg-white/6 text-white' : 'text-gray-700'
+                  r.active
+                    ? 'bg-white/6 text-white'
+                    : 'text-gray-700'
                 }`}
               >
-                <span className={`h-1.5 w-1.5 flex-none rounded-full ${r.dot}`} />
+                <span
+                  className={`h-1.5 w-1.5 flex-none rounded-full ${r.dot}`}
+                />
+
                 <span className="truncate font-mono flex-1 text-[11px]">
                   {r.repo}
                 </span>
-                <span className="text-[9px] opacity-60">{r.label}</span>
+
+                <span className="text-[9px] opacity-60">
+                  {r.label}
+                </span>
               </div>
             ))}
 
@@ -135,7 +177,10 @@ function ProductMockup() {
                 ['Time saved', '14h'],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
-                  <span className="text-[10px] text-gray-700">{k}</span>
+                  <span className="text-[10px] text-gray-700">
+                    {k}
+                  </span>
+
                   <span className="text-[10px] text-white font-mono font-bold">
                     {v}
                   </span>
@@ -144,6 +189,7 @@ function ProductMockup() {
             </div>
           </div>
 
+          {/* Main review panel */}
           <div className="col-span-2 p-5 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="rounded bg-red-500/12 px-2 py-0.5 text-[10px] font-bold uppercase text-red-400 font-mono border border-red-500/15">
@@ -159,21 +205,24 @@ function ProductMockup() {
               <div className="text-gray-600 mb-1.5">
                 // api/routes/auth.ts · line 47
               </div>
+
               <div className="text-red-400/80">
-                - const q = `SELECT * FROM users WHERE email='{'{email}'}'`
+                - const q = "SELECT * FROM users WHERE email='" + email + "'"
               </div>
+
               <div className="text-green-400/90 mt-1">
                 + const q = 'SELECT * FROM users WHERE email = $1'
               </div>
+
               <div className="text-green-400/90">
                 + db.query(q, [email])
               </div>
             </div>
 
             <p className="text-[11px] text-gray-500 leading-relaxed">
-              String interpolation lets an attacker escape the query and read
-              arbitrary tables. Parameterised queries fix this. Fix PR is ready
-              to merge.
+              String interpolation lets an attacker escape the query and
+              read arbitrary tables. Parameterised queries fix this. Fix
+              PR is ready to merge.
             </p>
 
             <div className="flex items-center gap-2 pt-1 flex-wrap">
@@ -194,7 +243,10 @@ function ProductMockup() {
                 ['Medium', 8, 'bg-yellow-500'],
                 ['Low', 3, 'bg-blue-500'],
               ].map(([label, count, color]) => (
-                <div key={label as string} className="space-y-1">
+                <div
+                  key={label as string}
+                  className="space-y-1"
+                >
                   <div className="flex justify-between text-[9px] font-mono text-gray-600">
                     <span>{label}</span>
                     <span className="text-white">{count}</span>
@@ -230,7 +282,8 @@ export default function Landing() {
 
     try {
       const apiBaseUrl = (
-        import.meta.env.VITE_API_URL || 'https://raptor-ai.onrender.com'
+        import.meta.env.VITE_API_URL ||
+        'https://raptor-ai.onrender.com'
       ).replace(/\/api$/, '');
 
       const redirectUri = getGithubRedirectUri();
@@ -249,8 +302,14 @@ export default function Landing() {
       }
 
       const data = await res.json();
+
+      if (!data.url) {
+        throw new Error('GitHub login URL was not returned');
+      }
+
       window.location.href = data.url;
-    } catch {
+    } catch (error) {
+      console.error('GitHub login failed:', error);
       setIsLoggingIn(false);
       navigate('/auth/error');
     }
@@ -258,14 +317,20 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
+      {/* Navigation */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 md:px-12">
-        <Link to="/" className="flex items-center gap-2 text-white">
+        <Link
+          to="/"
+          className="flex items-center gap-2 text-white"
+        >
           <TRexIcon className="h-6 w-6" />
+
           <span className="text-sm font-bold tracking-tight">
             Raptor AI
           </span>
         </Link>
 
+        {/* Desktop navigation */}
         <nav className="hidden md:flex items-center gap-8 text-sm text-gray-400">
           {navItems.map((item) => (
             <Link
@@ -278,11 +343,12 @@ export default function Landing() {
           ))}
         </nav>
 
+        {/* Desktop buttons */}
         <div className="hidden md:flex items-center gap-3">
           <button
             onClick={handleGithubLogin}
             disabled={isLoggingIn}
-            className="text-sm text-gray-400 hover:text-white transition-colors"
+            className="text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-60"
           >
             Sign in
           </button>
@@ -293,13 +359,20 @@ export default function Landing() {
             className="flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 transition disabled:opacity-60"
           >
             <Github className="h-4 w-4" />
-            {isLoggingIn ? 'Connecting…' : 'Get started'}
+
+            {isLoggingIn
+              ? 'Connecting…'
+              : 'Get started'}
           </button>
         </div>
 
+        {/* Mobile menu button */}
         <button
           className="md:hidden rounded border border-white/10 p-2 text-gray-400"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          onClick={() =>
+            setMobileMenuOpen(!mobileMenuOpen)
+          }
+          aria-label="Toggle menu"
         >
           {mobileMenuOpen ? (
             <X className="h-5 w-5" />
@@ -308,11 +381,15 @@ export default function Landing() {
           )}
         </button>
 
+        {/* Mobile menu */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 bg-black flex flex-col px-6 pt-20 pb-8">
             <button
               className="absolute top-4 right-4 rounded border border-white/10 p-2 text-gray-400"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={() =>
+                setMobileMenuOpen(false)
+              }
+              aria-label="Close menu"
             >
               <X className="h-5 w-5" />
             </button>
@@ -322,7 +399,9 @@ export default function Landing() {
                 <Link
                   key={item.label}
                   to={item.to}
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() =>
+                    setMobileMenuOpen(false)
+                  }
                   className="block py-3 text-lg font-semibold text-gray-300 border-b border-white/8 hover:text-white transition"
                 >
                   {item.label}
@@ -335,24 +414,29 @@ export default function Landing() {
                 setMobileMenuOpen(false);
                 handleGithubLogin();
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 text-sm font-bold text-black"
+              disabled={isLoggingIn}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 text-sm font-bold text-black disabled:opacity-60"
             >
               <Github className="h-4 w-4" />
-              Get started free
+
+              {isLoggingIn
+                ? 'Connecting…'
+                : 'Get started free'}
             </button>
           </div>
         )}
       </header>
 
+      {/* Hero */}
       <section className="flex flex-col items-center justify-center min-h-screen px-4 pt-20 text-center">
         <h1 className="max-w-3xl text-5xl md:text-7xl font-bold tracking-tight leading-[1.08]">
           AI code review that actually catches bugs.
         </h1>
 
         <p className="mt-6 max-w-md text-lg md:text-xl text-gray-400 leading-relaxed">
-          Raptor reviews every pull request in under 30 seconds — finding
-          security flaws, performance issues, and bad patterns before they
-          ship.
+          Raptor reviews every pull request in under 30 seconds —
+          finding security flaws, performance issues, and bad
+          patterns before they ship.
         </p>
 
         <div className="mt-10 flex flex-col sm:flex-row items-center gap-4">
@@ -362,7 +446,10 @@ export default function Landing() {
             className="flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition disabled:opacity-60"
           >
             <Github className="h-4 w-4" />
-            {isLoggingIn ? 'Connecting…' : 'Review your first PR free'}
+
+            {isLoggingIn
+              ? 'Connecting…'
+              : 'Review your first PR free'}
           </button>
 
           <Link
@@ -378,10 +465,12 @@ export default function Landing() {
         </p>
       </section>
 
+      {/* Product mockup */}
       <section className="px-4 md:px-12 pb-32">
         <ProductMockup />
       </section>
 
+      {/* How it works */}
       <section className="px-4 md:px-12 pb-32 max-w-5xl mx-auto">
         <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">
           How Raptor works
@@ -397,7 +486,7 @@ export default function Landing() {
               n: '01',
               icon: Github,
               title: 'Connect GitHub in 60 seconds',
-              desc: 'Install Raptor on any repo. No config files, no YAML, no infra. It works the moment it’s installed.',
+              desc: "Install Raptor on any repo. No config files, no YAML, no infra. It works the moment it's installed.",
             },
             {
               n: '02',
@@ -411,25 +500,41 @@ export default function Landing() {
               title: 'Fix PR ready to merge',
               desc: 'Every issue comes with an inline GitHub comment explaining the problem and a fix PR that’s ready to merge in one click.',
             },
-          ].map(({ n, icon: Icon, title, desc }) => (
-            <div key={n} className="space-y-4">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-gray-600">{n}</span>
-                <div className="h-px flex-1 bg-white/8" />
+          ].map(
+            ({
+              n,
+              icon: Icon,
+              title,
+              desc,
+            }) => (
+              <div
+                key={n}
+                className="space-y-4"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-gray-600">
+                    {n}
+                  </span>
+
+                  <div className="h-px flex-1 bg-white/8" />
+                </div>
+
+                <Icon className="h-6 w-6 text-white" />
+
+                <h3 className="text-base font-bold text-white">
+                  {title}
+                </h3>
+
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  {desc}
+                </p>
               </div>
-
-              <Icon className="h-6 w-6 text-white" />
-
-              <h3 className="text-base font-bold text-white">{title}</h3>
-
-              <p className="text-sm text-gray-500 leading-relaxed">
-                {desc}
-              </p>
-            </div>
-          ))}
+            )
+          )}
         </div>
       </section>
 
+      {/* Features */}
       <section className="px-4 md:px-12 pb-32 max-w-5xl mx-auto">
         <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">
           What Raptor catches
@@ -454,42 +559,78 @@ export default function Landing() {
             {
               icon: Users,
               title: 'Team convention violations',
-              desc: 'Raptor learns your team’s specific patterns after 10 PRs and enforces them automatically on every new PR.',
+              desc: "Raptor learns your team's specific patterns after 10 PRs and enforces them automatically on every new PR.",
             },
             {
               icon: GitPullRequest,
               title: 'Code quality issues',
               desc: 'Dead code, overly complex functions, missing error handling, inconsistent naming — flagged with one-click fixes.',
             },
-          ].map(({ icon: Icon, title, desc }) => (
-            <div
-              key={title}
-              className="rounded-2xl border border-white/8 bg-white/2 p-6 space-y-3 hover:border-white/15 transition-colors"
-            >
-              <Icon className="h-5 w-5 text-white" />
-              <h3 className="text-sm font-bold text-white">{title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
-            </div>
-          ))}
+          ].map(
+            ({
+              icon: Icon,
+              title,
+              desc,
+            }) => (
+              <div
+                key={title}
+                className="rounded-2xl border border-white/8 bg-white/2 p-6 space-y-3 hover:border-white/15 transition-colors"
+              >
+                <Icon className="h-5 w-5 text-white" />
+
+                <h3 className="text-sm font-bold text-white">
+                  {title}
+                </h3>
+
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  {desc}
+                </p>
+              </div>
+            )
+          )}
         </div>
       </section>
 
+      {/* Stats */}
       <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center border-t border-b border-white/8 py-16">
           {[
-            { value: '18s', label: 'Average review time' },
-            { value: '94%', label: 'Issues auto-fixed' },
-            { value: '3×', label: 'More bugs caught vs manual' },
-            { value: '<1%', label: 'False positive rate' },
-          ].map(({ value, label }) => (
-            <div key={label}>
-              <p className="text-4xl font-bold text-white">{value}</p>
-              <p className="mt-2 text-xs text-gray-500">{label}</p>
-            </div>
-          ))}
+            {
+              value: '18s',
+              label: 'Average review time',
+            },
+            {
+              value: '94%',
+              label: 'Issues auto-fixed',
+            },
+            {
+              value: '3×',
+              label: 'More bugs caught vs manual',
+            },
+            {
+              value: '<1%',
+              label: 'False positive rate',
+            },
+          ].map(
+            ({
+              value,
+              label,
+            }) => (
+              <div key={label}>
+                <p className="text-4xl font-bold text-white">
+                  {value}
+                </p>
+
+                <p className="mt-2 text-xs text-gray-500">
+                  {label}
+                </p>
+              </div>
+            )
+          )}
         </div>
       </section>
 
+      {/* Social proof */}
       <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
         <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">
           What teams say
@@ -513,24 +654,36 @@ export default function Landing() {
               name: 'CTO',
               company: 'SaaS company, Johannesburg',
             },
-          ].map(({ quote, name, company }) => (
-            <div
-              key={name}
-              className="rounded-2xl border border-white/8 bg-white/2 p-8 space-y-6"
-            >
-              <p className="text-sm text-gray-300 leading-relaxed">
-                "{quote}"
-              </p>
+          ].map(
+            ({
+              quote,
+              name,
+              company,
+            }) => (
+              <div
+                key={name}
+                className="rounded-2xl border border-white/8 bg-white/2 p-8 space-y-6"
+              >
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  "{quote}"
+                </p>
 
-              <div>
-                <p className="text-xs font-bold text-white">{name}</p>
-                <p className="text-xs text-gray-600 mt-0.5">{company}</p>
+                <div>
+                  <p className="text-xs font-bold text-white">
+                    {name}
+                  </p>
+
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    {company}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
       </section>
 
+      {/* Pricing */}
       <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
         <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">
           Pricing
@@ -583,59 +736,72 @@ export default function Landing() {
               cta: 'Contact us',
               highlight: false,
             },
-          ].map(({ name, price, sub, features, cta, highlight }) => (
-            <div
-              key={name}
-              className={`rounded-2xl border p-6 space-y-6 ${
-                highlight
-                  ? 'border-white bg-white/5'
-                  : 'border-white/10'
-              }`}
-            >
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wider font-mono">
-                  {name}
-                </p>
-
-                <div className="flex items-end gap-1 mt-2">
-                  <span className="text-3xl font-bold text-white">
-                    {price}
-                  </span>
-                  <span className="text-xs text-gray-600 mb-1">
-                    {sub}
-                  </span>
-                </div>
-              </div>
-
-              <ul className="space-y-2">
-                {features.map((f) => (
-                  <li
-                    key={f}
-                    className="flex items-center gap-2 text-sm text-gray-400"
-                  >
-                    <span className="h-1 w-1 rounded-full bg-white/30 flex-none" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={
-                  name !== 'Enterprise' ? handleGithubLogin : undefined
-                }
-                className={`w-full rounded-full py-2.5 text-sm font-bold transition ${
+          ].map(
+            ({
+              name,
+              price,
+              sub,
+              features,
+              cta,
+              highlight,
+            }) => (
+              <div
+                key={name}
+                className={`rounded-2xl border p-6 space-y-6 ${
                   highlight
-                    ? 'bg-white text-black hover:bg-gray-100'
-                    : 'border border-white/15 text-gray-300 hover:border-white/30 hover:text-white'
+                    ? 'border-white bg-white/5'
+                    : 'border-white/10'
                 }`}
               >
-                {cta}
-              </button>
-            </div>
-          ))}
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider font-mono">
+                    {name}
+                  </p>
+
+                  <div className="flex items-end gap-1 mt-2">
+                    <span className="text-3xl font-bold text-white">
+                      {price}
+                    </span>
+
+                    <span className="text-xs text-gray-600 mb-1">
+                      {sub}
+                    </span>
+                  </div>
+                </div>
+
+                <ul className="space-y-2">
+                  {features.map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-center gap-2 text-sm text-gray-400"
+                    >
+                      <span className="h-1 w-1 rounded-full bg-white/30 flex-none" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={
+                    name !== 'Enterprise'
+                      ? handleGithubLogin
+                      : undefined
+                  }
+                  className={`w-full rounded-full py-2.5 text-sm font-bold transition ${
+                    highlight
+                      ? 'bg-white text-black hover:bg-gray-100'
+                      : 'border border-white/15 text-gray-300 hover:border-white/30 hover:text-white'
+                  }`}
+                >
+                  {cta}
+                </button>
+              </div>
+            )
+          )}
         </div>
       </section>
 
+      {/* FAQ */}
       <section className="px-4 md:px-12 pb-32 max-w-2xl mx-auto">
         <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">
           FAQ
@@ -647,11 +813,15 @@ export default function Landing() {
 
         <div className="border-t border-white/8">
           {faqs.map((faq) => (
-            <FAQItem key={faq.q} {...faq} />
+            <FAQItem
+              key={faq.q}
+              {...faq}
+            />
           ))}
         </div>
       </section>
 
+      {/* Final CTA */}
       <section className="px-4 md:px-12 pb-32 text-center">
         <h2 className="text-4xl md:text-6xl font-bold max-w-2xl mx-auto leading-tight">
           Code review that helps during the PR, not after.
@@ -668,6 +838,7 @@ export default function Landing() {
             className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition disabled:opacity-60"
           >
             <Github className="h-4 w-4" />
+
             {isLoggingIn
               ? 'Connecting…'
               : 'Start reviewing PRs free'}
@@ -679,11 +850,13 @@ export default function Landing() {
         </p>
       </section>
 
+      {/* Footer */}
       <footer className="border-t border-white/8 px-6 md:px-12 py-12">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-start justify-between gap-8">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <TRexIcon className="h-5 w-5 text-white" />
+
               <span className="text-sm font-bold text-white">
                 Raptor AI
               </span>
@@ -695,25 +868,30 @@ export default function Landing() {
             </p>
 
             <div className="flex flex-col gap-1.5">
-              {contactItems.map(({ icon: Icon, label, href }) =>
-                href ? (
-                  <a
-                    key={label}
-                    href={href}
-                    className="flex items-center gap-2 text-xs text-gray-600 hover:text-white transition"
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </a>
-                ) : (
-                  <span
-                    key={label}
-                    className="flex items-center gap-2 text-xs text-gray-700"
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </span>
-                )
+              {contactItems.map(
+                ({
+                  icon: Icon,
+                  label,
+                  href,
+                }) =>
+                  href ? (
+                    <a
+                      key={label}
+                      href={href}
+                      className="flex items-center gap-2 text-xs text-gray-600 hover:text-white transition"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                    </a>
+                  ) : (
+                    <span
+                      key={label}
+                      className="flex items-center gap-2 text-xs text-gray-700"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                    </span>
+                  )
               )}
             </div>
           </div>
@@ -722,6 +900,7 @@ export default function Landing() {
             <p className="text-xs font-bold text-white mb-2">
               Product
             </p>
+
             <p className="text-xs font-bold text-white mb-2">
               Company
             </p>
@@ -752,4 +931,3 @@ export default function Landing() {
     </div>
   );
 }
-```
