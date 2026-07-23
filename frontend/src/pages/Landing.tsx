@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Github, Mail, MapPin, Menu, Phone, X, GitPullRequest, Shield, Zap, Users, ArrowRight, Clock, TrendingUp, Lock } from 'lucide-react';
+import { Github, Mail, MapPin, Menu, Phone, X, GitPullRequest, Shield, Zap, Users, ArrowRight } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
 import { getGithubRedirectUri } from '../api';
 
