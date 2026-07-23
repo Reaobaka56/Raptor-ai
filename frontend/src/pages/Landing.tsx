@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, Github, Mail, MapPin, Menu, Phone, X, GitPullRequest, Shield, Zap, Users } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
+import { NaspersLogo, DiscoveryLogo, TakealotLogo, CapitecLogo, VodacomLogo, StandardBankLogo, FNBLogo, InvestecLogo } from '../components/SALogos';
 import { getGithubRedirectUri } from '../api';
 
 const navItems = [
@@ -11,17 +12,8 @@ const navItems = [
 ];
 
 // SA companies as text badges (no trademark issues, same as before but styled better)
-// Real SA companies with sector — displayed as professional wordmark badges
-const saPartners = [
-  { name: 'Naspers', sector: 'Technology', icon: '🌍' },
-  { name: 'Discovery', sector: 'Financial Services', icon: '💡' },
-  { name: 'Takealot', sector: 'E-commerce', icon: '🛒' },
-  { name: 'Capitec', sector: 'Banking', icon: '🏦' },
-  { name: 'Vodacom', sector: 'Telecom', icon: '📡' },
-  { name: 'Standard Bank', sector: 'Banking', icon: '🏛' },
-  { name: 'FNB', sector: 'Banking', icon: '💳' },
-  { name: 'Investec', sector: 'Finance', icon: '📈' },
-];
+// SA companies displayed as SVG wordmarks in the landing page
+;
 
 const contactItems = [
   { icon: Mail, label: 'hello@raptor-ai.dev', href: 'mailto:hello@raptor-ai.dev' },
@@ -324,20 +316,18 @@ export default function Landing() {
 
       {/* ── SA Company Logos ── */}
       <div className="relative z-10 flex flex-col items-center px-6 py-12">
-        <TA as="p" animationNum={8} className="mb-3 text-center text-xs font-mono uppercase tracking-widest text-gray-600">
+        <TA as="p" animationNum={8} className="mb-8 text-center text-xs font-mono uppercase tracking-widest text-gray-600">
           Trusted by engineering teams across South Africa
         </TA>
-        <TA animationNum={9} className="flex flex-wrap items-center justify-center gap-3">
-          {saPartners.map((p) => (
-            <div key={p.name}
-              className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-black px-4 py-3 hover:border-white/20 transition-colors">
-              <span className="text-lg">{p.icon}</span>
-              <div>
-                <span className="text-sm font-bold tracking-tight text-white/90 block">{p.name}</span>
-                <span className="text-[10px] font-mono text-gray-600">{p.sector}</span>
-              </div>
-            </div>
-          ))}
+        <TA animationNum={9} className="flex flex-wrap items-center justify-center gap-8">
+          <NaspersLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
+          <DiscoveryLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
+          <TakealotLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
+          <CapitecLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
+          <VodacomLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
+          <StandardBankLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
+          <FNBLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
+          <InvestecLogo className="h-7 opacity-50 hover:opacity-90 transition-opacity" />
         </TA>
 
         <TA animationNum={11} className="mt-12 grid max-w-3xl gap-3 text-left sm:grid-cols-3">
