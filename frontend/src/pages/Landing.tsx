@@ -31,35 +31,10 @@ const faqs = [
 
 
 
-      function FAQItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-t border-white/8 py-5">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors"
-      >
-        {q}
-        <ChevronDown
-          className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open && <p className="pb-5 text-sm text-gray-400 leading-relaxed">{a}</p>}
-    </div>
-  );
-}
 
 
-  return (
-    <div className="border-t border-white/8 py-5">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors"
-      >
-        {q}
-        <ChevronDown
-          className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${open ? 'rotate-180' : ''}`}
-        />
+
+
 
 function ProductMockup() {
   return (
@@ -156,6 +131,24 @@ function FAQItem({ q, a }: { q: string; a: string }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export default function Landing() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
