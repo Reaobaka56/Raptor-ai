@@ -546,3 +546,85 @@
 .landing-drawer {
   animation: landingDrawerIn 0.28s ease-out;
 }
+
+/* ─────────────────────────────────────────────
+   ANIMATED BACKGROUND ORBS
+   ───────────────────────────────────────────── */
+
+@keyframes orbDrift1 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  33%     { transform: translate(60px,-40px) scale(1.1); }
+  66%     { transform: translate(-30px,50px) scale(0.95); }
+}
+@keyframes orbDrift2 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  33%     { transform: translate(-80px,30px) scale(1.05); }
+  66%     { transform: translate(50px,-60px) scale(1.08); }
+}
+@keyframes orbDrift3 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  50%     { transform: translate(40px,40px) scale(1.12); }
+}
+
+.bg-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.12;
+}
+.bg-orb-1 {
+  width: 600px; height: 600px;
+  top: -100px; left: -150px;
+  background: radial-gradient(circle, rgba(255,255,255,0.15), transparent 70%);
+  animation: orbDrift1 18s ease-in-out infinite;
+}
+.bg-orb-2 {
+  width: 500px; height: 500px;
+  top: 40%; right: -100px;
+  background: radial-gradient(circle, rgba(255,255,255,0.1), transparent 70%);
+  animation: orbDrift2 22s ease-in-out infinite;
+}
+.bg-orb-3 {
+  width: 400px; height: 400px;
+  bottom: 10%; left: 30%;
+  background: radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%);
+  animation: orbDrift3 26s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────
+   MODAL ANIMATIONS
+   ───────────────────────────────────────────── */
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-backdrop {
+  animation: modalFadeIn 0.2s ease forwards;
+}
+.modal-card {
+  animation: modalSlideUp 0.25s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+
+/* ─────────────────────────────────────────────
+   GLASSMORPHISM NAV
+   ───────────────────────────────────────────── */
+.nav-glass {
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.nav-transparent {
+  background: transparent;
+  backdrop-filter: none;
+  border-bottom: 1px solid transparent;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
