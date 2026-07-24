@@ -1,18 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import RepoBrowser from '../components/RepoBrowser'
+import CommitTimeline from '../components/CommitTimeline'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { 
   GitPullRequest, 
   AlertTriangle, 
-  Clock, 
   Shield,
   Zap,
   Code2,
   Layout,
   ArrowRight,
   Play,
+  Clock,
   Lock,
-  Globe
+  Globe,
 } from 'lucide-react'
 import { statsApi, reviewsApi, reposApi, type Stats, type Review, type UserProfile } from '../api'
 import { formatDistanceToNow } from 'date-fns'
@@ -179,7 +181,7 @@ export default function Dashboard() {
   const [customUrl, setCustomUrl] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
   const [viewingRepo, setViewingRepo] = useState<string | null>(null)
-  const [viewingCommits, setViewingCommits] = useState<string | null>(null)  useEffect(() => {
+  const [viewingCommits, setViewingCommits] = useState<string | null>(null);  useEffect(() => {
     const checkAuth = () => {
       const storedUser = localStorage.getItem('user')
       if (storedUser) {

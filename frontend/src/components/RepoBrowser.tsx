@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, ChevronDown, Folder, File as FileIcon, Loader2, ArrowLeft, Terminal } from 'lucide-react';
+import { Folder, File as FileIcon, Loader2, ArrowLeft, Terminal } from 'lucide-react';
 import { reposApi } from '../api';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
