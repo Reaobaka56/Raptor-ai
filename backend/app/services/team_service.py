@@ -87,6 +87,26 @@ def get_team(team_id: str) -> Optional[Dict[str, Any]]:
         release_conn(conn)
 
 
+def delete_team(team_id: str) -> bool:
+    conn = get_conn()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM teams WHERE id = %s", (team_id,))
+            conn.commit()
+            return cur.rowcount > 0
+    except Exception:
+        logger.exception("[team_service] delete_team failed")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False
+    finally:
+        release_conn(conn)
+
+
 def list_user_teams(user_id: str) -> List[Dict[str, Any]]:
     conn = get_conn()
     if not conn:

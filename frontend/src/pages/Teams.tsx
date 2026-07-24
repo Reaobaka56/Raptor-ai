@@ -25,7 +25,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
+function TeamDetail({ team, onBack }: { team: Team; onBack: (refresh?: boolean) => void }) {
   const [detail, setDetail] = useState<(Team & { members: TeamMember[] }) | null>(null);
   const [inviteInput, setInviteInput] = useState('');
   const [inviteMode, setInviteMode] = useState<'github' | 'email'>('github');
@@ -70,6 +70,26 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
     await load();
   };
 
+  const handleLeave = async () => {
+    if (!confirm('Are you sure you want to leave this team?')) return;
+    try {
+      await teamsApi.leaveTeam(team.id);
+      onBack(true);
+    } catch {
+      alert('Failed to leave team. If you are the only owner, you must delete the team instead.');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to completely delete this team? This cannot be undone.')) return;
+    try {
+      await teamsApi.deleteTeam(team.id);
+      onBack(true);
+    } catch {
+      alert('Failed to delete team.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24 text-gray-600">
@@ -81,7 +101,7 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <button onClick={onBack} className="text-gray-500 hover:text-white transition">
+        <button onClick={() => onBack(false)} className="text-gray-500 hover:text-white transition">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
@@ -114,7 +134,7 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
             </div>
             {m.role !== 'owner' && (team.role === 'owner' || team.role === 'admin') && (
               <button onClick={() => handleRemove(m.username)}
-                className="opacity-0 group-hover:opacity-100 rounded border border-red-500/20 p-1 text-red-400/60 hover:text-red-400 hover:border-red-400/50 transition">
+                className="opacity-0 group-hover:opacity-100 rounded border border-red-500/20 p-1 text-red-400/60 hover:text-red-400 hover:border-red-400/50 transition" title="Remove member">
                 <Trash2 className="h-3 w-3" />
               </button>
             )}
@@ -156,6 +176,34 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
           <p className="text-xs text-gray-600">Invite links expire after 7 days. Anyone with the link can join this team.</p>
         </div>
       )}
+
+      {/* Danger Zone */}
+      <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5 space-y-4">
+        <p className="text-xs font-mono uppercase tracking-widest text-red-500">Danger Zone</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">Leave Team</p>
+            <p className="text-xs text-gray-500">Remove yourself from this team.</p>
+          </div>
+          <button onClick={handleLeave}
+            className="rounded border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-500 hover:text-white transition">
+            Leave Team
+          </button>
+        </div>
+        
+        {team.role === 'owner' && (
+          <div className="flex items-center justify-between pt-4 border-t border-red-500/20">
+            <div>
+              <p className="text-sm font-semibold text-white">Delete Team</p>
+              <p className="text-xs text-gray-500">Permanently delete this team and remove all members.</p>
+            </div>
+            <button onClick={handleDelete}
+              className="rounded border border-red-500 bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition">
+              Delete Team
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -243,7 +291,10 @@ export default function TeamsPage() {
 
       <main className="max-w-3xl mx-auto px-6 pt-12">
         {selected ? (
-          <TeamDetail team={selected} onBack={() => setSelected(null)} />
+          <TeamDetail team={selected} onBack={(refresh) => {
+            setSelected(null);
+            if (refresh) void load();
+          }} />
         ) : (
           <>
             <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">Your Teams</h1>

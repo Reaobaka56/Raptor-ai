@@ -132,6 +132,35 @@ def kick_member(team_id: str, username: str,
         raise HTTPException(status_code=404, detail="Member not found in this team")
 
 
+@router.delete("/{team_id}/leave", status_code=204)
+def leave_team(team_id: str,
+               session: Dict[str, Any] = Depends(get_required_github_session)):
+    actor = _get_db_user(session)
+    actor_role = get_member_role(team_id, actor["id"])
+    
+    if not actor_role:
+        raise HTTPException(status_code=404, detail="You are not a member of this team")
+        
+    if actor_role == "owner":
+        # Check if there are other owners before allowing to leave, or prevent entirely
+        members = list_members(team_id)
+        owners = [m for m in members if m["role"] == "owner"]
+        if len(owners) <= 1:
+            raise HTTPException(status_code=400, detail="You are the only owner. You must delete the team or promote someone else to owner first.")
+
+    if not remove_member(team_id, actor["id"]):
+        raise HTTPException(status_code=500, detail="Failed to leave team")
+
+@router.delete("/{team_id}", status_code=204)
+def delete_team(team_id: str,
+                session: Dict[str, Any] = Depends(get_required_github_session)):
+    actor = _get_db_user(session)
+    _require_team_role(team_id, actor["id"], "owner")
+    from .services.team_service import delete_team as db_delete_team
+    if not db_delete_team(team_id):
+        raise HTTPException(status_code=500, detail="Failed to delete team")
+
+
 # ── Invitations ────────────────────────────────────────────────────────────────
 
 @router.post("/{team_id}/invitations", status_code=201)

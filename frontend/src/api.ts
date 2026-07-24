@@ -149,6 +149,8 @@ export const teamsApi = {
     api.post<Invitation>(`/teams/${teamId}/invitations`, data),
   getInvitation: (token: string) => api.get<Invitation>(`/teams/invitations/${token}`),
   acceptInvitation: (token: string) => api.post(`/teams/invitations/${token}/accept`),
+  leaveTeam: (teamId: string) => api.delete(`/teams/${teamId}/leave`),
+  deleteTeam: (teamId: string) => api.delete(`/teams/${teamId}`),
 }
 
 // ── Existing APIs ──────────────────────────────────────────────────────────────
@@ -156,6 +158,9 @@ export const teamsApi = {
 export const reposApi = {
   getRepos: () => api.get<RepositoryInfo[]>('/repos'),
   scanRepo: (repo: string) => api.post<Review>('/scan', { repo }),
+  getRepoTree: (owner: string, repo: string, branch = 'main') => api.get(`/repos/${owner}/${repo}/tree`, { params: { branch } }),
+  getRepoFileContent: (owner: string, repo: string, path: string, branch = 'main') => api.get(`/repos/${owner}/${repo}/contents/${path}`, { params: { branch } }),
+  getRepoCommits: (owner: string, repo: string, perPage = 30) => api.get(`/repos/${owner}/${repo}/commits`, { params: { per_page: perPage } }),
 }
 
 export const reviewsApi = {
