@@ -33,9 +33,11 @@ app.include_router(telemetry_router)
 
 # Serve static files (frontend) bundled with PyInstaller
 static_dir = os.path.join(
-    sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
+    sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
 )
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+if os.path.isdir(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 
 @app.get("/health", tags=["Telemetry"])
