@@ -87,17 +87,21 @@ function PricingCard({ onLogin, onClose }: { onLogin: () => void; onClose: () =>
 
 function FeaturesCard() {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 gap-2">
       {[
-        { icon: Shield, title: 'Security Scanning', desc: 'SQL injections, XSS, broken auth, secrets in code — caught before they merge.', color: 'text-red-400' },
-        { icon: Zap, title: 'Sub-30s Reviews', desc: 'Reviews land as GitHub inline comments the moment a PR is opened. No waiting.', color: 'text-amber-400' },
-        { icon: GitPullRequest, title: 'Auto-Fix PRs', desc: 'Every issue ships with a ready-to-merge fix PR. One click to resolve.', color: 'text-green-400' },
-        { icon: Users, title: 'Team Memory', desc: 'Learns your conventions after 10 PRs. Suppresses noise, surfaces signal.', color: 'text-blue-400' },
-      ].map(({ icon: Icon, title, desc, color }) => (
-        <div key={title} className="rounded-xl border border-white/8 bg-white/3 p-5 space-y-3 hover:border-white/18 transition-colors">
-          <Icon className={`h-5 w-5 ${color}`} />
-          <p className="text-sm font-bold text-white">{title}</p>
-          <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>
+        { icon: Shield, title: 'Security Scanning', desc: 'SQL injections, XSS, broken auth, secrets in code — caught before they merge.' },
+        { icon: Zap, title: 'Sub-30s Reviews', desc: 'Reviews land as GitHub inline comments the moment a PR is opened. No waiting.' },
+        { icon: GitPullRequest, title: 'Auto-Fix PRs', desc: 'Every issue ships with a ready-to-merge fix PR. One click to resolve.' },
+        { icon: Users, title: 'Team Memory', desc: 'Learns your conventions after 10 PRs. Suppresses noise, surfaces signal.' },
+      ].map(({ icon: Icon, title, desc }) => (
+        <div key={title} className="flex items-start gap-4 rounded-lg p-3 hover:bg-white/4 transition-colors">
+          <div className="mt-0.5 rounded-lg border border-white/10 bg-white/5 p-2 flex-none">
+            <Icon className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">{title}</p>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">{desc}</p>
+          </div>
         </div>
       ))}
     </div>

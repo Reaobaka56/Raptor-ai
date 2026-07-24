@@ -292,10 +292,7 @@ export default function Docs() {
             <span className={`hidden sm:block text-xs ${isDark ? 'text-gray-600' : 'text-slate-400'}`}>/ Docs</span>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={toggleTheme}
-              className={`rounded border p-1.5 transition-colors ${isDark ? 'border-white/10 text-gray-500 hover:text-white' : 'border-slate-200 text-slate-400 hover:text-slate-900'}`}>
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
+
             <button onClick={handleLogin}
               className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-black hover:bg-gray-100 transition">
               Get started
