@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Terminal, ShieldAlert, Zap, GitPullRequest, Moon, Sun, Menu, X, ChevronRight, Code2, BookOpen, Settings, Webhook, Brain, Copy, Check } from 'lucide-react';
+import { Terminal, ShieldAlert, Zap, GitPullRequest, Menu, X, ChevronRight, Code2, BookOpen, Settings, Webhook, Brain, Copy, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
 import { startGithubLogin } from '../api';
@@ -237,7 +237,7 @@ GET /api/reviews?repo=owner/repo&limit=20`} />
 }
 
 export default function Docs() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const isDark = theme === 'dark';
   const [activeSection, setActiveSection] = useState('overview');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
