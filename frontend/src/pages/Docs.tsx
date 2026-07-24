@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Terminal, ShieldAlert, Zap, ArrowLeft, GitPullRequest, Moon, Sun, Menu, X, ChevronRight, Code2, BookOpen, Settings, Webhook, Brain, Copy, Check } from 'lucide-react';
+import { Terminal, ShieldAlert, Zap, GitPullRequest, Moon, Sun, Menu, X, ChevronRight, Code2, BookOpen, Settings, Webhook, Brain, Copy, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
 import { startGithubLogin } from '../api';
@@ -40,7 +40,7 @@ function CodeBlock({ code, language = 'bash' }: { code: string; language?: strin
 
 function SectionContent({ id, isDark }: { id: string; isDark: boolean }) {
   const prose = isDark ? 'text-gray-400' : 'text-slate-600';
-  const heading = 'text-white font-bold text-lg mb-3';
+// const heading removed as unused
   const subheading = 'text-white font-semibold text-sm mb-2 mt-6';
 
   switch (id) {

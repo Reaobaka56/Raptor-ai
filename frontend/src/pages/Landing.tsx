@@ -28,31 +28,38 @@ const faqs = [
   { q: 'Is there a free plan?', a: 'Yes. Raptor is free for up to 5 repositories and 100 PRs per month. Open source projects get unlimited reviews for free.' },
 ];
 
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    const update = () => setMatches(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, [query]);
-  return matches;
-}
 
-function FAQItem({ q, a }: { q: string; a: string }) {
+
+
+      function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-b border-white/8">
-      <button onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors">
+    <div className="border-t border-white/8 py-5">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors"
+      >
         {q}
-        <ChevronDown className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
       {open && <p className="pb-5 text-sm text-gray-400 leading-relaxed">{a}</p>}
     </div>
   );
 }
+
+
+  return (
+    <div className="border-t border-white/8 py-5">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors"
+      >
+        {q}
+        <ChevronDown
+          className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
 
 function ProductMockup() {
   return (
@@ -132,13 +139,31 @@ function ProductMockup() {
   );
 }
 
+function FAQItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t border-white/8 py-5">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors"
+      >
+        {q}
+        <ChevronDown
+          className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && <p className="pb-5 text-sm text-gray-400 leading-relaxed">{a}</p>}
+    </div>
+  );
+}
+
 export default function Landing() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
   const [activeCard, setActiveCard] = useState<'docs' | 'pricing' | 'features' | null>(null);
   const [scrolled, setScrolled] = useState(false);
-  const isMobile = useMediaQuery('(max-width: 768px)');
+
   const navigate = useNavigate();
 
   useEffect(() => {
