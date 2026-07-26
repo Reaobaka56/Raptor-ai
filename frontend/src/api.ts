@@ -145,6 +145,10 @@ export const teamsApi = {
     api.post(`/teams/${teamId}/members`, { username, role }),
   removeMember: (teamId: string, username: string) =>
     api.delete(`/teams/${teamId}/members/${username}`),
+  leaveTeam: (teamId: string) =>
+    api.delete(`/teams/${teamId}/leave`),
+  deleteTeam: (teamId: string) =>
+    api.delete(`/teams/${teamId}`),
   invite: (teamId: string, data: { invitee_email?: string; invitee_github?: string; role?: string }) =>
     api.post<Invitation>(`/teams/${teamId}/invitations`, data),
   getInvitation: (token: string) => api.get<Invitation>(`/teams/invitations/${token}`),
