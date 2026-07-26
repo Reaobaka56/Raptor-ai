@@ -1,20 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import RepoBrowser from '../components/RepoBrowser'
-import CommitTimeline from '../components/CommitTimeline'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { 
   GitPullRequest, 
   AlertTriangle, 
+  Clock, 
   Shield,
   Zap,
   Code2,
   Layout,
   ArrowRight,
   Play,
-  Clock,
   Lock,
-  Globe,
+  Globe
 } from 'lucide-react'
 import { statsApi, reviewsApi, reposApi, type Stats, type Review, type UserProfile } from '../api'
 import { formatDistanceToNow } from 'date-fns'
@@ -180,8 +178,9 @@ export default function Dashboard() {
   const [scanningRepo, setScanningRepo] = useState<string | null>(null)
   const [customUrl, setCustomUrl] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
-  const [viewingRepo, setViewingRepo] = useState<string | null>(null)
-  const [viewingCommits, setViewingCommits] = useState<string | null>(null);  useEffect(() => {
+
+
+  useEffect(() => {
     const checkAuth = () => {
       const storedUser = localStorage.getItem('user')
       if (storedUser) {
@@ -325,27 +324,21 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div className="pt-3 border-t border-white/10 flex items-center justify-between font-mono flex-wrap gap-2">
+              <div className="pt-3 border-t border-white/10 flex items-center justify-between font-mono gap-2">
                 <span className="text-xs text-gray-500">
                   {repo.lastScan ? `Scanned ${formatDistanceToNow(new Date(repo.lastScan), { addSuffix: true })}` : 'Ready'}
                 </span>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setViewingRepo(repo.fullName)}
-                    className="inline-flex items-center gap-2 bg-white/5 hover:bg-white text-white hover:text-black px-3 py-1.5 rounded text-xs font-bold transition-colors border border-white/15"
+                  <Link
+                    to={`/repos/${repo.fullName}`}
+                    className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white px-3 py-2 rounded text-xs font-bold transition-colors border border-white/10"
                   >
-                    <Code2 className="w-3.5 h-3.5" /> Browse Code
-                  </button>
-                  <button
-                    onClick={() => setViewingCommits(repo.fullName)}
-                    className="inline-flex items-center gap-2 bg-white/5 hover:bg-white text-white hover:text-black px-3 py-1.5 rounded text-xs font-bold transition-colors border border-white/15"
-                  >
-                    <GitPullRequest className="w-3.5 h-3.5" /> Commits
-                  </button>
+                    <Code2 className="w-3 h-3" /> Browse
+                  </Link>
                   <button
                     onClick={() => handleScan(repo.fullName)}
                     disabled={!!scanningRepo}
-                    className="inline-flex items-center gap-2 bg-white text-black hover:bg-gray-200 px-3 py-1.5 rounded text-xs font-bold transition-colors border border-white/15 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 bg-white/5 hover:bg-white text-white hover:text-black px-4 py-2 rounded text-xs font-bold transition-colors border border-white/15 disabled:opacity-50"
                   >
                     <Play className={`w-3.5 h-3.5 ${scanningRepo === repo.fullName ? 'animate-spin' : ''}`} />
                     {scanningRepo === repo.fullName ? 'Scanning...' : 'Scan'}
@@ -356,27 +349,6 @@ export default function Dashboard() {
           ))
         )}
       </div>
-
-      {viewingRepo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-8">
-          <div className="w-full max-w-5xl h-full max-h-[85vh]">
-            <RepoBrowser repoFullName={viewingRepo} onClose={() => setViewingRepo(null)} />
-          </div>
-        </div>
-      )}
-
-      {viewingCommits && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-8">
-          <div className="w-full max-w-2xl h-full max-h-[85vh] flex flex-col">
-            <div className="flex justify-end mb-2">
-              <button onClick={() => setViewingCommits(null)} className="text-gray-400 hover:text-white bg-black/50 px-3 py-1 rounded font-mono text-xs border border-white/10">
-                Close
-              </button>
-            </div>
-            <CommitTimeline repoFullName={viewingCommits} />
-          </div>
-        </div>
-      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
