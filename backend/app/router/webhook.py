@@ -5,18 +5,20 @@ import os
 import json
 import time
 from typing import Optional
-from ..services.github_app import github_app_service
+
 router = APIRouter(prefix="/webhook", tags=["GitHub Webhook"])
 
+
 def verify_signature(payload_body: bytes, signature_header: str, secret: str) -> bool:
-    """Verify X-Hub-Signature-256 using the shared secret.
-    Returns True if valid, else False.
-    """
-    sha_name, signature = signature_header.split('=')
-    if sha_name != 'sha256':
+    """Verify X-Hub-Signature-256 using the shared secret."""
+    if not signature_header or "=" not in signature_header:
+        return False
+    sha_name, signature = signature_header.split("=", 1)
+    if sha_name != "sha256":
         return False
     mac = hmac.new(secret.encode(), msg=payload_body, digestmod=hashlib.sha256)
     return hmac.compare_digest(mac.hexdigest(), signature)
+
 
 @router.post("/github", status_code=200)
 async def github_webhook(
@@ -25,14 +27,19 @@ async def github_webhook(
     x_hub_signature_256: Optional[str] = Header(None),
     x_github_event: Optional[str] = Header(None),
 ):
-    """Handle GitHub webhook events for pull requests.
-    Verifies signature, logs event, and triggers a scan for opened/edited PRs.
+    """
+    Handle GitHub webhook events.
+    - Verifies HMAC-SHA256 signature
+    - Logs the event
+    - For PR opened/synchronize/reopened: triggers full AI review as background task
+      and posts inline comments back to the PR
     """
     secret = os.getenv("GITHUB_WEBHOOK_SECRET")
     if not secret:
         raise HTTPException(status_code=500, detail="Webhook secret not configured")
 
     body = await request.body()
+
     if not x_hub_signature_256 or not verify_signature(body, x_hub_signature_256, secret):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
@@ -41,26 +48,48 @@ async def github_webhook(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    # Basic logging to in‑memory list for demo purposes
+    # Log to in-memory list
     from ..state import LIVE_WEBHOOK_LOGS
     from ..models import WebhookLogItem
+
     event_log = WebhookLogItem(
-        id=f"wh_{int(time.time()*1000)}",
+        id=f"wh_{int(time.time() * 1000)}",
         repo=payload.get("repository", {}).get("full_name", "unknown"),
         event=x_github_event or payload.get("action", "unknown"),
         status=200,
         time="just now",
     )
     LIVE_WEBHOOK_LOGS.append(event_log)
+    # Keep log bounded
+    if len(LIVE_WEBHOOK_LOGS) > 200:
+        LIVE_WEBHOOK_LOGS.pop(0)
 
-    # Process only pull request events we care about
-    if payload.get("pull_request") and payload.get("action") in {"opened", "synchronize", "reopened"}:
+    # Only process PR events we care about
+    action = payload.get("action", "")
+    pr_data = payload.get("pull_request")
+
+    if pr_data and action in {"opened", "synchronize", "reopened"}:
         repo_full_name = payload["repository"]["full_name"]
-        pr_number = payload["pull_request"]["number"]
-        # Call scan_service.run_scan directly to avoid internal HTTP call which breaks multi-worker setups
+        pr_number = int(pr_data["number"])
+        commit_sha = pr_data.get("head", {}).get("sha", "")
+
         from ..services.scan_service import run_scan
 
-        # BackgroundTasks supports async callables; schedule the coroutine with the repo argument
-        background_tasks.add_task(run_scan, repo_full_name)
+        async def _scan_and_comment():
+            try:
+                await run_scan(
+                    target=repo_full_name,
+                    pr_number_override=pr_number,
+                    post_comments=True,
+                    # No github_token here — scan_service will use the GitHub App
+                    # installation token or fall back to GITHUB_TOKEN env var
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    "Webhook scan failed for %s#%s: %s", repo_full_name, pr_number, e
+                )
 
-    return {"status": "received"}
+        background_tasks.add_task(_scan_and_comment)
+
+    return {"status": "received", "event": x_github_event}
