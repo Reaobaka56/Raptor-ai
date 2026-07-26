@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Send, Search, Loader2, AlertCircle, MessageSquare, X, ArrowLeft } from 'lucide-react'
 import { chatApi, type ChatMessage, type ChatConversation } from '../api'
