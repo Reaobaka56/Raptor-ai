@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useParams, useSearchParams, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import {
-  Folder, File, ArrowLeft, ChevronRight, GitCommit, GitBranch,
-  Clock, Plus, Minus, Loader2, AlertCircle, ExternalLink, Copy, Check
+  Folder, ArrowLeft, ChevronRight, GitCommit,
+  Loader2, AlertCircle, ExternalLink, Copy, Check
 } from 'lucide-react'
 import { repoExplorerApi, type RepoTreeItem, type Commit, type CommitDetail } from '../api'
 import { formatDistanceToNow } from 'date-fns'
@@ -166,7 +166,7 @@ function CommitDetailView({ owner, repo, sha, onBack }: { owner: string; repo: s
 // ── Main component ────────────────────────────────────────────────────────────
 export default function RepoExplorer() {
   const { owner, repo } = useParams<{ owner: string; repo: string }>()
-  const [searchParams, setSearchParams] = useSearchParams()
+  // search params removed
   const [view, setView] = useState<'tree' | 'file' | 'commits' | 'commit-detail'>('tree')
   const [currentPath, setCurrentPath] = useState('')
   const [currentFile, setCurrentFile] = useState('')
