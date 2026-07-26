@@ -14,6 +14,8 @@ import Privacy from './pages/Privacy'
 import Teams from './pages/Teams'
 import AcceptInvite from './pages/AcceptInvite'
 import CalendarPage from './pages/Calendar'
+import Chat from './pages/Chat'
+import RepoExplorer from './pages/RepoExplorer'
 import './index.css'
 
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -46,6 +48,8 @@ function App() {
         <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
         <Route path="/teams/accept/:token" element={<AcceptInvite />} />
         <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
+        <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
+        <Route path="/repos/:owner/:repo" element={<ProtectedRoute><Layout><RepoExplorer /></Layout></ProtectedRoute>} />
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
     </>
