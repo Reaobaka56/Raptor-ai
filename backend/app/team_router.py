@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr
 
 from .auth_dependencies import get_required_github_session
 from .services.user_service import get_user_by_username
+from .services.db import get_conn, release_conn
 from .services.team_service import (
     create_team, get_team, list_user_teams,
     list_members, get_member_role, add_member, remove_member,
@@ -132,35 +133,6 @@ def kick_member(team_id: str, username: str,
         raise HTTPException(status_code=404, detail="Member not found in this team")
 
 
-@router.delete("/{team_id}/leave", status_code=204)
-def leave_team(team_id: str,
-               session: Dict[str, Any] = Depends(get_required_github_session)):
-    actor = _get_db_user(session)
-    actor_role = get_member_role(team_id, actor["id"])
-    
-    if not actor_role:
-        raise HTTPException(status_code=404, detail="You are not a member of this team")
-        
-    if actor_role == "owner":
-        # Check if there are other owners before allowing to leave, or prevent entirely
-        members = list_members(team_id)
-        owners = [m for m in members if m["role"] == "owner"]
-        if len(owners) <= 1:
-            raise HTTPException(status_code=400, detail="You are the only owner. You must delete the team or promote someone else to owner first.")
-
-    if not remove_member(team_id, actor["id"]):
-        raise HTTPException(status_code=500, detail="Failed to leave team")
-
-@router.delete("/{team_id}", status_code=204)
-def delete_team(team_id: str,
-                session: Dict[str, Any] = Depends(get_required_github_session)):
-    actor = _get_db_user(session)
-    _require_team_role(team_id, actor["id"], "owner")
-    from .services.team_service import delete_team as db_delete_team
-    if not db_delete_team(team_id):
-        raise HTTPException(status_code=500, detail="Failed to delete team")
-
-
 # ── Invitations ────────────────────────────────────────────────────────────────
 
 @router.post("/{team_id}/invitations", status_code=201)
@@ -194,6 +166,40 @@ def view_invitation(token: str):
     if not inv:
         raise HTTPException(status_code=404, detail="Invitation not found or expired")
     return inv
+
+
+@router.delete("/{team_id}/leave", status_code=204)
+def leave_team(team_id: str,
+               session: Dict[str, Any] = Depends(get_required_github_session)):
+    """Leave a team (non-owners only)."""
+    actor = _get_db_user(session)
+    role = get_member_role(team_id, actor["id"])
+    if not role:
+        raise HTTPException(status_code=404, detail="You are not a member of this team")
+    if role == "owner":
+        raise HTTPException(status_code=400, detail="Owners cannot leave — transfer ownership or delete the team")
+    if not remove_member(team_id, actor["id"]):
+        raise HTTPException(status_code=500, detail="Failed to leave team")
+
+
+@router.delete("/{team_id}", status_code=204)
+def delete_team(team_id: str,
+                session: Dict[str, Any] = Depends(get_required_github_session)):
+    """Delete a team (owner only)."""
+    actor = _get_db_user(session)
+    _require_team_role(team_id, actor["id"], "owner")
+
+    conn = get_conn()
+    if not conn:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM teams WHERE id = %s", (team_id,))
+            conn.commit()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to delete team")
+    finally:
+        release_conn(conn)
 
 
 @router.post("/invitations/{token}/accept")
