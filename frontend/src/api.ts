@@ -149,8 +149,6 @@ export const teamsApi = {
     api.post<Invitation>(`/teams/${teamId}/invitations`, data),
   getInvitation: (token: string) => api.get<Invitation>(`/teams/invitations/${token}`),
   acceptInvitation: (token: string) => api.post(`/teams/invitations/${token}/accept`),
-  leaveTeam: (teamId: string) => api.delete(`/teams/${teamId}/leave`),
-  deleteTeam: (teamId: string) => api.delete(`/teams/${teamId}`),
 }
 
 // ── Existing APIs ──────────────────────────────────────────────────────────────
@@ -158,9 +156,6 @@ export const teamsApi = {
 export const reposApi = {
   getRepos: () => api.get<RepositoryInfo[]>('/repos'),
   scanRepo: (repo: string) => api.post<Review>('/scan', { repo }),
-  getRepoTree: (owner: string, repo: string, branch = 'main') => api.get(`/repos/${owner}/${repo}/tree`, { params: { branch } }),
-  getRepoFileContent: (owner: string, repo: string, path: string, branch = 'main') => api.get(`/repos/${owner}/${repo}/contents/${path}`, { params: { branch } }),
-  getRepoCommits: (owner: string, repo: string, perPage = 30) => api.get(`/repos/${owner}/${repo}/commits`, { params: { per_page: perPage } }),
 }
 
 export const reviewsApi = {
@@ -197,9 +192,71 @@ export const memoryApi = {
   getOnboardingGuide: (repo: string) => api.get(`/memory/onboarding/${repo}`),
 }
 
-export default api
+// ── Repo file browser types ───────────────────────────────────────────────────
 
-// ── Legacy exports preserved for existing pages ────────────────────────────────
+export interface RepoTreeItem {
+  name: string; path: string; type: 'file' | 'dir'
+  size: number; sha: string; url: string
+}
+
+export interface RepoTree {
+  type: 'directory' | 'file'; path: string
+  items?: RepoTreeItem[]; item?: any
+}
+
+export interface RepoFile {
+  name: string; path: string; content: string
+  size: number; sha: string; html_url: string
+}
+
+export interface Commit {
+  sha: string; short_sha: string; message: string; full_message: string
+  author: { name: string; email: string; login?: string; avatar_url?: string }
+  date: string; html_url: string
+}
+
+export interface CommitDetail extends Commit {
+  stats: { additions: number; deletions: number; total: number }
+  files: { filename: string; status: string; additions: number; deletions: number; patch: string }[]
+}
+
+export const repoExplorerApi = {
+  getTree: (owner: string, repo: string, path = '', ref = '') =>
+    api.get<RepoTree>(`/repos/${owner}/${repo}/tree`, { params: { path, ref } }),
+  getFile: (owner: string, repo: string, path: string, ref = '') =>
+    api.get<RepoFile>(`/repos/${owner}/${repo}/file`, { params: { path, ref } }),
+  getCommits: (owner: string, repo: string, branch = '', path = '', page = 1, perPage = 30) =>
+    api.get<Commit[]>(`/repos/${owner}/${repo}/commits`, { params: { branch, path, page, per_page: perPage } }),
+  getCommitDetail: (owner: string, repo: string, sha: string) =>
+    api.get<CommitDetail>(`/repos/${owner}/${repo}/commits/${sha}`),
+  getBranches: (owner: string, repo: string) =>
+    api.get<{ name: string; sha: string }[]>(`/repos/${owner}/${repo}/branches`),
+}
+
+// ── Chat types ────────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string; sender_id: string; receiver_id: string
+  content: string; read: boolean; created_at: string
+  sender_username?: string; sender_avatar?: string
+}
+
+export interface ChatConversation {
+  partner_id: string; partner_username: string; partner_avatar?: string
+  last_message: string; last_at: string; unread_count: number
+}
+
+export const chatApi = {
+  getConversations: () => api.get<ChatConversation[]>('/chat/conversations'),
+  getMessages: (username: string, before?: string) =>
+    api.get<{ messages: ChatMessage[]; other_user: any }>(`/chat/messages/${username}`, { params: before ? { before } : {} }),
+  sendMessage: (receiver_username: string, content: string) =>
+    api.post<ChatMessage>('/chat/messages', { receiver_username, content }),
+  getUnreadCount: () => api.get<{ count: number }>('/chat/unread-count'),
+  searchUsers: (q: string) => api.get<any[]>('/chat/users/search', { params: { q } }),
+}
+
+
 
 export interface OnboardingStats {
   reviewCount: number
