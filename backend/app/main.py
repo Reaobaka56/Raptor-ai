@@ -18,12 +18,14 @@ from .user_router import router as user_router
 from .blog_router import router as blog_router
 from .team_router import router as team_router
 from .repo_router import router as repo_router
+from .chat_router import router as chat_router
 
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(blog_router)
 app.include_router(team_router)
 app.include_router(repo_router)
+app.include_router(chat_router)
 app.include_router(memory_router, prefix="/api")
 app.include_router(webhook_router)
 app.include_router(analysis_router, prefix="/debug")
@@ -33,11 +35,9 @@ app.include_router(telemetry_router)
 
 # Serve static files (frontend) bundled with PyInstaller
 static_dir = os.path.join(
-    sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+    sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
 )
-if os.path.isdir(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/health", tags=["Telemetry"])
