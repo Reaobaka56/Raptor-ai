@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Folder, File as FileIcon, Loader2, ArrowLeft, Terminal, Copy, Check } from 'lucide-react';
+import { Folder, Loader2, ArrowLeft, Terminal, Copy, Check } from 'lucide-react';
 import { repoExplorerApi, type RepoTreeItem } from '../api';
 
 interface RepoBrowserProps {
