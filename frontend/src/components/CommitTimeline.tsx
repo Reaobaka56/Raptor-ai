@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, GitCommit, ExternalLink, ChevronRight } from 'lucide-react';
+import { Loader2, GitCommit, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { repoExplorerApi, type Commit } from '../api';
 
