@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { TRexIcon } from './TRexIcon'
-import { startGithubLogin, type UserProfile } from '../api'
+import { startGithubLogin, chatApi, type UserProfile } from '../api'
 
 interface LayoutProps { children: React.ReactNode }
 
@@ -17,7 +17,7 @@ const navItems = [
   { path: '/onboarding',label: 'Onboarding',icon: Compass },
   { path: '/teams',     label: 'Teams',     icon: Users },
   { path: '/calendar',  label: 'Calendar',  icon: Calendar },
-  { path: '/chat',      label: 'Chat',      icon: MessageSquare },
+  { path: '/chat',      label: 'Chat',      icon: MessageSquare, badge: true },
 ]
 
 export default function Layout({ children }: LayoutProps) {
@@ -26,6 +26,7 @@ export default function Layout({ children }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     const checkAuth = () => {
@@ -38,6 +39,19 @@ export default function Layout({ children }: LayoutProps) {
     checkAuth()
     window.addEventListener('auth-change', checkAuth)
     return () => window.removeEventListener('auth-change', checkAuth)
+  }, [])
+
+  // Poll unread message count every 30s
+  useEffect(() => {
+    if (!localStorage.getItem('token')) return
+    const fetchUnread = () => {
+      chatApi.getUnreadCount()
+        .then(r => setUnreadCount(r.data.count))
+        .catch(() => {})
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const handleGithubLogin = async () => {
@@ -69,16 +83,22 @@ export default function Layout({ children }: LayoutProps) {
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-1">
-              {navItems.map(({ path, label, icon: Icon }) => {
+              {navItems.map(({ path, label, icon: Icon, badge }) => {
                 const active = location.pathname === path
+                const showBadge = badge && unreadCount > 0
                 return (
                   <Link key={path} to={path}
-                    className={`flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-semibold transition-all ${
+                    className={`relative flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-semibold transition-all ${
                       active
                         ? 'border-white bg-white text-black'
                         : 'border-transparent text-gray-400 hover:border-white/20 hover:text-white'
                     }`}>
                     <Icon className="h-3.5 w-3.5" />{label}
+                    {showBadge && (
+                      <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[9px] font-black text-black">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
                   </Link>
                 )
               })}
