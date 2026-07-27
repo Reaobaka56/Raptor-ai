@@ -28,13 +28,31 @@ const faqs = [
   { q: 'Is there a free plan?', a: 'Yes. Raptor is free for up to 5 repositories and 100 PRs per month. Open source projects get unlimited reviews for free.' },
 ];
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
 
-
-
-
-
-
-
+function FAQItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-white/8">
+      <button onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors">
+        {q}
+        <ChevronDown className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <p className="pb-5 text-sm text-gray-400 leading-relaxed">{a}</p>}
+    </div>
+  );
+}
 
 function ProductMockup() {
   return (
@@ -114,54 +132,25 @@ function ProductMockup() {
   );
 }
 
-function FAQItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-t border-white/8 py-5">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors"
-      >
-        {q}
-        <ChevronDown
-          className={`h-4 w-4 text-gray-500 flex-none ml-4 transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open && <p className="pb-5 text-sm text-gray-400 leading-relaxed">{a}</p>}
-    </div>
-  );
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 export default function Landing() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
   const [activeCard, setActiveCard] = useState<'docs' | 'pricing' | 'features' | null>(null);
   const [scrolled, setScrolled] = useState(false);
-
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const navigate = useNavigate();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', onScroll, { passive: true });
+    // Check if redirected due to session expiry
+    if (window.location.search.includes('session_expired=1')) {
+      setSessionExpired(true);
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
@@ -188,8 +177,21 @@ export default function Landing() {
       <div className="bg-orb bg-orb-2" aria-hidden="true" />
       <div className="bg-orb bg-orb-3" aria-hidden="true" />
 
-      {/* Sign-in modal */}
-      {showSignIn && (
+      {/* Session expired banner */}
+      {sessionExpired && (
+        <div className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-between bg-amber-500/90 backdrop-blur-sm px-4 py-2.5 text-sm font-semibold text-black">
+          <span>Your session expired. Please sign in again.</span>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowSignIn(true)}
+              className="rounded bg-black/15 px-3 py-1 text-xs hover:bg-black/25 transition">
+              Sign in
+            </button>
+            <button onClick={() => setSessionExpired(false)} className="opacity-60 hover:opacity-100">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
         <SignInModal
           onClose={() => setShowSignIn(false)}
           onLogin={handleGithubLogin}
