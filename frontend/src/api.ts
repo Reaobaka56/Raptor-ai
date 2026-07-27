@@ -29,6 +29,24 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// On 401, clear stale session and redirect to home
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const hadToken = !!localStorage.getItem('token')
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.dispatchEvent(new Event('auth-change'))
+      if (hadToken) {
+        // Only redirect if user was logged in — avoids redirect loops on public pages
+        window.location.href = '/?session_expired=1'
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface ReviewIssue {
