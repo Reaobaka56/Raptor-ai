@@ -10,11 +10,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+ADMIN_USERNAMES = {"reaobaka56"}
+PREMIUM_MULTIPLIER = 10   # premium users get 10x limits
+
 
 @dataclass(frozen=True)
 class RateLimitRule:
-    """Single per-client request limit for matching request paths."""
-
     name: str
     max_requests: int
     window_seconds: int
@@ -37,7 +38,6 @@ def _int_from_env(name: str, default: int) -> int:
 
 
 def build_rate_limit_rules() -> Tuple[RateLimitRule, ...]:
-    """Build ordered rate-limit rules from environment-backed defaults."""
     return (
         RateLimitRule(
             name="scan",
@@ -83,8 +83,36 @@ def build_rate_limit_rules() -> Tuple[RateLimitRule, ...]:
     )
 
 
+def _extract_username_from_request(request: Request) -> Optional[str]:
+    """
+    Extract the authenticated username from the Bearer token in the request.
+    Used to grant admin/premium bypass before hitting the rate limiter.
+    """
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header[7:]
+    if not token:
+        return None
+    try:
+        # Import here to avoid circular import
+        from .services.session_store import get_session
+        session = get_session(token)
+        if session:
+            return session.get("user", {}).get("username")
+    except Exception:
+        pass
+    return None
+
+
 class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
-    """Small in-process fixed-window limiter for every FastAPI route."""
+    """
+    Per-client fixed-window rate limiter.
+    
+    Tiers:
+    - Admin/premium accounts (reaobaka56): unlimited — all limits bypassed
+    - Regular users: standard limits from env vars
+    """
 
     def __init__(self, app, rules: Iterable[RateLimitRule]):
         super().__init__(app)
@@ -93,6 +121,12 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
         self.lock = threading.RLock()
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        # Check for admin/premium bypass FIRST
+        username = _extract_username_from_request(request)
+        if username and username.lower() in ADMIN_USERNAMES:
+            # Premium/admin — no rate limiting at all
+            return await call_next(request)
+
         rule = self._rule_for_path(request.url.path)
         client_key = self._client_key(request)
         now = time.monotonic()
@@ -102,10 +136,11 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=429,
                 content={
-                    "detail": "Rate limit exceeded. Please retry after the reset window.",
+                    "detail": "Rate limit exceeded. Upgrade to premium for unlimited access.",
                     "limit": rule.max_requests,
                     "windowSeconds": rule.window_seconds,
                     "retryAfterSeconds": reset_seconds,
+                    "upgradeUrl": "/pricing",
                 },
                 headers=self._headers(rule, remaining=0, reset_seconds=reset_seconds, retry_after=reset_seconds),
             )
@@ -121,7 +156,6 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
         return self.rules[-1]
 
     def _client_key(self, request: Request) -> str:
-        # Only trust X-Forwarded-For when the immediate peer is a configured trusted proxy
         forwarded_for = request.headers.get("x-forwarded-for")
         trusted = os.getenv("TRUSTED_PROXY_IPS", "")
         trusted_set = {p.strip() for p in trusted.split(",") if p.strip()}
@@ -149,13 +183,7 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
             reset_seconds = max(1, int(bucket[0] + rule.window_seconds - now))
             return True, remaining, reset_seconds
 
-    def _headers(
-        self,
-        rule: RateLimitRule,
-        remaining: int,
-        reset_seconds: int,
-        retry_after: Optional[int] = None,
-    ) -> Dict[str, str]:
+    def _headers(self, rule, remaining, reset_seconds, retry_after=None):
         headers = {
             "X-RateLimit-Limit": str(rule.max_requests),
             "X-RateLimit-Remaining": str(remaining),
