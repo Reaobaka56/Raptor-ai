@@ -35,10 +35,11 @@ app.include_router(scan_router)
 app.include_router(reviews_router)
 app.include_router(telemetry_router)
 
-# Serve static files (frontend) bundled with PyInstaller
+# Serve static files — create directory if it does not exist
 static_dir = os.path.join(
     sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
 )
+os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
