@@ -1,13 +1,9 @@
 {
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    }
-  ],
-  "outputDirectory": "frontend/dist",
-  "buildCommand": "cd frontend && npm install && npm run build",
+  "framework": "vite",
+  "rootDirectory": "frontend",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
   "rewrites": [
     { "source": "/api/auth/github/callback", "destination": "/index.html" },
     { "source": "/api/(.*)", "destination": "https://raptor-ai.onrender.com/api/$1" },
