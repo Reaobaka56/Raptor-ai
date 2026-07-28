@@ -301,3 +301,5 @@ export const prApi = {
   createPullRequest: (reviewId: number) =>
     api.post<{ pr_url: string; pr_number: number }>(`/reviews/${reviewId}/create-fix-pr`),
 }
+
+export default api
