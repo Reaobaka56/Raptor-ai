@@ -28,17 +28,6 @@ const faqs = [
   { q: 'Is there a free plan?', a: 'Yes. Raptor is free for up to 5 repositories and 100 PRs per month. Open source projects get unlimited reviews for free.' },
 ];
 
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    const update = () => setMatches(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, [query]);
-  return matches;
-}
 
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
