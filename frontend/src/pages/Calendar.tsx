@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Calendar, Clock, Plus, X, Check, ChevronLeft, ChevronRight, Video, Users, Loader2, Trash2 } from 'lucide-react'
 import api from '../api'
 
