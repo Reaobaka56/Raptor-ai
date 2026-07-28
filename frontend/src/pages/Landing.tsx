@@ -192,6 +192,8 @@ export default function Landing() {
           </div>
         </div>
       )}
+
+      {showSignIn && (
         <SignInModal
           onClose={() => setShowSignIn(false)}
           onLogin={handleGithubLogin}
