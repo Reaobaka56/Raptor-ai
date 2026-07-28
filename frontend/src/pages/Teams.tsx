@@ -1,37 +1,57 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Plus, Users, UserPlus, Trash2, Copy, Check, Loader2, Crown, Shield, User } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Plus, Users, UserPlus, Trash2, Copy, Check,
+  Loader2, Crown, Shield, User, Mail, Github, LogOut,
+  X, ChevronRight, AlertCircle, CheckCircle
+} from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
-import { teamsApi, type Team, type TeamMember } from '../api';
+import { teamsApi, userApi, type Team, type TeamMember } from '../api';
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 const ROLE_ICONS: Record<string, React.ReactNode> = {
-  owner: <Crown className="h-3 w-3 text-amber-400" />,
-  admin: <Shield className="h-3 w-3 text-indigo-400" />,
-  member: <User className="h-3 w-3 text-gray-500" />,
+  owner: <Crown className="h-3.5 w-3.5 text-amber-400" />,
+  admin: <Shield className="h-3.5 w-3.5 text-indigo-400" />,
+  member: <User className="h-3.5 w-3.5 text-gray-500" />,
 };
+
+function Avatar({ url, username, size = 8 }: { url?: string | null; username: string; size?: number }) {
+  const s = `h-${size} w-${size}`;
+  if (url) return (
+    <img src={url} alt={username}
+      className={`${s} rounded-full border border-white/10 object-cover flex-none`} />
+  );
+  return (
+    <div className={`${s} rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 flex-none`}>
+      {username[0]?.toUpperCase()}
+    </div>
+  );
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
   return (
-    <button onClick={handleCopy}
+    <button onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
       className="rounded border border-white/10 p-1.5 text-gray-500 hover:text-white transition">
       {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
     </button>
   );
 }
 
-function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
+// ── Team Detail ───────────────────────────────────────────────────────────────
+function TeamDetail({ team, currentUsername, onBack, onLeft }: {
+  team: Team; currentUsername: string; onBack: () => void; onLeft: () => void
+}) {
   const [detail, setDetail] = useState<(Team & { members: TeamMember[] }) | null>(null);
   const [inviteInput, setInviteInput] = useState('');
   const [inviteMode, setInviteMode] = useState<'github' | 'email'>('github');
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [leaving, setLeaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { void load(); }, [team.id]);
 
@@ -40,6 +60,8 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
     try {
       const res = await teamsApi.get(team.id);
       setDetail(res.data);
+    } catch {
+      setDetail(null);
     } finally {
       setLoading(false);
     }
@@ -48,17 +70,18 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
   const handleInvite = async () => {
     if (!inviteInput.trim()) return;
     setInviting(true);
+    setInviteError('');
     try {
       const payload = inviteMode === 'email'
         ? { invitee_email: inviteInput.trim() }
         : { invitee_github: inviteInput.trim() };
       const res = await teamsApi.invite(team.id, payload);
       const token = res.data.invite_token;
-      const link = `${window.location.origin}/teams/accept/${token}`;
-      setInviteLink(link);
+      setInviteLink(`${window.location.origin}/teams/accept/${token}`);
       setInviteInput('');
-    } catch {
-      alert('Failed to create invitation. Make sure you have admin permissions.');
+      await load();
+    } catch (e: any) {
+      setInviteError(e.response?.data?.detail || 'Failed to send invite. User may not be registered.');
     } finally {
       setInviting(false);
     }
@@ -70,96 +93,149 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
     await load();
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24 text-gray-600">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading team…
-      </div>
-    );
-  }
+  const handleLeave = async () => {
+    if (!confirm('Leave this team?')) return;
+    setLeaving(true);
+    try {
+      await teamsApi.leaveTeam(team.id);
+      onLeft();
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Could not leave team');
+    } finally {
+      setLeaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Permanently delete this team? This cannot be undone.')) return;
+    setDeleting(true);
+    try {
+      await teamsApi.deleteTeam(team.id);
+      onLeft();
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Could not delete team');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-24 text-gray-600">
+      <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading team…
+    </div>
+  );
+
+  const myRole = detail?.members.find(m => m.username === currentUsername)?.role;
+  const canManage = myRole === 'owner' || myRole === 'admin';
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3 flex-wrap">
         <button onClick={onBack} className="text-gray-500 hover:text-white transition">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <div>
+        <div className="flex-1 min-w-0">
           <h2 className="text-xl font-bold text-white">{detail?.name}</h2>
-          <p className="text-xs font-mono text-gray-600">/{detail?.slug}</p>
+          <p className="text-xs font-mono text-gray-600">/{detail?.slug} · {detail?.members.length || 0} members</p>
         </div>
-        <span className="ml-auto text-xs font-mono text-gray-600 border border-white/10 rounded px-2 py-1 capitalize">
-          {team.role}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {myRole !== 'owner' && (
+            <button onClick={handleLeave} disabled={leaving}
+              className="flex items-center gap-1.5 rounded border border-white/10 px-3 py-1.5 text-xs text-gray-400 hover:border-red-500/40 hover:text-red-400 transition">
+              <LogOut className="h-3.5 w-3.5" /> Leave
+            </button>
+          )}
+          {myRole === 'owner' && (
+            <button onClick={handleDelete} disabled={deleting}
+              className="flex items-center gap-1.5 rounded border border-red-500/20 px-3 py-1.5 text-xs text-red-400 hover:border-red-400/50 transition">
+              <Trash2 className="h-3.5 w-3.5" /> Delete team
+            </button>
+          )}
+          <span className="rounded border border-white/10 px-2.5 py-1 text-xs font-mono text-gray-500 capitalize">
+            {myRole}
+          </span>
+        </div>
       </div>
 
       {/* Members */}
-      <div className="rounded-2xl border border-white/10 bg-[#0d0d14] p-5 space-y-3">
-        <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">Members</p>
-        {detail?.members.map(m => (
-          <div key={m.id} className="flex items-center gap-3 group">
-            {m.avatar_url ? (
-              <img src={m.avatar_url} alt={m.username} className="h-7 w-7 rounded-full border border-white/10" />
-            ) : (
-              <div className="h-7 w-7 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-xs text-gray-500">
-                {m.username[0].toUpperCase()}
+      <div className="rounded-2xl border border-white/10 bg-[#0d0d14] overflow-hidden">
+        <div className="px-5 py-3 border-b border-white/8 flex items-center justify-between">
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-600">Members</p>
+          <Users className="h-3.5 w-3.5 text-gray-700" />
+        </div>
+        <div className="divide-y divide-white/5">
+          {detail?.members.map(m => (
+            <div key={m.id} className="flex items-center gap-3 px-5 py-3.5 group">
+              <Avatar url={m.avatar_url} username={m.username} size={8} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">@{m.username}</p>
+                {m.name && <p className="text-xs text-gray-600">{m.name}</p>}
               </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <span className="text-sm font-semibold text-white">@{m.username}</span>
-              {m.name && <span className="text-xs text-gray-500 ml-2">{m.name}</span>}
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 capitalize">
+                {ROLE_ICONS[m.role]} {m.role}
+              </div>
+              {canManage && m.role !== 'owner' && m.username !== currentUsername && (
+                <button onClick={() => handleRemove(m.username)}
+                  className="opacity-0 group-hover:opacity-100 rounded border border-red-500/20 p-1.5 text-red-400/60 hover:text-red-400 hover:border-red-400/50 transition">
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500 capitalize">
-              {ROLE_ICONS[m.role]} {m.role}
-            </div>
-            {m.role !== 'owner' && (team.role === 'owner' || team.role === 'admin') && (
-              <button onClick={() => handleRemove(m.username)}
-                className="opacity-0 group-hover:opacity-100 rounded border border-red-500/20 p-1 text-red-400/60 hover:text-red-400 hover:border-red-400/50 transition">
-                <Trash2 className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
-      {/* Invite */}
-      {(team.role === 'owner' || team.role === 'admin') && (
+      {/* Invite section */}
+      {canManage && (
         <div className="rounded-2xl border border-white/10 bg-[#0d0d14] p-5 space-y-4">
-          <p className="text-xs font-mono uppercase tracking-widest text-gray-600">Invite</p>
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-600">Invite members</p>
           <div className="flex gap-2">
             <button onClick={() => setInviteMode('github')}
-              className={`rounded px-3 py-1.5 text-xs font-semibold transition ${inviteMode === 'github' ? 'bg-white text-black' : 'border border-white/10 text-gray-400 hover:text-white'}`}>
-              GitHub username
+              className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-semibold transition ${inviteMode === 'github' ? 'bg-white text-black' : 'border border-white/10 text-gray-400 hover:text-white'}`}>
+              <Github className="h-3.5 w-3.5" /> GitHub
             </button>
             <button onClick={() => setInviteMode('email')}
-              className={`rounded px-3 py-1.5 text-xs font-semibold transition ${inviteMode === 'email' ? 'bg-white text-black' : 'border border-white/10 text-gray-400 hover:text-white'}`}>
-              Email
+              className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-semibold transition ${inviteMode === 'email' ? 'bg-white text-black' : 'border border-white/10 text-gray-400 hover:text-white'}`}>
+              <Mail className="h-3.5 w-3.5" /> Email
             </button>
           </div>
           <div className="flex gap-2">
-            <input value={inviteInput} onChange={e => setInviteInput(e.target.value)}
+            <input
+              value={inviteInput}
+              onChange={e => setInviteInput(e.target.value)}
               placeholder={inviteMode === 'github' ? 'GitHub username' : 'Email address'}
               className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
-              onKeyDown={e => e.key === 'Enter' && handleInvite()} />
+              onKeyDown={e => e.key === 'Enter' && handleInvite()}
+            />
             <button onClick={handleInvite} disabled={inviting || !inviteInput.trim()}
               className="flex items-center gap-1.5 rounded-lg border border-white bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
               {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               Invite
             </button>
           </div>
-          {inviteLink && (
-            <div className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2">
-              <p className="flex-1 text-xs font-mono text-indigo-300 truncate">{inviteLink}</p>
-              <CopyButton text={inviteLink} />
+          {inviteError && (
+            <div className="flex items-center gap-2 text-xs text-red-400 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+              <AlertCircle className="h-3.5 w-3.5 flex-none" /> {inviteError}
             </div>
           )}
-          <p className="text-xs text-gray-600">Invite links expire after 7 days. Anyone with the link can join this team.</p>
+          {inviteLink && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2.5">
+                <CheckCircle className="h-3.5 w-3.5 text-green-400 flex-none" />
+                <p className="flex-1 text-xs font-mono text-green-300 truncate">{inviteLink}</p>
+                <CopyButton text={inviteLink} />
+              </div>
+              <p className="text-[10px] text-gray-600">Share this link. It expires in 7 days. Only registered Raptor users can accept.</p>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selected, setSelected] = useState<Team | null>(null);
@@ -167,11 +243,17 @@ export default function TeamsPage() {
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentUsername, setCurrentUsername] = useState('');
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
   useEffect(() => {
     if (!token) { navigate('/'); return; }
+    // Get current user
+    const stored = localStorage.getItem('user');
+    if (stored) {
+      try { setCurrentUsername(JSON.parse(stored).username || ''); } catch {}
+    }
     void load();
   }, [token]);
 
@@ -190,12 +272,12 @@ export default function TeamsPage() {
     setCreating(true);
     try {
       const res = await teamsApi.create(newName.trim());
-      setTeams(prev => [res.data, ...prev]);
+      await load();
       setNewName('');
       setShowCreate(false);
       setSelected(res.data);
-    } catch {
-      alert('Failed to create team.');
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Failed to create team');
     } finally {
       setCreating(false);
     }
@@ -203,34 +285,30 @@ export default function TeamsPage() {
 
   return (
     <div className="min-h-screen bg-black text-gray-300 font-sans pb-24">
-      <nav className="border-b border-white/10 bg-black/80 sticky top-0 z-50 backdrop-blur-xl px-6 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link to="/dashboard" className="text-gray-400 hover:text-white flex items-center gap-1 text-sm font-mono transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Dashboard
-          </Link>
-          <TRexIcon className="w-6 h-6 text-white" />
-          <span className="text-white font-bold tracking-tight text-lg">Teams</span>
-        </div>
-        <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 rounded border border-white/20 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white hover:text-black transition">
-          <Plus className="h-3.5 w-3.5" /> New Team
-        </button>
-      </nav>
-
       {/* Create modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0d0d14] p-6 space-y-4">
-            <h2 className="text-lg font-bold text-white">Create Team</h2>
-            <input value={newName} onChange={e => setNewName(e.target.value)}
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white">Create Team</h2>
+              <button onClick={() => setShowCreate(false)} className="rounded border border-white/10 p-1.5 text-gray-500 hover:text-white transition">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <input
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
               placeholder="Team name"
+              autoFocus
               className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
-              onKeyDown={e => e.key === 'Enter' && handleCreate()} />
+              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            />
+            <p className="text-xs text-gray-600">Invite members after creating the team. Only registered Raptor users can be invited.</p>
             <div className="flex gap-3">
               <button onClick={handleCreate} disabled={creating || !newName.trim()}
                 className="flex items-center gap-2 rounded-lg border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
-                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {creating ? 'Creating…' : 'Create'}
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {creating ? 'Creating…' : 'Create Team'}
               </button>
               <button onClick={() => setShowCreate(false)}
                 className="rounded-lg border border-white/10 px-5 py-2 text-sm font-semibold text-gray-400 hover:text-white transition">
@@ -241,24 +319,51 @@ export default function TeamsPage() {
         </div>
       )}
 
-      <main className="max-w-3xl mx-auto px-6 pt-12">
+      <nav className="border-b border-white/10 bg-black/80 sticky top-0 z-40 backdrop-blur-xl px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link to="/dashboard" className="text-gray-400 hover:text-white flex items-center gap-1 text-sm font-mono transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Dashboard</span>
+          </Link>
+          <TRexIcon className="w-6 h-6 text-white" />
+          <span className="text-white font-bold tracking-tight">Teams</span>
+        </div>
+        <button onClick={() => setShowCreate(true)}
+          className="flex items-center gap-1.5 rounded border border-white/20 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white hover:text-black transition">
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">New Team</span>
+          <span className="sm:hidden">New</span>
+        </button>
+      </nav>
+
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12">
         {selected ? (
-          <TeamDetail team={selected} onBack={() => setSelected(null)} />
+          <TeamDetail
+            team={selected}
+            currentUsername={currentUsername}
+            onBack={() => setSelected(null)}
+            onLeft={() => { setSelected(null); void load(); }}
+          />
         ) : (
           <>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">Your Teams</h1>
-            <p className="text-gray-500 mb-10 text-sm">Collaborate with other GitHub users on shared Raptor AI projects.</p>
+            <div className="mb-8">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Your Teams</h1>
+              <p className="text-gray-500 mt-1 text-sm">Collaborate with other Raptor users on shared repositories.</p>
+            </div>
 
             {loading ? (
               <div className="flex items-center justify-center py-24 text-gray-600">
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
               </div>
             ) : teams.length === 0 ? (
-              <div className="text-center py-24 space-y-4">
-                <Users className="h-12 w-12 text-gray-700 mx-auto" />
-                <p className="text-gray-500 text-sm">You're not in any teams yet.</p>
+              <div className="text-center py-16 space-y-4">
+                <div className="h-14 w-14 rounded-2xl border border-white/10 bg-white/3 flex items-center justify-center mx-auto">
+                  <Users className="h-7 w-7 text-gray-700" />
+                </div>
+                <p className="text-gray-400 font-semibold">No teams yet</p>
+                <p className="text-gray-600 text-sm max-w-xs mx-auto">Create a team and invite GitHub users who have signed up for Raptor.</p>
                 <button onClick={() => setShowCreate(true)}
-                  className="flex items-center gap-2 mx-auto rounded border border-white/20 px-4 py-2 text-sm text-white hover:bg-white hover:text-black transition">
+                  className="inline-flex items-center gap-2 rounded border border-white/20 px-4 py-2 text-sm text-white hover:bg-white hover:text-black transition">
                   <Plus className="h-4 w-4" /> Create your first team
                 </button>
               </div>
@@ -266,19 +371,19 @@ export default function TeamsPage() {
               <div className="space-y-3">
                 {teams.map(team => (
                   <button key={team.id} onClick={() => setSelected(team)}
-                    className="w-full text-left rounded-2xl border border-white/10 bg-[#0d0d14] p-5 hover:border-white/25 transition-all group">
+                    className="w-full text-left rounded-2xl border border-white/10 bg-[#0d0d14] p-4 sm:p-5 hover:border-white/25 transition-all group">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-sm font-bold text-white">
+                      <div className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-base font-bold text-white flex-none">
                         {team.name[0].toUpperCase()}
                       </div>
-                      <div>
-                        <p className="font-semibold text-white">{team.name}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-white truncate">{team.name}</p>
                         <p className="text-xs font-mono text-gray-600">/{team.slug}</p>
                       </div>
-                      <div className="ml-auto flex items-center gap-1.5 text-xs text-gray-600 capitalize">
+                      <div className="flex items-center gap-1.5 text-xs text-gray-600 capitalize">
                         {ROLE_ICONS[team.role ?? 'member']} {team.role}
                       </div>
-                      <ArrowLeft className="h-4 w-4 text-gray-700 rotate-180 group-hover:text-white transition-colors" />
+                      <ChevronRight className="h-4 w-4 text-gray-700 group-hover:text-gray-400 transition flex-none" />
                     </div>
                   </button>
                 ))}
