@@ -4,9 +4,9 @@ import {
   Loader2, Crown, Shield, User, Mail, Github, LogOut,
   X, ChevronRight, AlertCircle, CheckCircle
 } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
-import { teamsApi, userApi, type Team, type TeamMember } from '../api';
+import { teamsApi, type Team, type TeamMember } from '../api';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
