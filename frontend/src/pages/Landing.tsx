@@ -139,7 +139,7 @@ export default function Landing() {
   const [activeCard, setActiveCard] = useState<'docs' | 'pricing' | 'features' | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const isMobile = useMediaQuery('(max-width: 768px)');
+
   const navigate = useNavigate();
 
   useEffect(() => {
