@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, List, BarChart3, Menu, X, Github,
-  LogOut, BookOpen, Compass, Users, Calendar, MessageSquare, ChevronDown
+  LogOut, BookOpen, Compass, Users, Calendar, MessageSquare, ChevronDown, Terminal
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { TRexIcon } from './TRexIcon'
@@ -18,6 +18,7 @@ const navItems = [
   { path: '/teams',      label: 'Teams',      icon: Users },
   { path: '/calendar',   label: 'Calendar',   icon: Calendar },
   { path: '/chat',       label: 'Chat',       icon: MessageSquare, badge: true },
+  { path: '/sandbox',   label: 'Sandbox',   icon: Terminal },
 ]
 
 export default function Layout({ children }: LayoutProps) {
@@ -271,3 +272,4 @@ export default function Layout({ children }: LayoutProps) {
     </div>
   )
 }
+
