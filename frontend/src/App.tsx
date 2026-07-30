@@ -16,6 +16,7 @@ import AcceptInvite from './pages/AcceptInvite'
 import CalendarPage from './pages/Calendar'
 import Chat from './pages/Chat'
 import RepoExplorer from './pages/RepoExplorer'
+import SandboxPage from './pages/Sandbox'
 import './index.css'
 
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -50,6 +51,7 @@ function App() {
         <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
         <Route path="/repos/:owner/:repo" element={<ProtectedRoute><Layout><RepoExplorer /></Layout></ProtectedRoute>} />
+        <Route path="/sandbox" element={<ProtectedRoute><Layout><SandboxPage /></Layout></ProtectedRoute>} />
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
     </>
@@ -57,3 +59,4 @@ function App() {
 }
 
 export default App
+
