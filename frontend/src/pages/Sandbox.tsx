@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
-  Terminal, Play, Square, Plus, Trash2, Shield, AlertTriangle,
-  CheckCircle, Clock, ArrowLeft, Loader2, ChevronRight, Zap,
-  Eye, X, Copy, Check, RefreshCw
+  Terminal, Play, Square, Plus, Shield, AlertTriangle,
+  ArrowLeft, Loader2, ChevronRight, Zap,
+  Eye, X
 } from 'lucide-react'
 import api from '../api'
 
@@ -51,16 +51,6 @@ const EVENT_ICONS: Record<string, React.ReactNode> = {
 }
 
 const AGENT_TYPES = ['custom', 'cursor', 'claude-code', 'copilot', 'codex', 'devin']
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <button onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-      className="rounded border border-white/10 p-1 text-gray-600 hover:text-white transition">
-      {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-    </button>
-  )
-}
 
 // ── Terminal component ────────────────────────────────────────────────────────
 function SandboxTerminal({ sessionId }: { sessionId: string }) {
