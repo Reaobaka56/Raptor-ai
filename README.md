@@ -45,6 +45,14 @@ Raptor provides isolated runtime containers for executing agent workflows and sa
 - **Tiered Resource Allocations**: Dynamic resource limits capping CPU usage, memory thresholds, disk storage, and max concurrent processes per user tier.
 - **Audit Logs & Telemetry**: Full execution history and resource utilization streams for auditing agent activities.
 
+### Team Collaboration & Organization Management
+Raptor integrates essential developer workflow features directly into the platform:
+- **Role-based Team Access**: Create teams, manage members with role hierarchies (`owner`, `admin`, `member`), and handle invite lifecycle flows.
+- **Real-Time Direct Messaging**: DB-persisted user-to-user chat with unread counters and conversation thread histories.
+- **Meeting Scheduler & Calendar**: Schedule and manage meetings, persisted directly via PostgreSQL JSONB data storage.
+- **Technical Blog System**: Support for drafting and publishing engineering posts, complete with admin-guarded CRUD controls.
+- **GitHub Repository File Browser**: Browse branches, file tree directories, decode code files, and inspect commit diffs natively in the UI.
+
 ### Minimalist CLI-Inspired Design
 - Built on a **pure black** aesthetic (`#000000`) with high-contrast typography and clean borders.
 - Eliminates visual clutter and popup modals for a lightning-fast, distraction-free review experience.
@@ -74,6 +82,12 @@ Raptor is split into a lightweight frontend and a modular backend:
   - `backend/app/telemetry_router.py` serves analytics and review stats.
   - `backend/app/memory_router.py` provides the team memory layer, convention rules, feedback, and RAG search.
   - `backend/app/sandbox_router.py` exposes agent sandbox session and execution controls.
+  - `backend/app/repo_router.py` provides GitHub integration for browsing files, commits, and branches.
+  - `backend/app/team_router.py` manages organization teams, member hierarchies, and invitations.
+  - `backend/app/chat_router.py` powers database-persisted direct user messaging.
+  - `backend/app/calendar_router.py` handles meeting coordination persisted via Postgres JSONB.
+  - `backend/app/blog_router.py` allows public reading and admin CRUD of engineering blog posts.
+  - `backend/app/user_router.py` retrieves logged-in profiles and manages admin status checks.
   - `backend/app/router/webhook.py` receives GitHub webhook events and schedules async scan jobs.
   - `backend/app/services/` contains the core logic for AI analysis, embeddings, GitHub integration, session storage, and database pooling.
 
@@ -172,6 +186,29 @@ App runs at `http://localhost:5173`.
 | `POST` | `/api/sandbox/sessions/{session_id}/execute` | Executes commands inside the sandbox |
 | `GET` | `/api/sandbox/sessions/{session_id}/events` | Fetches terminal audit logs and outputs |
 | `GET` | `/api/sandbox/sessions/{session_id}/stats` | Monitors CPU, memory, and disk usage |
+| `GET` | `/api/repos/{owner}/{repo}/tree` | Retrieves repository file explorer tree |
+| `GET` | `/api/repos/{owner}/{repo}/file` | Fetches base64 decoded file contents |
+| `GET` | `/api/repos/{owner}/{repo}/commits` | Retrieves paginated commit list |
+| `GET` | `/api/repos/{owner}/{repo}/branches` | Retrieves list of branches |
+| `GET` | `/api/teams` | Lists all teams the current user belongs to |
+| `POST` | `/api/teams` | Creates a new team (assigns creator as Owner) |
+| `GET` | `/api/teams/{team_id}` | Retrieves team details and member list |
+| `POST` | `/api/teams/{team_id}/members` | Adds a user to the team directly (Admin/Owner only) |
+| `DELETE` | `/api/teams/{team_id}/members/{username}` | Kicks a member from the team (Admin/Owner only) |
+| `POST` | `/api/teams/{team_id}/invitations` | Invites a member via email or GitHub username |
+| `POST` | `/api/teams/invitations/{token}/accept` | Accepts an invitation and joins the team |
+| `GET` | `/api/chat/conversations` | Lists user's direct message conversations |
+| `GET` | `/api/chat/messages/{username}` | Fetches message thread with another user |
+| `POST` | `/api/chat/messages` | Sends a direct message to a user |
+| `GET` | `/api/chat/unread-count` | Checks total unread direct message count |
+| `GET` | `/api/calendar/meetings` | Retrieves user's scheduled calendar meetings |
+| `PUT` | `/api/calendar/meetings` | Saves/Updates user's meeting schedules |
+| `GET` | `/api/blog` | Lists published blog posts (and drafts for Admin) |
+| `POST` | `/api/blog` | Creates a new blog post (Admin only) |
+| `PATCH` | `/api/blog/{slug}` | Modifies a blog post (Admin only) |
+| `DELETE` | `/api/blog/{slug}` | Deletes a blog post (Admin only) |
+| `GET` | `/api/users/me` | Retrieves profile of currently logged-in user |
+| `GET` | `/api/users/me/is-admin` | Checks if current user has Admin privileges |
 
 ---
 
