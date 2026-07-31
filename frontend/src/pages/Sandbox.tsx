@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2, ChevronRight, Zap,
   Eye, X
 } from 'lucide-react'
-import api from '../api'
+import api, { reposApi, type RepositoryInfo } from '../api'
 
 interface SandboxSession {
   id: string; name: string; status: string; agent_type: string
@@ -91,7 +91,7 @@ function SandboxTerminal({ sessionId }: { sessionId: string }) {
   return (
     <div className="flex flex-col h-full bg-black rounded-xl border border-white/10 overflow-hidden font-mono text-sm">
       {/* Terminal header */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-[#0a0a10] border-b border-white/8">
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-black border-b border-white/8">
         <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
         <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
         <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
@@ -142,7 +142,7 @@ function SandboxTerminal({ sessionId }: { sessionId: string }) {
       </div>
 
       {/* Input */}
-      <div className="border-t border-white/8 px-4 py-2.5 flex items-center gap-2 bg-[#0a0a10]">
+      <div className="border-t border-white/8 px-4 py-2.5 flex items-center gap-2 bg-black">
         <span className="text-green-400 select-none flex-none">$</span>
         <input
           ref={inputRef}
@@ -292,7 +292,7 @@ function SessionDetail({ session, onBack, onStop }: {
           { label: 'Violations', value: stats.policy_violations || 0, color: stats.policy_violations ? 'text-red-400' : 'text-white' },
           { label: 'Blocked', value: stats.secret_access_attempts || 0, color: stats.secret_access_attempts ? 'text-amber-400' : 'text-white' },
         ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-xl border border-white/10 bg-[#0d0d14] p-4 text-center">
+          <div key={label} className="rounded-xl border border-white/10 bg-black p-4 text-center">
             <p className={`text-2xl font-bold ${color}`}>{value}</p>
             <p className="text-xs text-gray-600 mt-0.5">{label}</p>
           </div>
@@ -328,6 +328,23 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
   const [agentType, setAgentType] = useState('custom')
   const [repoUrl, setRepoUrl] = useState('')
   const [creating, setCreating] = useState(false)
+  const [repos, setRepos] = useState<RepositoryInfo[]>([])
+  const [loadingRepos, setLoadingRepos] = useState(false)
+
+  useEffect(() => {
+    const fetchRepos = async () => {
+      setLoadingRepos(true)
+      try {
+        const res = await reposApi.getRepos()
+        setRepos(res.data)
+      } catch (err) {
+        console.error("Failed to fetch repositories", err)
+      } finally {
+        setLoadingRepos(false)
+      }
+    }
+    fetchRepos()
+  }, [])
 
   const handleCreate = async () => {
     setCreating(true)
@@ -343,11 +360,11 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0d0d14] p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+      <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-black p-6 space-y-4 shadow-[0_32px_80px_rgba(0,0,0,0.95)]">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-white">New Sandbox Session</h2>
-          <button onClick={onClose} className="rounded border border-white/10 p-1.5 text-gray-500 hover:text-white transition">
+          <button onClick={onClose} className="rounded-full border border-white/5 bg-white/5 p-1.5 text-gray-500 hover:text-white transition">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -360,15 +377,30 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
           <div>
             <label className="text-xs text-gray-600 mb-1 block">Agent type</label>
             <select value={agentType} onChange={e => setAgentType(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#0d0d14] px-3 py-2 text-sm text-white focus:outline-none">
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white focus:outline-none">
               {AGENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs text-gray-600 mb-1 block">Repository URL (optional)</label>
-            <input value={repoUrl} onChange={e => setRepoUrl(e.target.value)}
-              placeholder="https://github.com/owner/repo"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/30" />
+            {loadingRepos ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
+                <Loader2 className="h-3 w-3 animate-spin" /> Loading repositories...
+              </div>
+            ) : (
+              <select
+                value={repoUrl}
+                onChange={e => setRepoUrl(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 max-h-48 overflow-y-auto"
+              >
+                <option value="">None — start with an empty workspace</option>
+                {repos.map(r => (
+                  <option key={r.id} value={`https://github.com/${r.fullName}`}>
+                    {r.fullName} {r.private ? '🔒' : '🌐'}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 p-3">
@@ -378,7 +410,7 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
         </div>
         <div className="flex gap-3 pt-1">
           <button onClick={handleCreate} disabled={creating || !name.trim()}
-            className="flex items-center gap-2 rounded border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
+            className="flex items-center gap-2 rounded border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-neutral-200 disabled:opacity-50 transition">
             {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {creating ? 'Starting…' : 'Start Session'}
           </button>
@@ -449,7 +481,7 @@ export default function SandboxPage() {
               { icon: Eye, title: 'Full audit trail', desc: 'Every command, file access, and network request logged with timestamps and severity.' },
               { icon: Zap, title: 'Raptor integration', desc: 'PRs opened from inside a sandbox are auto-reviewed before they can be merged.' },
             ].map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="rounded-2xl border border-white/8 bg-[#0d0d14] p-5 space-y-2">
+              <div key={title} className="rounded-2xl border border-white/8 bg-black p-5 space-y-2">
                 <Icon className="h-5 w-5 text-white" />
                 <p className="text-sm font-bold text-white">{title}</p>
                 <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>
@@ -463,7 +495,7 @@ export default function SandboxPage() {
               <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading sessions…
             </div>
           ) : sessions.length === 0 ? (
-            <div className="text-center py-16 space-y-4 rounded-2xl border border-white/8 bg-[#0d0d14]">
+            <div className="text-center py-16 space-y-4 rounded-2xl border border-white/8 bg-black">
               <Terminal className="h-12 w-12 text-gray-700 mx-auto" />
               <p className="text-gray-400 font-semibold">No sessions yet</p>
               <p className="text-gray-600 text-sm max-w-xs mx-auto">
@@ -478,7 +510,7 @@ export default function SandboxPage() {
             <div className="space-y-2">
               {sessions.map(s => (
                 <button key={s.id} onClick={() => setSelected(s)}
-                  className="w-full text-left rounded-2xl border border-white/10 bg-[#0d0d14] px-5 py-4 hover:border-white/25 transition group">
+                  className="w-full text-left rounded-2xl border border-white/10 bg-black px-5 py-4 hover:border-white/25 transition group">
                   <div className="flex items-center gap-3">
                     <span className={`h-2 w-2 rounded-full flex-none ${STATUS_DOT[s.status]}`} />
                     <div className="flex-1 min-w-0">
