@@ -38,6 +38,13 @@ Raptor learns your team's conventions over time:
 - Retrieves relevant past decisions as context for every new PR review.
 - Gets smarter the more your team uses it — suppressing false positives specific to your codebase.
 
+### Secure Agent Sandbox Environments
+Raptor provides isolated runtime containers for executing agent workflows and safe CLI simulation:
+- **Dynamic Container Lifecycles**: Provision, execute commands, monitor, and teardown containerized sessions.
+- **Strict Policy Constraints**: Prevents data exfiltration by blocking access to local metadata endpoints and private configuration paths (e.g., `.env`, `.ssh`, `.aws`, `.pem`).
+- **Tiered Resource Allocations**: Dynamic resource limits capping CPU usage, memory thresholds, disk storage, and max concurrent processes per user tier.
+- **Audit Logs & Telemetry**: Full execution history and resource utilization streams for auditing agent activities.
+
 ### Minimalist CLI-Inspired Design
 - Built on a **pure black** aesthetic (`#000000`) with high-contrast typography and clean borders.
 - Eliminates visual clutter and popup modals for a lightning-fast, distraction-free review experience.
@@ -66,6 +73,7 @@ Raptor is split into a lightweight frontend and a modular backend:
   - `backend/app/reviews_router.py` exposes review retrieval and fix PR creation.
   - `backend/app/telemetry_router.py` serves analytics and review stats.
   - `backend/app/memory_router.py` provides the team memory layer, convention rules, feedback, and RAG search.
+  - `backend/app/sandbox_router.py` exposes agent sandbox session and execution controls.
   - `backend/app/router/webhook.py` receives GitHub webhook events and schedules async scan jobs.
   - `backend/app/services/` contains the core logic for AI analysis, embeddings, GitHub integration, session storage, and database pooling.
 
@@ -157,6 +165,13 @@ App runs at `http://localhost:5173`.
 | `GET` | `/api/reviews/{id}` | Fetches vulnerability details and diff suggestions |
 | `POST` | `/api/reviews/{id}/pull-request` | Creates automated fix PR on GitHub |
 | `GET` | `/api/stats` | Fetches telemetry and analytics |
+| `GET` | `/api/sandbox/sessions` | Lists active sandbox sessions |
+| `POST` | `/api/sandbox/sessions` | Spawns a new secure sandbox container with policy constraints |
+| `GET` | `/api/sandbox/sessions/{session_id}` | Retrieves sandbox session details and limits |
+| `DELETE` | `/api/sandbox/sessions/{session_id}` | Stops and destroys the sandbox environment |
+| `POST` | `/api/sandbox/sessions/{session_id}/execute` | Executes commands inside the sandbox |
+| `GET` | `/api/sandbox/sessions/{session_id}/events` | Fetches terminal audit logs and outputs |
+| `GET` | `/api/sandbox/sessions/{session_id}/stats` | Monitors CPU, memory, and disk usage |
 
 ---
 
