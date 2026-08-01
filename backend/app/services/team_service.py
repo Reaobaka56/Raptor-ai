@@ -75,7 +75,7 @@ def get_team(team_id: str) -> Optional[Dict[str, Any]]:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, name, slug, owner_id, created_at FROM teams WHERE id = %s",
+                "SELECT id, name, slug, owner_id, join_token_hash, join_token_created_at, created_at FROM teams WHERE id = %s",
                 (team_id,),
             )
             row = cur.fetchone()
@@ -345,3 +345,57 @@ def _expire_invitation(token: str) -> None:
         pass
     finally:
         release_conn(conn)
+
+# ── Join tokens ───────────────────────────────────────────────────────────────
+
+def _hash_join_token(token: str) -> str:
+    import hashlib
+    return hashlib.sha256(token.upper().strip().encode()).hexdigest()
+
+
+def generate_join_token() -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    part = lambda: "".join(secrets.choice(alphabet) for _ in range(4))
+    return f"TEAM-{part()}-{part()}"
+
+
+def ensure_join_token(team_id: str) -> Optional[str]:
+    """Generate and return a new plaintext join token for leader display."""
+    conn = get_conn()
+    if not conn: return None
+    try:
+        with conn.cursor() as cur:
+            for _ in range(8):
+                token = generate_join_token()
+                try:
+                    cur.execute("UPDATE teams SET join_token_hash=%s, join_token_created_at=now() WHERE id=%s RETURNING id", (_hash_join_token(token), team_id))
+                    if cur.fetchone():
+                        conn.commit(); return token
+                except Exception:
+                    conn.rollback()
+            return None
+    finally: release_conn(conn)
+
+
+def join_team_by_token(user_id: str, token: str) -> Optional[Dict[str, Any]]:
+    conn = get_conn()
+    if not conn: return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM teams WHERE join_token_hash=%s", (_hash_join_token(token),))
+            row = cur.fetchone()
+            if not row: return None
+            team_id = row[0]
+            cur.execute("""
+                INSERT INTO team_members(team_id, user_id, role)
+                VALUES(%s, %s, 'member')
+                ON CONFLICT(team_id, user_id) DO NOTHING
+            """, (team_id, user_id))
+            conn.commit()
+        return get_team(str(team_id))
+    except Exception:
+        logger.exception("[team_service] join_team_by_token failed")
+        try: conn.rollback()
+        except Exception: pass
+        return None
+    finally: release_conn(conn)

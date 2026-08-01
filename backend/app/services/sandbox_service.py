@@ -145,7 +145,8 @@ def _update_session(session_id: str, **fields) -> None:
 # ── Session management ────────────────────────────────────────────────────────
 
 def create_session(owner_id: str, name: str, repo_url: Optional[str],
-                   agent_type: str, policy: dict, resource_limits: dict) -> Dict[str, Any]:
+                   agent_type: str, policy: dict, resource_limits: dict,
+                   provider: Optional[str] = None, provider_key_source: str = "platform") -> Dict[str, Any]:
     conn = get_conn()
     if not conn:
         raise RuntimeError("Database unavailable")
@@ -154,13 +155,13 @@ def create_session(owner_id: str, name: str, repo_url: Optional[str],
             cur.execute(
                 """
                 INSERT INTO sandbox_sessions
-                    (owner_id, name, repo_url, agent_type, policy, resource_limits, status)
-                VALUES (%s::uuid, %s, %s, %s, %s::jsonb, %s::jsonb, 'starting')
-                RETURNING id, name, status, agent_type, repo_url, policy,
+                    (owner_id, name, repo_url, agent_type, policy, resource_limits, status, provider, provider_key_source)
+                VALUES (%s::uuid, %s, %s, %s, %s::jsonb, %s::jsonb, 'starting', %s, %s)
+                RETURNING id, name, status, agent_type, repo_url, provider, provider_key_source, policy,
                           resource_limits, created_at
                 """,
                 (owner_id, name, repo_url, agent_type,
-                 json.dumps(policy), json.dumps(resource_limits)),
+                 json.dumps(policy), json.dumps(resource_limits), provider, provider_key_source),
             )
             conn.commit()
             row = cur.fetchone()
@@ -181,6 +182,8 @@ def create_session(owner_id: str, name: str, repo_url: Optional[str],
                 "message": f"Sandbox session started. Workspace: {workspace}",
                 "agent_type": agent_type,
                 "repo_url": repo_url,
+                "provider": provider,
+                "provider_key_source": provider_key_source,
             })
 
             return session
@@ -199,7 +202,7 @@ def get_session(session_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT id, owner_id, name, status, agent_type, repo_url,
-                       workspace_path, policy, resource_limits,
+                       provider, provider_key_source, workspace_path, policy, resource_limits,
                        process_pid, started_at, ended_at, created_at
                 FROM sandbox_sessions
                 WHERE id = %s::uuid AND owner_id = %s::uuid
@@ -229,7 +232,7 @@ def list_sessions(owner_id: str) -> List[Dict[str, Any]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, name, status, agent_type, repo_url,
+                SELECT id, name, status, agent_type, repo_url, provider, provider_key_source,
                        started_at, ended_at, created_at
                 FROM sandbox_sessions
                 WHERE owner_id = %s::uuid
