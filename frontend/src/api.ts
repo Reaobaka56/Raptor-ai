@@ -99,7 +99,7 @@ export interface BlogPost {
 
 export interface Team {
   id: string; name: string; slug: string; owner_id: string
-  created_at: string; role?: string
+  created_at: string; role?: string; join_token?: string; join_token_configured?: boolean
 }
 
 export interface TeamMember {
@@ -171,6 +171,16 @@ export const teamsApi = {
     api.post<Invitation>(`/teams/${teamId}/invitations`, data),
   getInvitation: (token: string) => api.get<Invitation>(`/teams/invitations/${token}`),
   acceptInvitation: (token: string) => api.post(`/teams/invitations/${token}/accept`),
+  joinByToken: (token: string) => api.post<Team>('/teams/join', { token }),
+  regenerateToken: (teamId: string) => api.post<{ join_token: string }>(`/teams/${teamId}/join-token/regenerate`),
+}
+
+export interface ProviderKey { id: string; provider: string; key_mask: string; created_at: string; updated_at: string }
+export const providerKeysApi = {
+  providers: () => api.get<{ providers: string[] }>('/provider-keys/providers'),
+  list: () => api.get<ProviderKey[]>('/provider-keys'),
+  save: (provider: string, api_key: string) => api.put<ProviderKey>('/provider-keys', { provider, api_key }),
+  delete: (provider: string) => api.delete(`/provider-keys/${provider}`),
 }
 
 // ── Existing APIs ──────────────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Plus, Users, UserPlus, Trash2, Copy, Check,
-  Loader2, Crown, Shield, User, Mail, Github, LogOut,
-  X, ChevronRight, AlertCircle, CheckCircle
+  Loader2, Crown, Shield, User, LogOut,
+  X, ChevronRight
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
@@ -44,12 +44,9 @@ function TeamDetail({ team, currentUsername, onBack, onLeft }: {
   team: Team; currentUsername: string; onBack: () => void; onLeft: () => void
 }) {
   const [detail, setDetail] = useState<(Team & { members: TeamMember[] }) | null>(null);
-  const [inviteInput, setInviteInput] = useState('');
-  const [inviteMode, setInviteMode] = useState<'github' | 'email'>('github');
+  const [joinToken, setJoinToken] = useState(team.join_token || '');
+  const [regenerating, setRegenerating] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [inviting, setInviting] = useState(false);
-  const [inviteLink, setInviteLink] = useState('');
-  const [inviteError, setInviteError] = useState('');
   const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -64,26 +61,6 @@ function TeamDetail({ team, currentUsername, onBack, onLeft }: {
       setDetail(null);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleInvite = async () => {
-    if (!inviteInput.trim()) return;
-    setInviting(true);
-    setInviteError('');
-    try {
-      const payload = inviteMode === 'email'
-        ? { invitee_email: inviteInput.trim() }
-        : { invitee_github: inviteInput.trim() };
-      const res = await teamsApi.invite(team.id, payload);
-      const token = res.data.invite_token;
-      setInviteLink(`${window.location.origin}/teams/accept/${token}`);
-      setInviteInput('');
-      await load();
-    } catch (e: any) {
-      setInviteError(e.response?.data?.detail || 'Failed to send invite. User may not be registered.');
-    } finally {
-      setInviting(false);
     }
   };
 
@@ -127,6 +104,14 @@ function TeamDetail({ team, currentUsername, onBack, onLeft }: {
 
   const myRole = detail?.members.find(m => m.username === currentUsername)?.role;
   const canManage = myRole === 'owner' || myRole === 'admin';
+  const isOwner = myRole === 'owner';
+
+  const handleRegenerateToken = async () => {
+    if (!confirm('Regenerate this team token? The previous token will stop working.')) return;
+    setRegenerating(true);
+    try { const res = await teamsApi.regenerateToken(team.id); setJoinToken(res.data.join_token); await load(); }
+    finally { setRegenerating(false); }
+  };
 
   return (
     <div className="space-y-5">
@@ -158,6 +143,20 @@ function TeamDetail({ team, currentUsername, onBack, onLeft }: {
         </div>
       </div>
 
+      {isOwner && (
+        <div className="rounded-2xl border border-white/10 bg-[#070707] p-4 sm:p-5 space-y-3">
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-500">Team join token</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <code className="flex-1 rounded-xl bg-black px-3 py-3 text-sm text-white break-all">{joinToken || 'Token configured — regenerate to reveal a new token'}</code>
+            {joinToken && <CopyButton text={joinToken} />}
+            <button onClick={handleRegenerateToken} disabled={regenerating} className="rounded-xl border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white disabled:opacity-50">
+              {regenerating ? 'Regenerating…' : 'Regenerate'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-600">Share this token with people you want to join. Regenerating invalidates the old token.</p>
+        </div>
+      )}
+
       {/* Members */}
       <div className="rounded-2xl border border-white/10 bg-[#0d0d14] overflow-hidden">
         <div className="px-5 py-3 border-b border-white/8 flex items-center justify-between">
@@ -186,51 +185,6 @@ function TeamDetail({ team, currentUsername, onBack, onLeft }: {
         </div>
       </div>
 
-      {/* Invite section */}
-      {canManage && (
-        <div className="rounded-2xl border border-white/10 bg-[#0d0d14] p-5 space-y-4">
-          <p className="text-xs font-mono uppercase tracking-widest text-gray-600">Invite members</p>
-          <div className="flex gap-2">
-            <button onClick={() => setInviteMode('github')}
-              className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-semibold transition ${inviteMode === 'github' ? 'bg-white text-black' : 'border border-white/10 text-gray-400 hover:text-white'}`}>
-              <Github className="h-3.5 w-3.5" /> GitHub
-            </button>
-            <button onClick={() => setInviteMode('email')}
-              className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-semibold transition ${inviteMode === 'email' ? 'bg-white text-black' : 'border border-white/10 text-gray-400 hover:text-white'}`}>
-              <Mail className="h-3.5 w-3.5" /> Email
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <input
-              value={inviteInput}
-              onChange={e => setInviteInput(e.target.value)}
-              placeholder={inviteMode === 'github' ? 'GitHub username' : 'Email address'}
-              className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
-              onKeyDown={e => e.key === 'Enter' && handleInvite()}
-            />
-            <button onClick={handleInvite} disabled={inviting || !inviteInput.trim()}
-              className="flex items-center gap-1.5 rounded-lg border border-white bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
-              {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-              Invite
-            </button>
-          </div>
-          {inviteError && (
-            <div className="flex items-center gap-2 text-xs text-red-400 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
-              <AlertCircle className="h-3.5 w-3.5 flex-none" /> {inviteError}
-            </div>
-          )}
-          {inviteLink && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2.5">
-                <CheckCircle className="h-3.5 w-3.5 text-green-400 flex-none" />
-                <p className="flex-1 text-xs font-mono text-green-300 truncate">{inviteLink}</p>
-                <CopyButton text={inviteLink} />
-              </div>
-              <p className="text-[10px] text-gray-600">Share this link. It expires in 7 days. Only registered Raptor users can accept.</p>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -242,6 +196,9 @@ export default function TeamsPage() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinInput, setJoinInput] = useState('');
+  const [joining, setJoining] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentUsername, setCurrentUsername] = useState('');
   const navigate = useNavigate();
@@ -265,6 +222,14 @@ export default function TeamsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleJoin = async () => {
+    if (!joinInput.trim()) return;
+    setJoining(true);
+    try { const res = await teamsApi.joinByToken(joinInput.trim()); await load(); setJoinInput(''); setShowJoin(false); setSelected(res.data); }
+    catch (e: any) { alert(e.response?.data?.detail || 'Invalid or expired team token'); }
+    finally { setJoining(false); }
   };
 
   const handleCreate = async () => {
@@ -303,7 +268,7 @@ export default function TeamsPage() {
               className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
               onKeyDown={e => e.key === 'Enter' && handleCreate()}
             />
-            <p className="text-xs text-gray-600">Invite members after creating the team. Only registered Raptor users can be invited.</p>
+            <p className="text-xs text-gray-600">A secure join token will be generated. Share it with members when you are ready.</p>
             <div className="flex gap-3">
               <button onClick={handleCreate} disabled={creating || !newName.trim()}
                 className="flex items-center gap-2 rounded-lg border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
@@ -319,6 +284,17 @@ export default function TeamsPage() {
         </div>
       )}
 
+
+      {showJoin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0d0d14] p-6 space-y-4">
+            <div className="flex items-center justify-between"><h2 className="text-base font-bold text-white">Join a Team</h2><button onClick={() => setShowJoin(false)} className="rounded border border-white/10 p-1.5 text-gray-500 hover:text-white transition"><X className="h-4 w-4" /></button></div>
+            <input value={joinInput} onChange={e => setJoinInput(e.target.value.toUpperCase())} placeholder="TEAM-8X4K-29QP" className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30" onKeyDown={e => e.key === 'Enter' && handleJoin()} />
+            <div className="flex gap-3"><button onClick={handleJoin} disabled={joining || !joinInput.trim()} className="flex items-center gap-2 rounded-lg border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">{joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}Join Team</button><button onClick={() => setShowJoin(false)} className="rounded-lg border border-white/10 px-5 py-2 text-sm font-semibold text-gray-400 hover:text-white transition">Cancel</button></div>
+          </div>
+        </div>
+      )}
+
       <nav className="border-b border-white/10 bg-black/80 sticky top-0 z-40 backdrop-blur-xl px-4 sm:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="text-gray-400 hover:text-white flex items-center gap-1 text-sm font-mono transition-colors">
@@ -328,12 +304,15 @@ export default function TeamsPage() {
           <TRexIcon className="w-6 h-6 text-white" />
           <span className="text-white font-bold tracking-tight">Teams</span>
         </div>
-        <button onClick={() => setShowCreate(true)}
+        <div className="flex gap-2"><button onClick={() => setShowJoin(true)}
+          className="flex items-center gap-1.5 rounded border border-white/10 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:bg-white/5 hover:text-white transition">
+          <UserPlus className="h-3.5 w-3.5" /> Join
+        </button><button onClick={() => setShowCreate(true)}
           className="flex items-center gap-1.5 rounded border border-white/20 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white hover:text-black transition">
           <Plus className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">New Team</span>
           <span className="sm:hidden">New</span>
-        </button>
+        </button></div>
       </nav>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12">
@@ -361,11 +340,16 @@ export default function TeamsPage() {
                   <Users className="h-7 w-7 text-gray-700" />
                 </div>
                 <p className="text-gray-400 font-semibold">No teams yet</p>
-                <p className="text-gray-600 text-sm max-w-xs mx-auto">Create a team and invite GitHub users who have signed up for Raptor.</p>
-                <button onClick={() => setShowCreate(true)}
+                <p className="text-gray-600 text-sm max-w-xs mx-auto">Create a team or join one with a token from a team leader.</p>
+                <div className="flex gap-2"><button onClick={() => setShowJoin(true)}
+          className="flex items-center gap-1.5 rounded border border-white/10 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:bg-white/5 hover:text-white transition">
+          <UserPlus className="h-3.5 w-3.5" /> Join
+        </button><button onClick={() => setShowCreate(true)}
                   className="inline-flex items-center gap-2 rounded border border-white/20 px-4 py-2 text-sm text-white hover:bg-white hover:text-black transition">
                   <Plus className="h-4 w-4" /> Create your first team
                 </button>
+                <button onClick={() => setShowJoin(true)} className="inline-flex items-center gap-2 rounded border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"><UserPlus className="h-4 w-4" /> Join a Team</button>
+              </div>
               </div>
             ) : (
               <div className="space-y-3">

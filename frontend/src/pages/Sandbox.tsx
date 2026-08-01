@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import {
   Terminal, Play, Square, Plus, Shield, AlertTriangle,
   ArrowLeft, Loader2, ChevronRight, Zap,
-  Eye, X
+  Eye, X, KeyRound
 } from 'lucide-react'
-import api, { reposApi, type RepositoryInfo } from '../api'
+import api, { reposApi, providerKeysApi, type RepositoryInfo, type ProviderKey } from '../api'
 
 interface SandboxSession {
   id: string; name: string; status: string; agent_type: string
   repo_url?: string; workspace_path?: string
   started_at?: string; ended_at?: string; created_at: string
+  provider?: string; provider_key_source?: string
 }
 
 interface SandboxEvent {
@@ -51,6 +52,7 @@ const EVENT_ICONS: Record<string, React.ReactNode> = {
 }
 
 const AGENT_TYPES = ['custom', 'cursor', 'claude-code', 'copilot', 'codex', 'devin']
+const PROVIDERS = ['openai', 'anthropic', 'google', 'gemini', 'mistral', 'groq']
 
 // ── Terminal component ────────────────────────────────────────────────────────
 function SandboxTerminal({ sessionId }: { sessionId: string }) {
@@ -329,14 +331,19 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
   const [repoUrl, setRepoUrl] = useState('')
   const [creating, setCreating] = useState(false)
   const [repos, setRepos] = useState<RepositoryInfo[]>([])
+  const [keys, setKeys] = useState<ProviderKey[]>([])
+  const [provider, setProvider] = useState(PROVIDERS[0])
+  const [keySource, setKeySource] = useState<'platform' | 'user'>('platform')
+  const [repoError, setRepoError] = useState('')
   const [loadingRepos, setLoadingRepos] = useState(false)
 
   useEffect(() => {
     const fetchRepos = async () => {
       setLoadingRepos(true)
       try {
-        const res = await reposApi.getRepos()
+        const [res, keyRes] = await Promise.all([reposApi.getRepos(), providerKeysApi.list().catch(() => ({ data: [] as ProviderKey[] }))])
         setRepos(res.data)
+        setKeys(keyRes.data)
       } catch (err) {
         console.error("Failed to fetch repositories", err)
       } finally {
@@ -346,12 +353,21 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
     fetchRepos()
   }, [])
 
+  const validateRepo = () => {
+    if (!repoUrl.trim()) { setRepoError(''); return true }
+    const ok = /^https:\/\/(www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/.test(repoUrl.trim())
+    setRepoError(ok ? '' : 'Enter a valid GitHub repository URL, e.g. https://github.com/username/repository')
+    return ok
+  }
+
   const handleCreate = async () => {
+    if (!validateRepo()) return
     setCreating(true)
     try {
       const res = await api.post('/sandbox/sessions', {
         name, agent_type: agentType,
-        repo_url: repoUrl || undefined,
+        repo_url: repoUrl.trim() || undefined,
+        provider, provider_key_source: keySource,
       })
       onCreate(res.data)
     } catch (e: any) {
@@ -361,7 +377,7 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-black p-6 space-y-4 shadow-[0_32px_80px_rgba(0,0,0,0.95)]">
+      <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#050505] p-5 sm:p-6 space-y-5 shadow-[0_32px_80px_rgba(0,0,0,0.95)]">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-white">New Sandbox Session</h2>
           <button onClick={onClose} className="rounded-full border border-white/5 bg-white/5 p-1.5 text-gray-500 hover:text-white transition">
@@ -372,42 +388,56 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
           <div>
             <label className="text-xs text-gray-600 mb-1 block">Session name</label>
             <input value={name} onChange={e => setName(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30" />
+              className="w-full min-h-11 rounded-xl border border-white/10 bg-[#101010] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20" />
           </div>
           <div>
             <label className="text-xs text-gray-600 mb-1 block">Agent type</label>
             <select value={agentType} onChange={e => setAgentType(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white focus:outline-none">
+              className="w-full min-h-11 rounded-xl border border-white/10 bg-[#101010] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20">
               {AGENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">AI provider</label>
+              <select value={provider} onChange={e => setProvider(e.target.value)} className="w-full min-h-11 rounded-xl border border-white/10 bg-[#101010] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20">
+                {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">API key source</label>
+              <select value={keySource} onChange={e => setKeySource(e.target.value as 'platform' | 'user')} className="w-full min-h-11 rounded-xl border border-white/10 bg-[#101010] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20">
+                <option value="platform">Platform default key</option>
+                <option value="user" disabled={!keys.some(k => k.provider === provider)}>My {provider} key {keys.some(k => k.provider === provider) ? '' : '(not configured)'}</option>
+              </select>
+            </div>
+          </div>
           <div>
-            <label className="text-xs text-gray-600 mb-1 block">Repository URL (optional)</label>
+            <label className="text-xs text-gray-500 mb-1 block">Repository URL (optional)</label>
             {loadingRepos ? (
               <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
                 <Loader2 className="h-3 w-3 animate-spin" /> Loading repositories...
               </div>
             ) : (
-              <select
-                value={repoUrl}
-                onChange={e => setRepoUrl(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 max-h-48 overflow-y-auto"
-              >
-                <option value="">None — start with an empty workspace</option>
-                {repos.map(r => (
-                  <option key={r.id} value={`https://github.com/${r.fullName}`}>
-                    {r.fullName} {r.private ? '🔒' : '🌐'}
-                  </option>
-                ))}
-              </select>
+              <>
+                <input
+                  value={repoUrl}
+                  onChange={e => { setRepoUrl(e.target.value); if (repoError) setRepoError('') }}
+                  onBlur={validateRepo}
+                  list="sandbox-repositories"
+                  placeholder="https://github.com/username/repository"
+                  className="w-full min-h-11 rounded-xl border border-white/10 bg-[#101010] px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20"
+                />
+                <datalist id="sandbox-repositories">
+                  {repos.map(r => <option key={r.id} value={`https://github.com/${r.fullName}`}>{r.fullName}</option>)}
+                </datalist>
+                {repoError && <p className="mt-1 text-xs text-red-400">{repoError}</p>}
+              </>
             )}
           </div>
         </div>
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 p-3">
-          <p className="text-xs text-amber-400/80 leading-relaxed">
-            Commands run in an isolated workspace. Dangerous commands, secret file access, and cloud metadata endpoints are blocked automatically.
-          </p>
-        </div>
+        <div className="rounded-xl bg-white/[0.03] p-3 text-xs text-gray-500 flex gap-2"><KeyRound className="h-4 w-4 flex-none"/> This session will use the {keySource === 'user' ? 'personal masked provider key' : 'platform default provider key'}.</div>
         <div className="flex gap-3 pt-1">
           <button onClick={handleCreate} disabled={creating || !name.trim()}
             className="flex items-center gap-2 rounded border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-neutral-200 disabled:opacity-50 transition">
@@ -465,28 +495,13 @@ export default function SandboxPage() {
             <div>
               <h1 className="text-2xl font-bold text-white tracking-tight">Agent Sandbox</h1>
               <p className="text-sm text-gray-500 mt-0.5">
-                Isolated execution environments for AI coding agents — with full audit trails.
+                Minimal isolated workspaces for AI coding agents.
               </p>
             </div>
             <button onClick={() => setShowCreate(true)}
               className="flex items-center gap-2 rounded border border-white bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-100 transition">
               <Plus className="h-4 w-4" /> New Session
             </button>
-          </div>
-
-          {/* Value props */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[
-              { icon: Shield, title: 'Policy enforcement', desc: 'Blocks dangerous commands, secret access, and cloud metadata endpoints automatically.' },
-              { icon: Eye, title: 'Full audit trail', desc: 'Every command, file access, and network request logged with timestamps and severity.' },
-              { icon: Zap, title: 'Raptor integration', desc: 'PRs opened from inside a sandbox are auto-reviewed before they can be merged.' },
-            ].map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="rounded-2xl border border-white/8 bg-black p-5 space-y-2">
-                <Icon className="h-5 w-5 text-white" />
-                <p className="text-sm font-bold text-white">{title}</p>
-                <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>
-              </div>
-            ))}
           </div>
 
           {/* Sessions list */}
@@ -516,7 +531,7 @@ export default function SandboxPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-white">{s.name}</p>
                       <p className="text-xs font-mono text-gray-600 mt-0.5">
-                        {s.agent_type} · {s.id.slice(0, 8)}
+                        {s.agent_type} · {s.provider || 'default'} · {s.provider_key_source === 'user' ? 'BYOK' : 'platform'} · {s.id.slice(0, 8)}
                         {s.started_at && ` · started ${new Date(s.started_at).toLocaleTimeString()}`}
                       </p>
                     </div>
