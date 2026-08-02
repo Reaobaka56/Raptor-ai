@@ -14,6 +14,6 @@ CREATE INDEX IF NOT EXISTS idx_provider_keys_user ON user_provider_keys(user_id)
 ALTER TABLE sandbox_sessions ADD COLUMN IF NOT EXISTS provider TEXT;
 ALTER TABLE sandbox_sessions ADD COLUMN IF NOT EXISTS provider_key_source TEXT NOT NULL DEFAULT 'platform';
 
-ALTER TABLE teams ADD COLUMN IF NOT EXISTS join_token_hash TEXT;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS join_token_hash TEXT UNIQUE;
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS join_token_created_at TIMESTAMPTZ;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_join_token_hash ON teams(join_token_hash) WHERE join_token_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_teams_join_token_hash ON teams(join_token_hash);

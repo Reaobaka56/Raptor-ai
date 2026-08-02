@@ -383,7 +383,6 @@ def generate_join_token() -> str:
 
 def ensure_join_token(team_id: str) -> Optional[str]:
     """Generate and return a new plaintext join token for leader display."""
-    ensure_team_token_columns()
     conn = get_conn()
     if not conn: return None
     try:
@@ -401,7 +400,6 @@ def ensure_join_token(team_id: str) -> Optional[str]:
 
 
 def join_team_by_token(user_id: str, token: str) -> Optional[Dict[str, Any]]:
-    ensure_team_token_columns()
     conn = get_conn()
     if not conn: return None
     try:

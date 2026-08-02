@@ -26,37 +26,7 @@ def _public(record: Dict[str, Any]) -> Dict[str, Any]:
     record.pop("encrypted_key", None)
     return record
 
-
-def ensure_provider_key_schema() -> None:
-    """Create BYOK storage table when newer migrations have not been applied yet."""
-    conn = get_conn()
-    if not conn:
-        return
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS user_provider_keys (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    provider TEXT NOT NULL,
-                    encrypted_key TEXT NOT NULL,
-                    key_mask TEXT NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    UNIQUE(user_id, provider)
-                );
-                CREATE INDEX IF NOT EXISTS idx_provider_keys_user ON user_provider_keys(user_id);
-            """)
-            conn.commit()
-    except Exception:
-        try: conn.rollback()
-        except Exception: pass
-        raise
-    finally:
-        release_conn(conn)
-
 def list_keys(user_id: str) -> List[Dict[str, Any]]:
-    ensure_provider_key_schema()
     conn=get_conn()
     if not conn: return []
     try:
@@ -69,7 +39,6 @@ def list_keys(user_id: str) -> List[Dict[str, Any]]:
     finally: release_conn(conn)
 
 def upsert_key(user_id: str, provider: str, api_key: str) -> Optional[Dict[str, Any]]:
-    ensure_provider_key_schema()
     provider=provider.lower().strip()
     if provider not in SUPPORTED_PROVIDERS or not api_key.strip(): return None
     encrypted=_fernet().encrypt(api_key.strip().encode()).decode()
@@ -90,7 +59,6 @@ def upsert_key(user_id: str, provider: str, api_key: str) -> Optional[Dict[str, 
     finally: release_conn(conn)
 
 def delete_key(user_id: str, provider: str) -> bool:
-    ensure_provider_key_schema()
     conn=get_conn()
     if not conn: return False
     try:
@@ -100,7 +68,6 @@ def delete_key(user_id: str, provider: str) -> bool:
     finally: release_conn(conn)
 
 def key_configured(user_id: str, provider: str) -> bool:
-    ensure_provider_key_schema()
     conn=get_conn()
     if not conn: return False
     try:

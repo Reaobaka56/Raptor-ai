@@ -167,7 +167,6 @@ def ensure_sandbox_schema() -> None:
 def create_session(owner_id: str, name: str, repo_url: Optional[str],
                    agent_type: str, policy: dict, resource_limits: dict,
                    provider: Optional[str] = None, provider_key_source: str = "platform") -> Dict[str, Any]:
-    ensure_sandbox_schema()
     conn = get_conn()
     if not conn:
         raise RuntimeError("Database unavailable")
