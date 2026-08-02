@@ -2,13 +2,15 @@
 Sandbox router — REST API for agent sandbox sessions.
 """
 import logging
+import re
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl, field_validator
 
 from .auth_dependencies import get_required_github_session
 from .services.user_service import get_user_by_username
 from .services import sandbox_service
+from .services.provider_key_service import SUPPORTED_PROVIDERS, key_configured
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sandbox", tags=["Sandbox"])
@@ -47,7 +49,19 @@ class CreateSessionRequest(BaseModel):
     name: str = "New Session"
     agent_type: str = "custom"
     repo_url: Optional[str] = None
+    provider: Optional[str] = None
+    provider_key_source: str = "platform"
     policy: dict = {}
+
+    @field_validator("repo_url")
+    @classmethod
+    def validate_repo_url(cls, value: Optional[str]) -> Optional[str]:
+        if not value or not value.strip():
+            return None
+        value = value.strip()
+        if not re.match(r"^https://(www\.)?github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$", value):
+            raise ValueError("Repository URL must be a GitHub repository URL like https://github.com/username/repository")
+        return value.rstrip("/")
     resource_limits: dict = {}
 
 
@@ -71,6 +85,13 @@ def create_session(
 ):
     user = _get_user(session)
     limits = _tier_limits(user["username"])
+
+    provider = body.provider.lower() if body.provider else None
+    provider_key_source = body.provider_key_source if body.provider_key_source in ("platform", "user") else "platform"
+    if provider and provider not in SUPPORTED_PROVIDERS:
+        raise HTTPException(status_code=400, detail="Unsupported provider")
+    if provider_key_source == "user" and (not provider or not key_configured(user["id"], provider)):
+        raise HTTPException(status_code=400, detail="Add a personal API key for this provider before using it in Sandbox")
 
     # Merge policy with tier limits
     policy = {
@@ -97,6 +118,8 @@ def create_session(
             agent_type=body.agent_type,
             policy=policy,
             resource_limits=resource_limits,
+            provider=provider,
+            provider_key_source=provider_key_source,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

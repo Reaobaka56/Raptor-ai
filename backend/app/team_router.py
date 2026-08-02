@@ -17,6 +17,7 @@ from .services.team_service import (
     create_team, get_team, list_user_teams,
     list_members, get_member_role, add_member, remove_member,
     create_invitation, get_invitation, accept_invitation,
+    ensure_join_token, join_team_by_token,
 )
 
 router = APIRouter(prefix="/api/teams", tags=["Teams"])
@@ -57,6 +58,9 @@ class AddMemberRequest(BaseModel):
     username: str
     role: str = "member"
 
+class JoinTokenRequest(BaseModel):
+    token: str
+
 
 # ── Team CRUD ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +77,16 @@ def new_team(body: TeamCreate,
     team = create_team(owner_id=user["id"], name=body.name)
     if not team:
         raise HTTPException(status_code=500, detail="Failed to create team")
+    token = ensure_join_token(team["id"])
+    return {**team, "join_token": token}
+
+
+@router.post("/join", status_code=201)
+def join_by_token(body: JoinTokenRequest, session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = _get_db_user(session)
+    team = join_team_by_token(user["id"], body.token)
+    if not team:
+        raise HTTPException(status_code=400, detail="Team token is invalid or expired")
     return team
 
 
@@ -84,7 +98,21 @@ def team_detail(team_id: str,
     team = get_team(team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
-    return {**team, "members": list_members(team_id)}
+    role = get_member_role(team_id, user["id"])
+    result = {**team, "members": list_members(team_id)}
+    if role == "owner":
+        result["join_token_configured"] = bool(team.get("join_token_hash"))
+    return result
+
+
+@router.post("/{team_id}/join-token/regenerate")
+def regenerate_join_token(team_id: str, session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = _get_db_user(session)
+    _require_team_role(team_id, user["id"], "owner")
+    token = ensure_join_token(team_id)
+    if not token:
+        raise HTTPException(status_code=500, detail="Failed to regenerate team token")
+    return {"join_token": token}
 
 
 # ── Members ────────────────────────────────────────────────────────────────────
