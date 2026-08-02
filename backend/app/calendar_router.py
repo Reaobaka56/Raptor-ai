@@ -64,6 +64,7 @@ except Exception:
 
 @router.get("/meetings")
 def get_meetings(session: Dict[str, Any] = Depends(get_required_github_session)):
+    _ensure_meetings_column()
     user_id = _get_user_id(session)
     conn = get_conn()
     if not conn:
@@ -88,6 +89,7 @@ def save_meetings(
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
     """Replace the user's entire meetings list (client is source of truth)."""
+    _ensure_meetings_column()
     user_id = _get_user_id(session)
     conn = get_conn()
     if not conn:
@@ -114,6 +116,7 @@ def add_meeting(
     meeting: Meeting,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
+    _ensure_meetings_column()
     user_id = _get_user_id(session)
     conn = get_conn()
     if not conn:
@@ -144,6 +147,7 @@ def delete_meeting(
     meeting_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
+    _ensure_meetings_column()
     user_id = _get_user_id(session)
     conn = get_conn()
     if not conn:
@@ -154,11 +158,11 @@ def delete_meeting(
             cur.execute(
                 """
                 UPDATE users
-                SET meetings = (
+                SET meetings = COALESCE((
                     SELECT jsonb_agg(m)
                     FROM jsonb_array_elements(meetings) AS m
                     WHERE m->>'id' != %s
-                )
+                ), '[]'::jsonb)
                 WHERE id = %s::uuid
                 """,
                 (meeting_id, user_id),

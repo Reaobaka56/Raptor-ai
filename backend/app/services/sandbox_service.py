@@ -142,6 +142,26 @@ def _update_session(session_id: str, **fields) -> None:
         release_conn(conn)
 
 
+
+def ensure_sandbox_schema() -> None:
+    """Add columns introduced after the original sandbox migration, if absent."""
+    conn = get_conn()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE sandbox_sessions ADD COLUMN IF NOT EXISTS provider TEXT;
+                ALTER TABLE sandbox_sessions ADD COLUMN IF NOT EXISTS provider_key_source TEXT NOT NULL DEFAULT 'platform';
+            """)
+            conn.commit()
+    except Exception:
+        logger.exception("[sandbox_service] ensure_sandbox_schema failed")
+        try: conn.rollback()
+        except Exception: pass
+    finally:
+        release_conn(conn)
+
 # ── Session management ────────────────────────────────────────────────────────
 
 def create_session(owner_id: str, name: str, repo_url: Optional[str],
@@ -194,6 +214,7 @@ def create_session(owner_id: str, name: str, repo_url: Optional[str],
 
 
 def get_session(session_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
+    ensure_sandbox_schema()
     conn = get_conn()
     if not conn:
         return None
@@ -225,6 +246,7 @@ def get_session(session_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
 
 
 def list_sessions(owner_id: str) -> List[Dict[str, Any]]:
+    ensure_sandbox_schema()
     conn = get_conn()
     if not conn:
         return []
