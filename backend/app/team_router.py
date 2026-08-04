@@ -230,6 +230,125 @@ def delete_team(team_id: str,
         release_conn(conn)
 
 
+
+@router.post("/join")
+def join_by_token(
+    body: dict,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    """Join a team using a plain-text join token."""
+    token = (body.get("token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is required")
+
+    actor = _get_db_user(session)
+    token_hash = __import__('hashlib').sha256(token.encode()).hexdigest()
+
+    conn = get_conn()
+    if not conn:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, name, slug, owner_id FROM teams WHERE join_token_hash = %s",
+                (token_hash,)
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invalid join token")
+
+            team_id, team_name, team_slug, owner_id = str(row[0]), row[1], row[2], str(row[3])
+
+            # Check not already a member
+            cur.execute(
+                "SELECT id FROM team_members WHERE team_id = %s::uuid AND user_id = %s::uuid",
+                (team_id, actor["id"])
+            )
+            if cur.fetchone():
+                raise HTTPException(status_code=400, detail="You are already a member of this team")
+
+            # Add as member
+            cur.execute(
+                "INSERT INTO team_members (team_id, user_id, role) VALUES (%s::uuid, %s::uuid, 'member') ON CONFLICT DO NOTHING",
+                (team_id, actor["id"])
+            )
+            conn.commit()
+            return {"id": team_id, "name": team_name, "slug": team_slug, "role": "member"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        release_conn(conn)
+
+
+@router.post("/{team_id}/join-token/regenerate")
+def regenerate_join_token(
+    team_id: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    """Generate a new join token for a team (owner/admin only)."""
+    actor = _get_db_user(session)
+    _require_team_role(team_id, actor["id"], "admin")
+
+    import secrets, hashlib
+    plain_token = secrets.token_urlsafe(16).upper()[:16]
+    token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
+
+    conn = get_conn()
+    if not conn:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE teams
+                SET join_token_hash = %s, join_token_created_at = now()
+                WHERE id = %s::uuid
+                """,
+                (token_hash, team_id)
+            )
+            conn.commit()
+            return {"join_token": plain_token}
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        release_conn(conn)
+
+
+@router.get("/{team_id}/join-token")
+def get_join_token_status(
+    team_id: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    """Check if a join token is configured for this team (does not reveal the token)."""
+    actor = _get_db_user(session)
+    _require_team_role(team_id, actor["id"], "admin")
+
+    conn = get_conn()
+    if not conn:
+        return {"configured": False}
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT join_token_hash IS NOT NULL, join_token_created_at FROM teams WHERE id = %s::uuid",
+                (team_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Team not found")
+            configured, created_at = row
+            return {
+                "configured": bool(configured),
+                "created_at": created_at.isoformat() if created_at else None
+            }
+    finally:
+        release_conn(conn)
+
 @router.post("/invitations/{token}/accept")
 def accept(token: str,
            session: Dict[str, Any] = Depends(get_required_github_session)):
@@ -238,3 +357,4 @@ def accept(token: str,
     if not ok:
         raise HTTPException(status_code=400, detail="Invitation invalid, expired, or already used")
     return {"accepted": True}
+
