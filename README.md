@@ -17,126 +17,92 @@ By integrating directly with your **GitHub repositories** and utilizing **Google
 ## Core Capabilities
 
 ### Semantic Vulnerability Detection
-Unlike standard static linters that produce overwhelming false positives based on keyword matching, Raptor understands semantic intent. It actively detects:
 - **Authentication & Authorization Bypasses**: Unvalidated route parameters, broken object-level authorization (BOLA), and improper token checks.
-- **Injection Vulnerabilities**: SQL injection, command injection, and Cross-Site Scripting (XSS) via unescaped string concatenation.
+- **Injection Vulnerabilities**: SQL injection, command injection, and Cross-Site Scripting (XSS).
 - **Sensitive Data Exposure**: Unmasked API keys, hardcoded credentials, and leaked PII in logger streams.
 
 ### Database & Performance Profiling
-Raptor analyzes query structures and async loop lifecycles across modern ORMs (Prisma, SQLAlchemy, Django ORM, GORM):
-- **N+1 Query Detection**: Identifies database access patterns occurring within iterative loops and suggests batched query aggregations.
-- **Memory & Resource Leaks**: Highlights unclosed database connections, dangling event listeners, and runaway recursive promises.
+- **N+1 Query Detection**: Identifies database access patterns occurring within iterative loops.
+- **Memory & Resource Leaks**: Highlights unclosed database connections and dangling event listeners.
 
 ### Autonomous Fix & Pull Request Generation
-Raptor does not just report issues — it acts autonomously to resolve them:
-- **AI Diff Suggestions**: Generates precise, production-ready replacement blocks formatted to match your existing code style.
-- **One-Click Automated Fix PRs**: Clicking "Create Fix PR" automatically creates a patch branch, commits the verified AST fixes, and opens a fully documented Pull Request directly on your GitHub repository.
+- **AI Diff Suggestions**: Generates precise, production-ready replacement blocks.
+- **One-Click Automated Fix PRs**: Automatically creates a patch branch, commits fixes, and opens a Pull Request.
 
 ### Team Memory Layer
-Raptor learns your team's conventions over time:
 - Stores accepted and rejected review suggestions per repository using pgvector.
-- Retrieves relevant past decisions as context for every new PR review.
 - Gets smarter the more your team uses it — suppressing false positives specific to your codebase.
 
 ### Secure Agent Sandbox Environments
-Raptor provides isolated runtime containers for executing agent workflows and safe CLI simulation:
-- **Dynamic Container Lifecycles**: Provision, execute commands, monitor, and teardown containerized sessions.
-- **Strict Policy Constraints**: Prevents data exfiltration by blocking access to local metadata endpoints and private configuration paths (e.g., `.env`, `.ssh`, `.aws`, `.pem`).
-- **Tiered Resource Allocations**: Dynamic resource limits capping CPU usage, memory thresholds, disk storage, and max concurrent processes per user tier.
-- **Audit Logs & Telemetry**: Full execution history and resource utilization streams for auditing agent activities.
+- **Isolated Execution**: Provision, execute commands, monitor, and teardown containerized sessions.
+- **Policy Enforcement**: Blocks access to metadata endpoints and private config paths (`.env`, `.ssh`, `.aws`, `.pem`).
+- **Audit Logs**: Full execution history for auditing agent activities.
 
-### Team Collaboration & Organization Management
-Raptor integrates essential developer workflow features directly into the platform:
-- **Role-based Team Access**: Create teams, manage members with role hierarchies (`owner`, `admin`, `member`), and handle invite lifecycle flows.
-- **Real-Time Direct Messaging**: DB-persisted user-to-user chat with unread counters and conversation thread histories.
-- **Meeting Scheduler & Calendar**: Schedule and manage meetings, persisted directly via PostgreSQL JSONB data storage.
-- **Technical Blog System**: Support for drafting and publishing engineering posts, complete with admin-guarded CRUD controls.
-- **GitHub Repository File Browser**: Browse branches, file tree directories, decode code files, and inspect commit diffs natively in the UI.
+### BYOK — Bring Your Own Key
+- Connect your own **OpenAI**, **Anthropic**, **Gemini**, **Groq**, or **Mistral** API keys.
+- Keys encrypted at rest with AES-256; never stored in plaintext.
+- Per-agent model selection — route different agents to different providers.
 
-### Minimalist CLI-Inspired Design
-- Built on a **pure black** aesthetic (`#000000`) with high-contrast typography and clean borders.
-- Eliminates visual clutter and popup modals for a lightning-fast, distraction-free review experience.
+### Team Collaboration
+- Role-based team access (`owner`, `admin`, `member`) with join-token invite flow.
+- Real-time direct messaging with unread counters.
+- Meeting scheduler persisted in PostgreSQL.
+- GitHub repository file browser with commit history and diff viewer.
 
 ---
 
 ## System Architecture
 
 ```
-React + Vite Frontend ↔ Python FastAPI REST API ↔ GitHub API & Webhooks ↔ Gemini AI
+React + Vite Frontend ↔ Python FastAPI REST API ↔ GitHub API & Webhooks ↔ AI Providers
 ```
-
-### Architecture Overview
-Raptor is split into a lightweight frontend and a modular backend:
-
-- **Frontend**
-  - Hosts the user interface and GitHub OAuth flow.
-  - Calls backend REST endpoints for scans, reviews, telemetry, and memory management.
-  - Receives session tokens and persists the user session on the client.
-
-- **Backend**
-  - `backend/app/state.py` initializes the FastAPI app, CORS, middleware, request ID logging, and shared demo state.
-  - `backend/app/main.py` registers routers and exposes the health endpoint.
-  - `backend/app/auth_router.py` handles GitHub OAuth login and token exchange.
-  - `backend/app/scan_router.py` runs repository scan jobs through the AI scan service.
-  - `backend/app/reviews_router.py` exposes review retrieval and fix PR creation.
-  - `backend/app/telemetry_router.py` serves analytics and review stats.
-  - `backend/app/memory_router.py` provides the team memory layer, convention rules, feedback, and RAG search.
-  - `backend/app/sandbox_router.py` exposes agent sandbox session and execution controls.
-  - `backend/app/repo_router.py` provides GitHub integration for browsing files, commits, and branches.
-  - `backend/app/team_router.py` manages organization teams, member hierarchies, and invitations.
-  - `backend/app/chat_router.py` powers database-persisted direct user messaging.
-  - `backend/app/calendar_router.py` handles meeting coordination persisted via Postgres JSONB.
-  - `backend/app/blog_router.py` allows public reading and admin CRUD of engineering blog posts.
-  - `backend/app/user_router.py` retrieves logged-in profiles and manages admin status checks.
-  - `backend/app/router/webhook.py` receives GitHub webhook events and schedules async scan jobs.
-  - `backend/app/services/` contains the core logic for AI analysis, embeddings, GitHub integration, session storage, and database pooling.
-
-- **Persistence**
-  - Redis stores short-lived sessions with sliding TTL.
-  - PostgreSQL persists review records, along with pgvector embeddings for semantic search and memory.
-
-- **Security**
-  - GitHub OAuth state is signed and validated in cookies.
-  - Internal API routes allow bearer tokens and secure session access.
-  - CORS origins are explicit and not regex-based.
 
 ### Tech Stack
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, Recharts
-- **Backend**: Python 3.10+, FastAPI, Uvicorn, Pydantic, Google Generative AI SDK
-- **Database**: PostgreSQL with pgvector for team memory and review caching
+- **Backend**: Python 3.10+, FastAPI, Uvicorn, Pydantic
+- **Database**: PostgreSQL with pgvector · Redis (sessions)
+- **AI**: Google Gemini (default) · OpenAI · Anthropic · Groq · Mistral (BYOK)
 
 ---
 
-## Quick Start
+## Quick Start (Local)
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+
+- Python 3.10+, Node.js 18+
 - GitHub OAuth App credentials
-- Google Gemini API key
+- Google Gemini API key (or any BYOK provider key)
+- PostgreSQL + Redis
 
 ### 1. Clone & Configure
 
 ```bash
 git clone https://github.com/Reaobaka56/Raptor-ai.git
 cd Raptor-ai
+cp .env.example .env
 ```
 
-Create a `.env` file in the root directory:
+Fill in `.env`:
 
 ```env
-# GitHub Credentials
 GITHUB_CLIENT_ID=your_github_client_id
 GITHUB_CLIENT_SECRET=your_github_client_secret
-
-# AI Model Configuration
 GEMINI_API_KEY=your_google_gemini_api_key
+DATABASE_URL=postgresql://user:password@localhost:5432/raptor
+REDIS_URL=redis://localhost:6379/0
+SECRET_KEY=your-random-32-char-secret
 ```
 
-Set your GitHub OAuth app callback URL to `<frontend-origin>/auth/github/callback`.
-For local development: `http://localhost:5173/auth/github/callback`
+### 2. Run Migrations
 
-### 2. Start the Backend
+```bash
+psql $DATABASE_URL < backend/migrations/003_users_teams_blog.sql
+psql $DATABASE_URL < backend/migrations/004_chat_messages.sql
+psql $DATABASE_URL < backend/migrations/005_sandbox.sql
+psql $DATABASE_URL < backend/migrations/006_api_keys.sql
+psql $DATABASE_URL < backend/migrations/007_join_tokens.sql
+```
+
+### 3. Start Backend
 
 ```bash
 cd backend
@@ -144,9 +110,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-API runs at `http://localhost:8000` — interactive docs available at `http://localhost:8000/docs`.
-
-### 3. Start the Frontend
+### 4. Start Frontend
 
 ```bash
 cd frontend
@@ -158,12 +122,258 @@ App runs at `http://localhost:5173`.
 
 ---
 
-## Workflow
+## Deployment — Render (Current Production)
 
-1. **Connect GitHub**: Click **Login with GitHub** to sync your account and repositories.
-2. **Open a PR**: Raptor automatically triggers on pull request events via webhook.
-3. **Review Results**: Inspect file locations, line numbers, and severity badges (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) with AI diff suggestions.
-4. **Apply Fix**: Click **Create Fix PR** to automatically branch, commit the corrected diffs, and open a pull request on GitHub.
+Raptor runs on [Render](https://render.com) with a PostgreSQL database and Redis instance.
+
+| Service | Type | Config |
+|---|---|---|
+| `raptor-ai` | Web Service (Docker) | Builds from `/backend` |
+| `raptor-ai-db` | PostgreSQL | Standard plan |
+| `raptor-redis` | Key Value (Redis) | Starter plan |
+
+Set environment variables in Render → Service → Environment:
+
+```env
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GITHUB_WEBHOOK_SECRET=
+GEMINI_API_KEY=
+DATABASE_URL=          # Use Internal Connection String from Render PostgreSQL
+REDIS_URL=             # Use Internal Key Value URL from Render Redis
+SECRET_KEY=            # Random 32-char string
+BASE_URL=https://your-service.onrender.com
+```
+
+Frontend deploys to [Vercel](https://vercel.com) from the `frontend/` directory with `framework: vite`.
+
+---
+
+## Deployment — AWS
+
+### Architecture Overview
+
+```
+Route 53 → CloudFront → S3 (frontend)
+                      → ALB → ECS Fargate (backend)
+                                         → RDS PostgreSQL
+                                         → ElastiCache Redis
+```
+
+### Prerequisites
+- AWS CLI configured (`aws configure`)
+- Docker installed
+- ECR repository created
+
+### 1. Push Backend Image to ECR
+
+```bash
+# Create ECR repository
+aws ecr create-repository --repository-name raptor-ai --region us-east-1
+
+# Get login token
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin \
+  <your-account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+# Build and push
+cd backend
+docker build -t raptor-ai .
+docker tag raptor-ai:latest <your-account-id>.dkr.ecr.us-east-1.amazonaws.com/raptor-ai:latest
+docker push <your-account-id>.dkr.ecr.us-east-1.amazonaws.com/raptor-ai:latest
+```
+
+### 2. Database — RDS PostgreSQL
+
+```bash
+aws rds create-db-instance \
+  --db-instance-identifier raptor-ai-db \
+  --db-instance-class db.t3.micro \
+  --engine postgres \
+  --engine-version 15 \
+  --master-username raptor \
+  --master-user-password <your-db-password> \
+  --allocated-storage 20 \
+  --no-publicly-accessible \
+  --vpc-security-group-ids <your-sg-id> \
+  --db-subnet-group-name <your-subnet-group>
+```
+
+Run migrations after RDS is available:
+
+```bash
+psql postgresql://raptor:<password>@<rds-endpoint>:5432/postgres \
+  < backend/migrations/003_users_teams_blog.sql
+# Repeat for 004, 005, 006, 007
+```
+
+### 3. Cache — ElastiCache Redis
+
+```bash
+aws elasticache create-replication-group \
+  --replication-group-id raptor-redis \
+  --replication-group-description "Raptor AI sessions" \
+  --cache-node-type cache.t3.micro \
+  --engine redis \
+  --num-cache-clusters 1 \
+  --security-group-ids <your-sg-id> \
+  --subnet-group-name <your-subnet-group>
+```
+
+### 4. Backend — ECS Fargate
+
+Create task definition (`task-definition.json`):
+
+```json
+{
+  "family": "raptor-ai",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::<account>:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "raptor-ai",
+      "image": "<account>.dkr.ecr.us-east-1.amazonaws.com/raptor-ai:latest",
+      "portMappings": [{ "containerPort": 8000, "protocol": "tcp" }],
+      "environment": [
+        { "name": "DATABASE_URL", "value": "postgresql://raptor:<pass>@<rds-endpoint>:5432/postgres" },
+        { "name": "REDIS_URL", "value": "redis://<elasticache-endpoint>:6379/0" },
+        { "name": "GITHUB_CLIENT_ID", "value": "<your-value>" },
+        { "name": "GITHUB_CLIENT_SECRET", "value": "<your-value>" },
+        { "name": "GEMINI_API_KEY", "value": "<your-value>" },
+        { "name": "SECRET_KEY", "value": "<random-32-char>" },
+        { "name": "BASE_URL", "value": "https://api.yourdomain.com" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/raptor-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
+```
+
+```bash
+# Register task definition
+aws ecs register-task-definition --cli-input-json file://task-definition.json
+
+# Create cluster
+aws ecs create-cluster --cluster-name raptor-ai
+
+# Create service
+aws ecs create-service \
+  --cluster raptor-ai \
+  --service-name raptor-api \
+  --task-definition raptor-ai \
+  --desired-count 1 \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[<subnet-id>],securityGroups=[<sg-id>],assignPublicIp=ENABLED}" \
+  --load-balancers "targetGroupArn=<target-group-arn>,containerName=raptor-ai,containerPort=8000"
+```
+
+### 5. Frontend — S3 + CloudFront
+
+```bash
+# Build frontend
+cd frontend
+VITE_API_URL=https://api.yourdomain.com npm run build
+
+# Create S3 bucket
+aws s3 mb s3://raptor-ai-frontend-<your-account-id>
+
+# Upload build
+aws s3 sync dist/ s3://raptor-ai-frontend-<your-account-id> \
+  --delete \
+  --cache-control "public,max-age=31536000,immutable"
+
+# Upload index.html with no-cache (for SPA routing)
+aws s3 cp dist/index.html s3://raptor-ai-frontend-<your-account-id>/index.html \
+  --cache-control "no-cache,no-store,must-revalidate"
+
+# Create CloudFront distribution (point to S3 bucket, add error page: 404 → /index.html → 200)
+aws cloudfront create-distribution \
+  --distribution-config file://cloudfront-config.json
+```
+
+### 6. GitHub Webhook
+
+In your GitHub OAuth App / GitHub App settings, set the webhook URL to:
+```
+https://api.yourdomain.com/webhook/github
+```
+
+Set `GITHUB_WEBHOOK_SECRET` to the same value in your ECS environment.
+
+### 7. CI/CD — GitHub Actions (Auto-deploy to ECS)
+
+Create `.github/workflows/deploy-aws.yml`:
+
+```yaml
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, push image
+        run: |
+          IMAGE_URI=${{ secrets.ECR_REGISTRY }}/raptor-ai:${{ github.sha }}
+          docker build -t $IMAGE_URI backend/
+          docker push $IMAGE_URI
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster raptor-ai \
+            --service raptor-api \
+            --force-new-deployment
+
+      - name: Deploy frontend to S3
+        run: |
+          cd frontend
+          npm ci
+          VITE_API_URL=https://api.yourdomain.com npm run build
+          aws s3 sync dist/ s3://${{ secrets.S3_BUCKET }} --delete
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CF_DISTRIBUTION_ID }} \
+            --paths "/*"
+```
+
+Add these GitHub secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ECR_REGISTRY`, `S3_BUCKET`, `CF_DISTRIBUTION_ID`.
+
+### Estimated AWS Cost (us-east-1)
+
+| Resource | Spec | Monthly est. |
+|---|---|---|
+| ECS Fargate | 0.5 vCPU / 1GB | ~$15 |
+| RDS PostgreSQL | db.t3.micro | ~$15 |
+| ElastiCache Redis | cache.t3.micro | ~$12 |
+| S3 + CloudFront | Low traffic | ~$2 |
+| ALB | 1 load balancer | ~$16 |
+| **Total** | | **~$60/mo** |
 
 ---
 
@@ -171,44 +381,33 @@ App runs at `http://localhost:5173`.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/auth/github/login` | Starts the GitHub OAuth login flow |
-| `POST` | `/api/auth/github` | Exchanges OAuth code for session and repository list |
-| `GET` | `/api/repos` | Retrieves repositories from GitHub |
-| `POST` | `/api/scan` | Runs AI AST scan on selected repository |
-| `GET` | `/api/reviews` | Retrieves paginated scan reports |
-| `GET` | `/api/reviews/{id}` | Fetches vulnerability details and diff suggestions |
-| `POST` | `/api/reviews/{id}/pull-request` | Creates automated fix PR on GitHub |
-| `GET` | `/api/stats` | Fetches telemetry and analytics |
-| `GET` | `/api/sandbox/sessions` | Lists active sandbox sessions |
-| `POST` | `/api/sandbox/sessions` | Spawns a new secure sandbox container with policy constraints |
-| `GET` | `/api/sandbox/sessions/{session_id}` | Retrieves sandbox session details and limits |
-| `DELETE` | `/api/sandbox/sessions/{session_id}` | Stops and destroys the sandbox environment |
-| `POST` | `/api/sandbox/sessions/{session_id}/execute` | Executes commands inside the sandbox |
-| `GET` | `/api/sandbox/sessions/{session_id}/events` | Fetches terminal audit logs and outputs |
-| `GET` | `/api/sandbox/sessions/{session_id}/stats` | Monitors CPU, memory, and disk usage |
-| `GET` | `/api/repos/{owner}/{repo}/tree` | Retrieves repository file explorer tree |
-| `GET` | `/api/repos/{owner}/{repo}/file` | Fetches base64 decoded file contents |
-| `GET` | `/api/repos/{owner}/{repo}/commits` | Retrieves paginated commit list |
-| `GET` | `/api/repos/{owner}/{repo}/branches` | Retrieves list of branches |
-| `GET` | `/api/teams` | Lists all teams the current user belongs to |
-| `POST` | `/api/teams` | Creates a new team (assigns creator as Owner) |
-| `GET` | `/api/teams/{team_id}` | Retrieves team details and member list |
-| `POST` | `/api/teams/{team_id}/members` | Adds a user to the team directly (Admin/Owner only) |
-| `DELETE` | `/api/teams/{team_id}/members/{username}` | Kicks a member from the team (Admin/Owner only) |
-| `POST` | `/api/teams/{team_id}/invitations` | Invites a member via email or GitHub username |
-| `POST` | `/api/teams/invitations/{token}/accept` | Accepts an invitation and joins the team |
-| `GET` | `/api/chat/conversations` | Lists user's direct message conversations |
-| `GET` | `/api/chat/messages/{username}` | Fetches message thread with another user |
-| `POST` | `/api/chat/messages` | Sends a direct message to a user |
-| `GET` | `/api/chat/unread-count` | Checks total unread direct message count |
-| `GET` | `/api/calendar/meetings` | Retrieves user's scheduled calendar meetings |
-| `PUT` | `/api/calendar/meetings` | Saves/Updates user's meeting schedules |
-| `GET` | `/api/blog` | Lists published blog posts (and drafts for Admin) |
-| `POST` | `/api/blog` | Creates a new blog post (Admin only) |
-| `PATCH` | `/api/blog/{slug}` | Modifies a blog post (Admin only) |
-| `DELETE` | `/api/blog/{slug}` | Deletes a blog post (Admin only) |
-| `GET` | `/api/users/me` | Retrieves profile of currently logged-in user |
-| `GET` | `/api/users/me/is-admin` | Checks if current user has Admin privileges |
+| `GET` | `/api/auth/github/login` | Starts GitHub OAuth login |
+| `POST` | `/api/auth/github` | Exchanges OAuth code for session |
+| `GET` | `/api/repos` | Lists connected repositories |
+| `POST` | `/api/scan` | Runs AI review on a repository |
+| `GET` | `/api/reviews` | Lists paginated scan reports |
+| `POST` | `/api/reviews/{id}/pull-request` | Creates automated fix PR |
+| `GET` | `/api/stats` | Fetches analytics |
+| `GET` | `/api/sandbox/sessions` | Lists sandbox sessions |
+| `POST` | `/api/sandbox/sessions` | Creates a new sandbox |
+| `POST` | `/api/sandbox/sessions/{id}/execute` | Runs a command in sandbox |
+| `GET` | `/api/sandbox/sessions/{id}/events` | Gets audit log |
+| `GET` | `/api/repos/{owner}/{repo}/tree` | File browser |
+| `GET` | `/api/repos/{owner}/{repo}/commits` | Commit history |
+| `GET` | `/api/teams` | Lists user's teams |
+| `POST` | `/api/teams` | Creates a team |
+| `POST` | `/api/teams/join` | Joins a team by token |
+| `POST` | `/api/teams/{id}/join-token/regenerate` | Regenerates join token |
+| `POST` | `/api/teams/{id}/invitations` | Sends an invite |
+| `GET` | `/api/chat/conversations` | Lists conversations |
+| `POST` | `/api/chat/messages` | Sends a direct message |
+| `GET` | `/api/calendar/meetings` | Gets meetings |
+| `POST` | `/api/calendar/meetings` | Creates a meeting |
+| `GET` | `/api/blog` | Lists blog posts |
+| `GET` | `/api/keys` | Lists BYOK API keys |
+| `POST` | `/api/keys` | Adds a provider API key |
+| `POST` | `/api/keys/{id}/test` | Tests a key validity |
+| `GET` | `/api/users/me` | Gets current user profile |
 
 ---
 
