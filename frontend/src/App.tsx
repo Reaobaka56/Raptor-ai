@@ -17,7 +17,6 @@ import CalendarPage from './pages/Calendar'
 import Chat from './pages/Chat'
 import RepoExplorer from './pages/RepoExplorer'
 import SandboxPage from './pages/Sandbox'
-import SettingsPage from './pages/Settings'
 import './index.css'
 
 import { ProtectedRoute } from './components/ProtectedRoute'
