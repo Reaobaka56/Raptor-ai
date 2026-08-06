@@ -52,7 +52,7 @@ function App() {
         <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
         <Route path="/repos/:owner/:repo" element={<ProtectedRoute><Layout><RepoExplorer /></Layout></ProtectedRoute>} />
         <Route path="/sandbox" element={<ProtectedRoute><Layout><SandboxPage /></Layout></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
+       
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
     </>
