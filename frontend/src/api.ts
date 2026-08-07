@@ -314,5 +314,64 @@ export const prApi = {
     api.post<{ pr_url: string; pr_number: number }>(`/reviews/${reviewId}/create-fix-pr`),
 }
 
+// ── Multi-Agent API ────────────────────────────────────────────────────────────
+
+export interface Agent {
+  id: string; owner_id: string; name: string; role: string
+  description?: string; system_prompt?: string; model: string
+  provider: string; tools: string[]; permissions: Record<string, any>
+  status: string; sandbox_id?: string; current_task_id?: string
+  config: Record<string, any>; knowledge_sources: string[]
+  created_at: string; updated_at: string
+}
+
+export interface AgentTask {
+  id: string; owner_id: string; title: string; description?: string
+  priority: number; status: string; assigned_agent_id?: string
+  parent_task_id?: string; dependencies: string[]
+  input_context?: string; output?: string; logs: any[]; errors: any[]
+  review_status: string; metadata: Record<string, any>
+  started_at?: string; completed_at?: string
+  created_at: string; updated_at: string
+}
+
+export interface AgentMessage {
+  id: string; owner_id: string; from_agent_id?: string; to_agent_id?: string
+  message_type: string; content: string; task_id?: string
+  metadata: Record<string, any>; read: boolean; created_at: string
+  from_agent_name?: string; to_agent_name?: string
+}
+
+export interface AgentActivity {
+  id: string; owner_id: string; agent_id?: string
+  activity_type: string; description: string
+  metadata: Record<string, any>; created_at: string
+}
+
+export const agentApi = {
+  list: () => api.get<Agent[]>('/agents'),
+  get: (id: string) => api.get<Agent>(`/agents/${id}`),
+  create: (data: Partial<Agent>) => api.post<Agent>('/agents', data),
+  update: (id: string, data: Partial<Agent>) => api.patch<Agent>(`/agents/${id}`, data),
+  delete: (id: string) => api.delete(`/agents/${id}`),
+  getTemplates: () => api.get<Record<string, any>>('/agents/templates'),
+  updateStatus: (id: string, status: string) => api.post<Agent>(`/agents/${id}/status`, { status }),
+  getActivity: (id: string, limit = 100) => api.get<AgentActivity[]>(`/agents/${id}/activity`, { params: { limit } }),
+}
+
+export const taskApi = {
+  list: (params?: { status?: string; agent_id?: string }) => api.get<AgentTask[]>('/tasks', { params }),
+  get: (id: string) => api.get<AgentTask>(`/tasks/${id}`),
+  create: (data: Partial<AgentTask>) => api.post<AgentTask>('/tasks', data),
+  update: (id: string, data: Partial<AgentTask>) => api.patch<AgentTask>(`/tasks/${id}`, data),
+  delete: (id: string) => api.delete(`/tasks/${id}`),
+}
+
+export const sandboxApi = {
+  // We redefine these here for easier access, even though Sandbox.tsx currently uses raw api.post
+  pauseSession: (sessionId: string) => api.post(`/sandbox/sessions/${sessionId}/pause`),
+  resumeSession: (sessionId: string) => api.post(`/sandbox/sessions/${sessionId}/resume`),
+}
+
 export default api
 

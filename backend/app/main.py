@@ -22,6 +22,8 @@ from .chat_router import router as chat_router
 from .calendar_router import router as calendar_router
 from .sandbox_router import router as sandbox_router
 from .provider_keys_router import router as provider_keys_router
+from .agent_router import router as agent_router
+from .task_router import router as task_router
 
 app.include_router(auth_router)
 app.include_router(user_router)
@@ -32,6 +34,8 @@ app.include_router(chat_router)
 app.include_router(calendar_router)
 app.include_router(sandbox_router)
 app.include_router(provider_keys_router)
+app.include_router(agent_router)
+app.include_router(task_router)
 app.include_router(memory_router, prefix="/api")
 app.include_router(webhook_router)
 app.include_router(analysis_router, prefix="/debug")

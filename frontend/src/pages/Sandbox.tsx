@@ -325,32 +325,37 @@ function SessionDetail({ session, onBack, onStop }: {
 }
 
 // ── Create session modal ──────────────────────────────────────────────────────
-function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s: SandboxSession) => void }) {
+function CreateModal({ onClose, onCreate }: { onClose: () => void, onCreate: (s: SandboxSession) => void }) {
   const [name, setName] = useState('New Session')
   const [agentType, setAgentType] = useState('custom')
   const [repoUrl, setRepoUrl] = useState('')
-  const [creating, setCreating] = useState(false)
   const [repos, setRepos] = useState<RepositoryInfo[]>([])
   const [keys, setKeys] = useState<ProviderKey[]>([])
+  const [creating, setCreating] = useState(false)
   const [provider, setProvider] = useState(PROVIDERS[0])
   const [keySource, setKeySource] = useState<'platform' | 'user'>('platform')
   const [repoError, setRepoError] = useState('')
   const [loadingRepos, setLoadingRepos] = useState(false)
+  const [envVars, setEnvVars] = useState('{}')
+  const [networkAllow, setNetworkAllow] = useState(true)
 
   useEffect(() => {
-    const fetchRepos = async () => {
+    const fetchReposAndKeys = async () => {
       setLoadingRepos(true)
       try {
-        const [res, keyRes] = await Promise.all([reposApi.getRepos(), providerKeysApi.list().catch(() => ({ data: [] as ProviderKey[] }))])
-        setRepos(res.data)
-        setKeys(keyRes.data)
-      } catch (err) {
-        console.error("Failed to fetch repositories", err)
+        const [repoRes, keysRes] = await Promise.all([
+          reposApi.getRepos(),
+          providerKeysApi.list()
+        ])
+        setRepos(repoRes.data)
+        setKeys(keysRes.data)
+      } catch (e) {
+        console.error(e)
       } finally {
         setLoadingRepos(false)
       }
     }
-    fetchRepos()
+    fetchReposAndKeys()
   }, [])
 
   const validateRepo = () => {
@@ -368,6 +373,8 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
         name, agent_type: agentType,
         repo_url: repoUrl.trim() || undefined,
         provider, provider_key_source: keySource,
+        environment_vars: JSON.parse(envVars || '{}'),
+        network_policy: { allow: networkAllow }
       })
       onCreate(res.data)
     } catch (e: any) {
@@ -435,6 +442,17 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s:
                 {repoError && <p className="mt-1 text-xs text-red-400">{repoError}</p>}
               </>
             )}
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Environment Variables (JSON)</label>
+            <textarea
+              value={envVars} onChange={e => setEnvVars(e.target.value)}
+              className="w-full min-h-16 rounded-xl border border-white/10 bg-[#101010] px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20 font-mono"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="networkAllow" checked={networkAllow} onChange={e => setNetworkAllow(e.target.checked)} className="rounded border-white/10 bg-[#101010]" />
+            <label htmlFor="networkAllow" className="text-xs text-gray-500">Allow Outbound Network Access</label>
           </div>
         </div>
         <div className="rounded-xl bg-white/[0.03] p-3 text-xs text-gray-500 flex gap-2"><KeyRound className="h-4 w-4 flex-none"/> This session will use the {keySource === 'user' ? 'personal masked provider key' : 'platform default provider key'}.</div>
