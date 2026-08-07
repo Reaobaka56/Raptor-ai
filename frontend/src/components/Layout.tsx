@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, List, BarChart3, Menu, X, Github,
-  LogOut, BookOpen, Compass, Users, Calendar, MessageSquare, ChevronDown, Terminal, KeyRound, Bot, Kanban
+  LogOut, BookOpen, Compass, Users, Calendar, MessageSquare, ChevronDown, Terminal, KeyRound, Bot, Kanban, Activity
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { TRexIcon } from './TRexIcon'
@@ -17,11 +17,12 @@ const navItems = [
   { path: '/onboarding', label: 'Onboarding', icon: Compass },
   { path: '/teams',      label: 'Teams',      icon: Users },
   { path: '/calendar',   label: 'Calendar',   icon: Calendar },
-  { path: '/chat',       label: 'Chat',       icon: MessageSquare, badge: true },
-  { path: '/agents',     label: 'Agents',     icon: Bot },
-  { path: '/tasks',      label: 'Tasks',      icon: Kanban },
-  { path: '/sandbox',    label: 'Sandbox',    icon: Terminal },
-  { path: '/settings',   label: 'Settings',   icon: KeyRound },
+  { path: '/chat',            label: 'Chat',            icon: MessageSquare, badge: true },
+  { path: '/agent-dashboard', label: 'Agent Dash',      icon: Activity },
+  { path: '/agents',          label: 'Agents',          icon: Bot },
+  { path: '/tasks',           label: 'Tasks',           icon: Kanban },
+  { path: '/sandbox',         label: 'Sandbox',         icon: Terminal },
+  { path: '/settings',        label: 'Settings',        icon: KeyRound },
 ]
 
 export default function Layout({ children }: LayoutProps) {

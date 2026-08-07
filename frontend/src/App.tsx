@@ -28,6 +28,7 @@ import RuleManager from './pages/RuleManager'
 import OnboardingGuide from './pages/OnboardingGuide'
 import Agents from './pages/Agents'
 import Tasks from './pages/Tasks'
+import AgentDashboard from './pages/AgentDashboard'
 
 function App() {
   return (
@@ -55,6 +56,7 @@ function App() {
         <Route path="/repos/:owner/:repo" element={<ProtectedRoute><Layout><RepoExplorer /></Layout></ProtectedRoute>} />
         <Route path="/sandbox" element={<ProtectedRoute><Layout><SandboxPage /></Layout></ProtectedRoute>} />
         <Route path="/agents" element={<ProtectedRoute><Layout><Agents /></Layout></ProtectedRoute>} />
+        <Route path="/agent-dashboard" element={<ProtectedRoute><Layout><AgentDashboard /></Layout></ProtectedRoute>} />
         <Route path="/tasks" element={<ProtectedRoute><Layout><Tasks /></Layout></ProtectedRoute>} />
        
         <Route path="/debug" element={<DebugTool />} />
