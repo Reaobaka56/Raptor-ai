@@ -166,7 +166,12 @@ def ensure_sandbox_schema() -> None:
 
 def create_session(owner_id: str, name: str, repo_url: Optional[str],
                    agent_type: str, policy: dict, resource_limits: dict,
-                   provider: Optional[str] = None, provider_key_source: str = "platform") -> Dict[str, Any]:
+                   agent_id: Optional[str] = None,
+                   environment_vars: dict = None,
+                   api_key_refs: list = None,
+                   network_policy: dict = None,
+                   filesystem_permissions: dict = None,
+                   tool_permissions: list = None) -> Dict[str, Any]:
     conn = get_conn()
     if not conn:
         raise RuntimeError("Database unavailable")
@@ -175,13 +180,22 @@ def create_session(owner_id: str, name: str, repo_url: Optional[str],
             cur.execute(
                 """
                 INSERT INTO sandbox_sessions
-                    (owner_id, name, repo_url, agent_type, policy, resource_limits, status, provider, provider_key_source)
-                VALUES (%s::uuid, %s, %s, %s, %s::jsonb, %s::jsonb, 'starting', %s, %s)
-                RETURNING id, name, status, agent_type, repo_url, provider, provider_key_source, policy,
-                          resource_limits, created_at
+                    (owner_id, name, repo_url, agent_type, policy, resource_limits, status,
+                     agent_id, environment_vars, api_key_refs, network_policy, filesystem_permissions, tool_permissions)
+                VALUES (%s::uuid, %s, %s, %s, %s::jsonb, %s::jsonb, 'starting',
+                        %s::uuid, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
+                RETURNING id, name, status, agent_type, repo_url, policy,
+                          resource_limits, agent_id, environment_vars, api_key_refs,
+                          network_policy, filesystem_permissions, tool_permissions, created_at
                 """,
                 (owner_id, name, repo_url, agent_type,
-                 json.dumps(policy), json.dumps(resource_limits), provider, provider_key_source),
+                 json.dumps(policy), json.dumps(resource_limits),
+                 agent_id,
+                 json.dumps(environment_vars or {}),
+                 json.dumps(api_key_refs or []),
+                 json.dumps(network_policy or {"allow": True}),
+                 json.dumps(filesystem_permissions or {}),
+                 json.dumps(tool_permissions or [])),
             )
             conn.commit()
             row = cur.fetchone()
@@ -202,8 +216,7 @@ def create_session(owner_id: str, name: str, repo_url: Optional[str],
                 "message": f"Sandbox session started. Workspace: {workspace}",
                 "agent_type": agent_type,
                 "repo_url": repo_url,
-                "provider": provider,
-                "provider_key_source": provider_key_source,
+                "agent_id": agent_id,
             })
 
             return session
@@ -223,8 +236,10 @@ def get_session(session_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT id, owner_id, name, status, agent_type, repo_url,
-                       provider, provider_key_source, workspace_path, policy, resource_limits,
-                       process_pid, started_at, ended_at, created_at
+                       workspace_path, policy, resource_limits,
+                       agent_id, environment_vars, api_key_refs, network_policy,
+                       filesystem_permissions, tool_permissions,
+                       process_pid, started_at, ended_at, paused_at, created_at
                 FROM sandbox_sessions
                 WHERE id = %s::uuid AND owner_id = %s::uuid
                 """,
@@ -237,7 +252,9 @@ def get_session(session_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
             s = dict(zip(cols, row))
             s["id"] = str(s["id"])
             s["owner_id"] = str(s["owner_id"])
-            for ts in ("started_at", "ended_at", "created_at"):
+            if s.get("agent_id"):
+                s["agent_id"] = str(s["agent_id"])
+            for ts in ("started_at", "ended_at", "paused_at", "created_at"):
                 if s.get(ts):
                     s[ts] = s[ts].isoformat()
             return s
@@ -254,8 +271,8 @@ def list_sessions(owner_id: str) -> List[Dict[str, Any]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, name, status, agent_type, repo_url, provider, provider_key_source,
-                       started_at, ended_at, created_at
+                SELECT id, name, status, agent_type, repo_url, agent_id,
+                       started_at, ended_at, paused_at, created_at
                 FROM sandbox_sessions
                 WHERE owner_id = %s::uuid
                 ORDER BY created_at DESC
@@ -269,7 +286,9 @@ def list_sessions(owner_id: str) -> List[Dict[str, Any]]:
             for row in rows:
                 s = dict(zip(cols, row))
                 s["id"] = str(s["id"])
-                for ts in ("started_at", "ended_at", "created_at"):
+                if s.get("agent_id"):
+                    s["agent_id"] = str(s["agent_id"])
+                for ts in ("started_at", "ended_at", "paused_at", "created_at"):
                     if s.get(ts):
                         s[ts] = s[ts].isoformat()
                 result.append(s)
@@ -437,6 +456,30 @@ def stop_session(session_id: str, owner_id: str) -> bool:
         except Exception:
             pass
 
+    return True
+
+
+def pause_session(session_id: str, owner_id: str) -> bool:
+    session = get_session(session_id, owner_id)
+    if not session or session["status"] != "running":
+        return False
+
+    _log_event(session_id, "system", {"message": "Session paused by user"})
+    _update_session(session_id,
+                    status="paused",
+                    paused_at=datetime.now(timezone.utc).isoformat())
+    return True
+
+
+def resume_session(session_id: str, owner_id: str) -> bool:
+    session = get_session(session_id, owner_id)
+    if not session or session["status"] != "paused":
+        return False
+
+    _log_event(session_id, "system", {"message": "Session resumed by user"})
+    _update_session(session_id,
+                    status="running",
+                    paused_at=None)
     return True
 
 

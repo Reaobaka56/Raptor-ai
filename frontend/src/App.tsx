@@ -26,6 +26,8 @@ import AuthCallback from './pages/AuthCallback'
 import DebugTool from './pages/DebugTool';
 import RuleManager from './pages/RuleManager'
 import OnboardingGuide from './pages/OnboardingGuide'
+import Agents from './pages/Agents'
+import Tasks from './pages/Tasks'
 
 function App() {
   return (
@@ -52,6 +54,8 @@ function App() {
         <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
         <Route path="/repos/:owner/:repo" element={<ProtectedRoute><Layout><RepoExplorer /></Layout></ProtectedRoute>} />
         <Route path="/sandbox" element={<ProtectedRoute><Layout><SandboxPage /></Layout></ProtectedRoute>} />
+        <Route path="/agents" element={<ProtectedRoute><Layout><Agents /></Layout></ProtectedRoute>} />
+        <Route path="/tasks" element={<ProtectedRoute><Layout><Tasks /></Layout></ProtectedRoute>} />
        
         <Route path="/debug" element={<DebugTool />} />
       </Routes>

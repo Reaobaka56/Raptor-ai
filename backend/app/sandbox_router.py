@@ -52,6 +52,13 @@ class CreateSessionRequest(BaseModel):
     provider: Optional[str] = None
     provider_key_source: str = "platform"
     policy: dict = {}
+    resource_limits: dict = {}
+    agent_id: Optional[str] = None
+    environment_vars: dict = {}
+    api_key_refs: list = []
+    network_policy: dict = {"allow": True}
+    filesystem_permissions: dict = {}
+    tool_permissions: list = []
 
     @field_validator("repo_url")
     @classmethod
@@ -62,7 +69,6 @@ class CreateSessionRequest(BaseModel):
         if not re.match(r"^https://(www\.)?github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$", value):
             raise ValueError("Repository URL must be a GitHub repository URL like https://github.com/username/repository")
         return value.rstrip("/")
-    resource_limits: dict = {}
 
 
 class ExecuteRequest(BaseModel):
@@ -120,6 +126,12 @@ def create_session(
             resource_limits=resource_limits,
             provider=provider,
             provider_key_source=provider_key_source,
+            agent_id=body.agent_id,
+            environment_vars=body.environment_vars,
+            api_key_refs=body.api_key_refs,
+            network_policy=body.network_policy,
+            filesystem_permissions=body.filesystem_permissions,
+            tool_permissions=body.tool_permissions,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -145,6 +157,28 @@ def stop_session(
     user = _get_user(session)
     if not sandbox_service.stop_session(session_id, user["id"]):
         raise HTTPException(status_code=404, detail="Session not found")
+
+
+@router.post("/sessions/{session_id}/pause", status_code=200)
+def pause_session(
+    session_id: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = _get_user(session)
+    if not sandbox_service.pause_session(session_id, user["id"]):
+        raise HTTPException(status_code=404, detail="Session not found or not running")
+    return {"status": "paused"}
+
+
+@router.post("/sessions/{session_id}/resume", status_code=200)
+def resume_session(
+    session_id: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = _get_user(session)
+    if not sandbox_service.resume_session(session_id, user["id"]):
+        raise HTTPException(status_code=404, detail="Session not found or not paused")
+    return {"status": "running"}
 
 
 @router.post("/sessions/{session_id}/execute")
