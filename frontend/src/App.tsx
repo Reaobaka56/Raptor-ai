@@ -17,6 +17,7 @@ import CalendarPage from './pages/Calendar'
 import Chat from './pages/Chat'
 import RepoExplorer from './pages/RepoExplorer'
 import SandboxPage from './pages/Sandbox'
+import AgentsPage from './pages/Agents'
 import './index.css'
 
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -66,4 +67,5 @@ function App() {
 }
 
 export default App
+
 
