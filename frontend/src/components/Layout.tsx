@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, List, BarChart3, Menu, X, Github,
-  LogOut, BookOpen, Compass, Users, Calendar, MessageSquare, ChevronDown, Terminal, KeyRound, Bot, Kanban, Activity
+  LogOut, BookOpen, Users, Calendar, MessageSquare, ChevronDown, Terminal, KeyRound, Bot
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { TRexIcon } from './TRexIcon'
@@ -12,17 +12,14 @@ interface LayoutProps { children: React.ReactNode }
 const navItems = [
   { path: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
   { path: '/reviews',    label: 'Reviews',    icon: List },
+  { path: '/agents',     label: 'Agents',     icon: Bot },
+  { path: '/sandbox',    label: 'Sandbox',    icon: Terminal },
   { path: '/analytics',  label: 'Analytics',  icon: BarChart3 },
-  { path: '/rules',      label: 'Rules',      icon: BookOpen },
-  { path: '/onboarding', label: 'Onboarding', icon: Compass },
   { path: '/teams',      label: 'Teams',      icon: Users },
+  { path: '/chat',       label: 'Chat',       icon: MessageSquare, badge: true },
   { path: '/calendar',   label: 'Calendar',   icon: Calendar },
-  { path: '/chat',            label: 'Chat',            icon: MessageSquare, badge: true },
-  { path: '/agent-dashboard', label: 'Agent Dash',      icon: Activity },
-  { path: '/agents',          label: 'Agents',          icon: Bot },
-  { path: '/tasks',           label: 'Tasks',           icon: Kanban },
-  { path: '/sandbox',         label: 'Sandbox',         icon: Terminal },
-  { path: '/settings',        label: 'Settings',        icon: KeyRound },
+  { path: '/rules',      label: 'AI Memory',  icon: Brain },
+  { path: '/settings',   label: 'Settings',   icon: KeyRound },
 ]
 
 export default function Layout({ children }: LayoutProps) {
@@ -276,5 +273,6 @@ export default function Layout({ children }: LayoutProps) {
     </div>
   )
 }
+
 
 
