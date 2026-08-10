@@ -121,6 +121,33 @@ function ProductMockup() {
   );
 }
 
+
+function PublicStats() {
+  const [stats, setStats] = useState<{totalReviews:number;totalIssues:number;avgReviewTime:number}|null>(null)
+  useEffect(() => {
+    const base = (import.meta.env.VITE_API_URL || 'https://raptor-ai.onrender.com/api').replace(/\/api$/, '').replace(/\/$/, '')
+    fetch(`${base}/api/stats`).then(r => r.ok ? r.json() : null).then(d => { if(d) setStats(d) }).catch(()=>{})
+  }, [])
+  const items = [
+    { value: stats ? (stats.totalReviews > 0 ? stats.totalReviews.toLocaleString() : '0') : '…', label: 'PRs reviewed' },
+    { value: stats ? (stats.totalIssues > 0 ? stats.totalIssues.toLocaleString() : '0') : '…', label: 'Issues caught' },
+    { value: stats && stats.avgReviewTime > 0 ? `${Math.round(stats.avgReviewTime/1000)}s` : '—', label: 'Avg review time' },
+    { value: '<1%', label: 'False positive rate' },
+  ]
+  return (
+    <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center border-t border-b border-white/8 py-16">
+        {items.map(({ value, label }) => (
+          <div key={label}>
+            <p className="text-4xl font-bold text-white">{value}</p>
+            <p className="mt-2 text-xs text-gray-500">{label}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function Landing() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -332,22 +359,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Stats ── */}
-      <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center border-t border-b border-white/8 py-16">
-          {[
-            { value: '18s', label: 'Average review time' },
-            { value: '94%', label: 'Issues auto-fixed' },
-            { value: '3×', label: 'More bugs caught vs manual' },
-            { value: '<1%', label: 'False positive rate' },
-          ].map(({ value, label }) => (
-            <div key={label}>
-              <p className="text-4xl font-bold text-white">{value}</p>
-              <p className="mt-2 text-xs text-gray-500">{label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* ── Stats — real data from API ── */}
+      <PublicStats />
 
       {/* ── Social proof ── */}
       <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
@@ -469,3 +482,4 @@ export default function Landing() {
     </div>
   );
 }
+
