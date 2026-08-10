@@ -17,6 +17,7 @@ import CalendarPage from './pages/Calendar'
 import Chat from './pages/Chat'
 import RepoExplorer from './pages/RepoExplorer'
 import SandboxPage from './pages/Sandbox'
+import SettingsPage from './pages/Settings'
 import AgentsPage from './pages/Agents'
 import './index.css'
 
@@ -27,9 +28,6 @@ import AuthCallback from './pages/AuthCallback'
 import DebugTool from './pages/DebugTool';
 import RuleManager from './pages/RuleManager'
 import OnboardingGuide from './pages/OnboardingGuide'
-import Agents from './pages/Agents'
-import Tasks from './pages/Tasks'
-import AgentDashboard from './pages/AgentDashboard'
 
 function App() {
   return (
@@ -50,15 +48,14 @@ function App() {
         <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
         <Route path="/rules" element={<ProtectedRoute><Layout><RuleManager /></Layout></ProtectedRoute>} />
         <Route path="/onboarding" element={<ProtectedRoute><Layout><OnboardingGuide /></Layout></ProtectedRoute>} />
-        <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
+        <Route path="/teams" element={<ProtectedRoute><Layout><Teams /></Layout></ProtectedRoute>} />
         <Route path="/teams/accept/:token" element={<AcceptInvite />} />
         <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
         <Route path="/repos/:owner/:repo" element={<ProtectedRoute><Layout><RepoExplorer /></Layout></ProtectedRoute>} />
         <Route path="/sandbox" element={<ProtectedRoute><Layout><SandboxPage /></Layout></ProtectedRoute>} />
-        <Route path="/agents" element={<ProtectedRoute><Layout><Agents /></Layout></ProtectedRoute>} />
-        <Route path="/agent-dashboard" element={<ProtectedRoute><Layout><AgentDashboard /></Layout></ProtectedRoute>} />
-        <Route path="/tasks" element={<ProtectedRoute><Layout><Tasks /></Layout></ProtectedRoute>} />
+        <Route path="/agents" element={<ProtectedRoute><Layout><AgentsPage /></Layout></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
        
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
@@ -67,5 +64,6 @@ function App() {
 }
 
 export default App
+
 
 
