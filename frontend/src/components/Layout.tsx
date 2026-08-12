@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, List, BarChart3, Menu, X, Github,
-  LogOut, BookOpen, Users, Calendar, MessageSquare, ChevronDown, Terminal, KeyRound, Bot
+  LogOut, Users, Calendar, MessageSquare, ChevronDown, Terminal, KeyRound, Bot, Brain
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { TRexIcon } from './TRexIcon'
@@ -273,6 +273,7 @@ export default function Layout({ children }: LayoutProps) {
     </div>
   )
 }
+
 
 
 
