@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Bot, Plus, Pause, Square, Trash2, Edit2, Activity, Send,
-  Loader2, X, Save, Brain, Code2, Shield, TestTube, Cpu,
-  Database, FileText, Search, Zap, Users, Play, CheckCircle
-} from 'lucide-react'
+import {Bot, Plus, Pause, Trash2, Edit2, Activity, Send,
+  Loader2, X, Save, Code2, Shield, TestTube, Cpu,
+  Database, FileText, Search, Zap, Users, Play, CheckCircle} from 'lucide-react'
 import api from '../api'
 
 interface Agent {
@@ -425,3 +423,4 @@ export default function AgentsPage() {
     </div>
   )
 }
+
