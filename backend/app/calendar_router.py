@@ -126,8 +126,14 @@ def add_meeting(
                 """,
                 (json.dumps([meeting.dict()]), user_id),
             )
+            if cur.rowcount == 0:
+                # No matching user row — don't report success on a no-op write.
+                conn.rollback()
+                raise HTTPException(status_code=404, detail="User record not found — log in again")
             conn.commit()
             return meeting
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("add_meeting failed")
         try: conn.rollback()
