@@ -7,13 +7,36 @@ from fastapi import APIRouter, Depends, HTTPException
 from .auth_dependencies import get_required_github_session, get_current_user as _get_user
 from .services.user_service import get_user_by_username
 from .services import agent_service
+from .services.provider_key_service import upsert_key, SUPPORTED_PROVIDERS
 
 router = APIRouter(prefix="/api/agents", tags=["Agents"])
 
 
 @router.get("/templates")
-def get_templates():
-    return agent_service.get_agent_templates()
+def get_templates(session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = _get_user(session)
+    return agent_service.get_agent_templates(owner_id=user["id"])
+
+
+@router.post("/templates", status_code=201)
+def create_template(
+    data: dict,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = _get_user(session)
+    if not (data.get("name") or "").strip():
+        raise HTTPException(status_code=400, detail="Template name is required")
+    return agent_service.create_custom_template(user["id"], data)
+
+
+@router.delete("/templates/{template_id}", status_code=204)
+def delete_template(
+    template_id: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = _get_user(session)
+    if not agent_service.delete_custom_template(template_id, user["id"]):
+        raise HTTPException(status_code=404, detail="Template not found")
 
 
 @router.post("", status_code=201)
@@ -22,6 +45,16 @@ def create_agent(
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
     user = _get_user(session)
+    # Optional inline API key: if the caller included one alongside the
+    # provider, save it via the single canonical provider-keys path instead
+    # of duplicating key-storage logic here.
+    api_key = (data.pop("api_key", None) or "").strip()
+    provider = (data.get("provider") or "").lower().strip()
+    if api_key:
+        if provider not in SUPPORTED_PROVIDERS:
+            raise HTTPException(status_code=400, detail="Unsupported provider for API key")
+        if not upsert_key(user["id"], provider, api_key):
+            raise HTTPException(status_code=400, detail="Failed to save API key")
     return agent_service.create_agent(user["id"], data)
 
 

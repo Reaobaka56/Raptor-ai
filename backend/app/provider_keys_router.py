@@ -6,6 +6,7 @@ from .auth_dependencies import get_required_github_session, get_current_user as 
 from .services.user_service import get_user_by_username
 from .services.provider_key_service import (
     SUPPORTED_PROVIDERS,
+    PROVIDER_LABELS,
     list_keys,
     upsert_key,
     delete_key,
@@ -19,7 +20,11 @@ class KeyRequest(BaseModel):
     api_key: str = Field(min_length=8, max_length=4096)
 
 @router.get("/providers")
-def providers(): return {"providers": sorted(SUPPORTED_PROVIDERS)}
+def providers():
+    return {
+        "providers": sorted(SUPPORTED_PROVIDERS),
+        "labels": PROVIDER_LABELS,
+    }
 
 @router.get("")
 def my_keys(session: Dict[str, Any] = Depends(get_required_github_session)):
@@ -66,6 +71,30 @@ def _validate_key(provider: str, api_key: str) -> Dict[str, Any]:
         elif provider == "mistral":
             resp = requests.get(
                 "https://api.mistral.ai/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10,
+            )
+        elif provider == "deepseek":
+            resp = requests.get(
+                "https://api.deepseek.com/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10,
+            )
+        elif provider == "xai":
+            resp = requests.get(
+                "https://api.x.ai/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10,
+            )
+        elif provider == "cohere":
+            resp = requests.get(
+                "https://api.cohere.com/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10,
+            )
+        elif provider == "openrouter":
+            resp = requests.get(
+                "https://openrouter.ai/api/v1/auth/key",
                 headers={"Authorization": f"Bearer {api_key}"},
                 timeout=10,
             )

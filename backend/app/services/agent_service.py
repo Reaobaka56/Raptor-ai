@@ -457,9 +457,185 @@ def delete_agent(agent_id: str, owner_id: str) -> bool:
         release_conn(conn)
 
 
-def get_agent_templates() -> Dict[str, Dict[str, Any]]:
-    """Return built-in agent role templates."""
-    return AGENT_TEMPLATES
+def list_agents_by_sandbox(sandbox_id: str, owner_id: str) -> List[Dict[str, Any]]:
+    """List agents currently attached to a given sandbox session."""
+    conn = get_conn()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT id, owner_id, name, role, description, system_prompt,
+                          model, provider, tools, permissions, status,
+                          sandbox_id, current_task_id, config, knowledge_sources,
+                          created_at, updated_at
+                   FROM agents
+                   WHERE sandbox_id = %s::uuid AND owner_id = %s::uuid
+                   ORDER BY created_at DESC""",
+                (sandbox_id, owner_id),
+            )
+            rows = cur.fetchall()
+            return [_row_to_dict(cur, row) for row in rows]
+    finally:
+        release_conn(conn)
+
+
+def attach_agent_to_sandbox(agent_id: str, owner_id: str, sandbox_id: str) -> Optional[Dict[str, Any]]:
+    """Attach an existing agent to a sandbox session."""
+    conn = get_conn()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE agents SET sandbox_id = %s::uuid, updated_at = now()
+                   WHERE id = %s::uuid AND owner_id = %s::uuid
+                   RETURNING id, owner_id, name, role, description, system_prompt,
+                             model, provider, tools, permissions, status,
+                             sandbox_id, current_task_id, config, knowledge_sources,
+                             created_at, updated_at""",
+                (sandbox_id, agent_id, owner_id),
+            )
+            conn.commit()
+            result = _row_to_dict(cur, cur.fetchone())
+            if result:
+                _log_activity(owner_id, agent_id, "system",
+                              f"Agent '{result['name']}' attached to sandbox session")
+            return result
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        release_conn(conn)
+
+
+def drop_agent_from_sandbox(agent_id: str, owner_id: str, sandbox_id: str) -> Optional[Dict[str, Any]]:
+    """Drop (safely unassign) an agent from a sandbox session. This does not
+    delete the agent — it just detaches it, so other agents attached to the
+    same sandbox are unaffected."""
+    conn = get_conn()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE agents SET sandbox_id = NULL, updated_at = now()
+                   WHERE id = %s::uuid AND owner_id = %s::uuid AND sandbox_id = %s::uuid
+                   RETURNING id, owner_id, name, role, description, system_prompt,
+                             model, provider, tools, permissions, status,
+                             sandbox_id, current_task_id, config, knowledge_sources,
+                             created_at, updated_at""",
+                (agent_id, owner_id, sandbox_id),
+            )
+            conn.commit()
+            result = _row_to_dict(cur, cur.fetchone())
+            if result:
+                _log_activity(owner_id, agent_id, "system",
+                              f"Agent '{result['name']}' dropped from sandbox session")
+            return result
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        release_conn(conn)
+
+
+def get_agent_templates(owner_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    """Return built-in agent role templates, merged with the caller's custom
+    (user-created) templates when owner_id is provided. Custom templates are
+    keyed by their UUID and flagged with is_custom=True so the UI can offer
+    to delete them (built-ins can't be deleted)."""
+    templates: Dict[str, Dict[str, Any]] = {
+        key: {**tpl, "is_custom": False} for key, tpl in AGENT_TEMPLATES.items()
+    }
+    if owner_id:
+        templates.update({t["id"]: t for t in list_custom_templates(owner_id)})
+    return templates
+
+
+def list_custom_templates(owner_id: str) -> List[Dict[str, Any]]:
+    conn = get_conn()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT id, name, role, description, system_prompt, tools, permissions, created_at
+                   FROM agent_templates WHERE owner_id = %s::uuid ORDER BY created_at DESC""",
+                (owner_id,),
+            )
+            rows = cur.fetchall()
+            out = []
+            for row in rows:
+                d = _row_to_dict(cur, row)
+                d["is_custom"] = True
+                out.append(d)
+            return out
+    finally:
+        release_conn(conn)
+
+
+def create_custom_template(owner_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    conn = get_conn()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO agent_templates (owner_id, name, role, description, system_prompt, tools, permissions)
+                   VALUES (%s::uuid, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+                   RETURNING id, name, role, description, system_prompt, tools, permissions, created_at""",
+                (
+                    owner_id,
+                    data.get("name", "Untitled Template"),
+                    data.get("role", "custom"),
+                    data.get("description"),
+                    data.get("system_prompt"),
+                    json.dumps(data.get("tools", [])),
+                    json.dumps(data.get("permissions", {})),
+                ),
+            )
+            conn.commit()
+            result = _row_to_dict(cur, cur.fetchone())
+            if result:
+                result["is_custom"] = True
+            return result
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        release_conn(conn)
+
+
+def delete_custom_template(template_id: str, owner_id: str) -> bool:
+    conn = get_conn()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM agent_templates WHERE id = %s::uuid AND owner_id = %s::uuid",
+                (template_id, owner_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        release_conn(conn)
 
 
 def get_activity_log(owner_id: str, agent_id: Optional[str] = None,

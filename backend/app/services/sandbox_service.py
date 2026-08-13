@@ -167,6 +167,8 @@ def ensure_sandbox_schema() -> None:
 def create_session(owner_id: str, name: str, repo_url: Optional[str],
                    agent_type: str, policy: dict, resource_limits: dict,
                    agent_id: Optional[str] = None,
+                   provider: Optional[str] = None,
+                   provider_key_source: str = "platform",
                    environment_vars: dict = None,
                    api_key_refs: list = None,
                    network_policy: dict = None,
@@ -181,16 +183,18 @@ def create_session(owner_id: str, name: str, repo_url: Optional[str],
                 """
                 INSERT INTO sandbox_sessions
                     (owner_id, name, repo_url, agent_type, policy, resource_limits, status,
-                     agent_id, environment_vars, api_key_refs, network_policy, filesystem_permissions, tool_permissions)
+                     agent_id, provider, provider_key_source, environment_vars, api_key_refs,
+                     network_policy, filesystem_permissions, tool_permissions)
                 VALUES (%s::uuid, %s, %s, %s, %s::jsonb, %s::jsonb, 'starting',
-                        %s::uuid, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
+                        %s::uuid, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
                 RETURNING id, name, status, agent_type, repo_url, policy,
-                          resource_limits, agent_id, environment_vars, api_key_refs,
+                          resource_limits, agent_id, provider, provider_key_source,
+                          environment_vars, api_key_refs,
                           network_policy, filesystem_permissions, tool_permissions, created_at
                 """,
                 (owner_id, name, repo_url, agent_type,
                  json.dumps(policy), json.dumps(resource_limits),
-                 agent_id,
+                 agent_id, provider, provider_key_source,
                  json.dumps(environment_vars or {}),
                  json.dumps(api_key_refs or []),
                  json.dumps(network_policy or {"allow": True}),

@@ -4,7 +4,23 @@ from typing import Any, Dict, List, Optional
 from cryptography.fernet import Fernet
 from .db import get_conn, release_conn, row_to_dict as _row
 
-SUPPORTED_PROVIDERS = {"openai", "anthropic", "google", "gemini", "mistral", "groq"}
+SUPPORTED_PROVIDERS = {
+    "openai", "anthropic", "google", "gemini", "mistral", "groq",
+    "deepseek", "xai", "cohere", "openrouter",
+}
+
+PROVIDER_LABELS = {
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "google": "Google",
+    "gemini": "Gemini",
+    "mistral": "Mistral",
+    "groq": "Groq",
+    "deepseek": "DeepSeek",
+    "xai": "xAI (Grok)",
+    "cohere": "Cohere",
+    "openrouter": "OpenRouter",
+}
 
 def _fernet() -> Fernet:
     secret = os.getenv("PROVIDER_KEYS_FERNET_KEY") or os.getenv("SECRET_KEY") or os.getenv("JWT_SECRET") or "raptor-local-dev-key"

@@ -177,7 +177,7 @@ export const teamsApi = {
 
 export interface ProviderKey { id: string; provider: string; key_mask: string; created_at: string; updated_at: string }
 export const providerKeysApi = {
-  providers: () => api.get<{ providers: string[] }>('/provider-keys/providers'),
+  providers: () => api.get<{ providers: string[]; labels: Record<string, string> }>('/provider-keys/providers'),
   list: () => api.get<ProviderKey[]>('/provider-keys'),
   save: (provider: string, api_key: string) =>
     api.put<ProviderKey>('/provider-keys', { provider, api_key }),
@@ -351,10 +351,13 @@ export interface AgentActivity {
 export const agentApi = {
   list: () => api.get<Agent[]>('/agents'),
   get: (id: string) => api.get<Agent>(`/agents/${id}`),
-  create: (data: Partial<Agent>) => api.post<Agent>('/agents', data),
+  create: (data: Partial<Agent> & { api_key?: string }) => api.post<Agent>('/agents', data),
   update: (id: string, data: Partial<Agent>) => api.patch<Agent>(`/agents/${id}`, data),
   delete: (id: string) => api.delete(`/agents/${id}`),
   getTemplates: () => api.get<Record<string, any>>('/agents/templates'),
+  createTemplate: (data: { name: string; role: string; description?: string; system_prompt?: string; tools?: string[]; permissions?: any }) =>
+    api.post('/agents/templates', data),
+  deleteTemplate: (id: string) => api.delete(`/agents/templates/${id}`),
   updateStatus: (id: string, status: string) => api.post<Agent>(`/agents/${id}/status`, { status }),
   getActivity: (id: string, limit = 100) => api.get<AgentActivity[]>(`/agents/${id}/activity`, { params: { limit } }),
 }
@@ -371,6 +374,9 @@ export const sandboxApi = {
   // We redefine these here for easier access, even though Sandbox.tsx currently uses raw api.post
   pauseSession: (sessionId: string) => api.post(`/sandbox/sessions/${sessionId}/pause`),
   resumeSession: (sessionId: string) => api.post(`/sandbox/sessions/${sessionId}/resume`),
+  listAgents: (sessionId: string) => api.get<Agent[]>(`/sandbox/sessions/${sessionId}/agents`),
+  attachAgent: (sessionId: string, agentId: string) => api.post<Agent>(`/sandbox/sessions/${sessionId}/agents`, { agent_id: agentId }),
+  dropAgent: (sessionId: string, agentId: string) => api.delete<Agent>(`/sandbox/sessions/${sessionId}/agents/${agentId}`),
 }
 
 export default api

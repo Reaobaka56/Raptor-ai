@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {Bot, Plus, Pause, Trash2, Edit2, Activity, Send,
   Loader2, X, Save, Code2, Shield, TestTube, Cpu,
-  Database, FileText, Search, Zap, Users, Play, CheckCircle} from 'lucide-react'
-import api from '../api'
+  Database, FileText, Search, Zap, Users, Play, CheckCircle,
+  KeyRound, BookmarkPlus, Eye, EyeOff} from 'lucide-react'
+import api, { providerKeysApi, type ProviderKey } from '../api'
 
 interface Agent {
   id: string; name: string; role: string; description?: string
@@ -20,6 +21,7 @@ interface Task {
 interface Template {
   name: string; role: string; description: string
   system_prompt: string; tools: string[]; permissions: any
+  is_custom?: boolean
 }
 
 const ROLE_ICONS: Record<string, React.ReactNode> = {
@@ -52,28 +54,72 @@ const STATUS_TEXT: Record<string, string> = {
 const PRIORITY_LABELS = ['Critical','High','Medium','Low']
 const PRIORITY_COLORS = ['text-red-400','text-orange-400','text-amber-400','text-gray-500']
 const TOOLS = ['file_read','file_write','command_exec','git_ops','network','install_deps','run_tests','lint','build']
-const MODELS = ['gemini-2.5-pro','gemini-2.0-flash','gpt-4o','gpt-4o-mini','claude-sonnet-4-5','claude-haiku-4-5']
 
-function AgentModal({ templates, agent, onSave, onClose }: {
+// Sensible default model per provider — the user can still type a custom one.
+const PROVIDER_MODELS: Record<string, string[]> = {
+  openai:     ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'o3-mini'],
+  anthropic:  ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'],
+  google:     ['gemini-2.5-pro', 'gemini-2.0-flash'],
+  gemini:     ['gemini-2.5-pro', 'gemini-2.0-flash'],
+  groq:       ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'],
+  mistral:    ['mistral-large-latest', 'mistral-small-latest'],
+  deepseek:   ['deepseek-chat', 'deepseek-reasoner'],
+  xai:        ['grok-2-latest', 'grok-beta'],
+  cohere:     ['command-r-plus', 'command-r'],
+  openrouter: ['openrouter/auto'],
+}
+const FALLBACK_PROVIDERS = ['openai', 'anthropic', 'google', 'gemini', 'groq', 'mistral', 'deepseek', 'xai', 'cohere', 'openrouter']
+
+function AgentModal({ templates, agent, onSave, onSaveTemplate, onDeleteTemplate, onClose }: {
   templates: Record<string,Template>; agent?: Agent|null
-  onSave:(d:any)=>Promise<void>; onClose:()=>void
+  onSave:(d:any)=>Promise<void>; onSaveTemplate:(d:any)=>Promise<void>; onDeleteTemplate:(id:string)=>Promise<void>; onClose:()=>void
 }) {
   const [name,setName]           = useState(agent?.name||'')
   const [role,setRole]           = useState(agent?.role||'custom')
   const [desc,setDesc]           = useState(agent?.description||'')
   const [prompt,setPrompt]       = useState(agent?.system_prompt||'')
+  const [provider,setProvider]   = useState(agent?.provider||'google')
   const [model,setModel]         = useState(agent?.model||'gemini-2.5-pro')
   const [tools,setTools]         = useState<string[]>(agent?.tools||[])
   const [saving,setSaving]       = useState(false)
+  const [savingTemplate,setSavingTemplate] = useState(false)
+
+  const [providerList,setProviderList]   = useState<string[]>(FALLBACK_PROVIDERS)
+  const [providerLabels,setProviderLabels] = useState<Record<string,string>>({})
+  const [savedKeys,setSavedKeys]         = useState<ProviderKey[]>([])
+  const [apiKey,setApiKey]               = useState('')
+  const [showKey,setShowKey]             = useState(false)
+
+  useEffect(() => {
+    providerKeysApi.providers().then(r => { setProviderList(r.data.providers); setProviderLabels(r.data.labels || {}) }).catch(()=>{})
+    providerKeysApi.list().then(r => setSavedKeys(r.data)).catch(()=>{})
+  }, [])
+
+  const hasKeyForProvider = savedKeys.some(k => k.provider === provider)
 
   const apply = (t:Template) => { setName(t.name);setRole(t.role);setDesc(t.description);setPrompt(t.system_prompt);setTools(t.tools) }
   const toggle = (t:string) => setTools(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])
 
+  const changeProvider = (p: string) => {
+    setProvider(p)
+    setModel(PROVIDER_MODELS[p]?.[0] || model)
+  }
+
   const save = async () => {
     if(!name.trim()) return
     setSaving(true)
-    await onSave({name,role,description:desc,system_prompt:prompt,model,tools})
+    const payload: any = {name,role,description:desc,system_prompt:prompt,model,provider,tools}
+    if (apiKey.trim()) payload.api_key = apiKey.trim()
+    await onSave(payload)
     setSaving(false)
+  }
+
+  const saveAsTemplate = async () => {
+    if(!name.trim()) return
+    setSavingTemplate(true)
+    try {
+      await onSaveTemplate({ name, role, description: desc, system_prompt: prompt, tools, permissions: {} })
+    } finally { setSavingTemplate(false) }
   }
 
   return (
@@ -89,9 +135,19 @@ function AgentModal({ templates, agent, onSave, onClose }: {
               <p className="text-[10px] font-mono uppercase tracking-widest text-gray-700 mb-2">Templates</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {Object.entries(templates).map(([k,t])=>(
-                  <button key={k} onClick={()=>apply(t)} className="flex items-center gap-2 rounded-lg border border-white/8 px-3 py-2 text-xs text-gray-500 hover:border-white/20 hover:text-white transition text-left">
-                    {ROLE_ICONS[k]||<Bot className="h-3.5 w-3.5"/>}<span className="truncate">{t.name}</span>
-                  </button>
+                  <div key={k} className="relative group/tpl">
+                    <button onClick={()=>apply(t)} className="w-full flex items-center gap-2 rounded-lg border border-white/8 px-3 py-2 text-xs text-gray-500 hover:border-white/20 hover:text-white transition text-left">
+                      {ROLE_ICONS[t.role]||<Bot className="h-3.5 w-3.5"/>}<span className="truncate flex-1">{t.name}</span>
+                      {t.is_custom && <span className="text-[9px] text-indigo-400/70 font-mono flex-none">custom</span>}
+                    </button>
+                    {t.is_custom && (
+                      <button onClick={(e)=>{e.stopPropagation(); onDeleteTemplate(k)}}
+                        title="Delete template"
+                        className="absolute -top-1.5 -right-1.5 hidden group-hover/tpl:flex h-4 w-4 items-center justify-center rounded-full bg-red-500/90 text-white">
+                        <X className="h-2.5 w-2.5"/>
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -108,12 +164,44 @@ function AgentModal({ templates, agent, onSave, onClose }: {
               </select>
             </div>
           </div>
-          <div>
-            <label className="text-xs text-gray-600 mb-1 block">Model</label>
-            <select value={model} onChange={e=>setModel(e.target.value)} className="w-full rounded-lg border border-white/10 bg-[#080810] px-3 py-2 text-sm text-white focus:outline-none">
-              {MODELS.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
+
+          {/* Provider + model */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">AI provider</label>
+              <select value={provider} onChange={e=>changeProvider(e.target.value)} className="w-full rounded-lg border border-white/10 bg-[#080810] px-3 py-2 text-sm text-white focus:outline-none">
+                {providerList.map(p=><option key={p} value={p}>{providerLabels[p] || p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">Model</label>
+              <input list="agent-model-options" value={model} onChange={e=>setModel(e.target.value)} className="w-full rounded-lg border border-white/10 bg-[#080810] px-3 py-2 text-sm text-white focus:outline-none"/>
+              <datalist id="agent-model-options">
+                {(PROVIDER_MODELS[provider]||[]).map(m=><option key={m} value={m}/>)}
+              </datalist>
+            </div>
           </div>
+
+          {/* API key for this provider */}
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 space-y-2">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <KeyRound className="h-3.5 w-3.5 flex-none"/>
+              {hasKeyForProvider
+                ? <span>Using your saved <span className="text-white font-semibold capitalize">{providerLabels[provider]||provider}</span> key from Settings.</span>
+                : <span>No saved <span className="text-white font-semibold capitalize">{providerLabels[provider]||provider}</span> key yet — paste one below to save it, or leave blank to use the platform default.</span>}
+            </div>
+            {!hasKeyForProvider && (
+              <div className="flex gap-2">
+                <input type={showKey?'text':'password'} value={apiKey} onChange={e=>setApiKey(e.target.value)}
+                  placeholder={`${providerLabels[provider]||provider} API key (optional)`}
+                  className="flex-1 rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-xs text-white font-mono placeholder:text-gray-700 focus:outline-none focus:border-white/25"/>
+                <button type="button" onClick={()=>setShowKey(!showKey)} className="rounded-lg border border-white/10 px-2.5 text-gray-500 hover:text-white transition">
+                  {showKey ? <EyeOff className="h-3.5 w-3.5"/> : <Eye className="h-3.5 w-3.5"/>}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-xs text-gray-600 mb-1 block">Description</label>
             <input value={desc} onChange={e=>setDesc(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-sm text-white focus:outline-none focus:border-white/25"/>
@@ -131,12 +219,16 @@ function AgentModal({ templates, agent, onSave, onClose }: {
             </div>
           </div>
         </div>
-        <div className="border-t border-white/8 px-6 py-4 flex gap-3">
+        <div className="border-t border-white/8 px-6 py-4 flex flex-wrap gap-3">
           <button onClick={save} disabled={saving||!name.trim()} className="flex items-center gap-2 rounded border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
             {saving?<Loader2 className="h-4 w-4 animate-spin"/>:<Save className="h-4 w-4"/>}
             {saving?'Saving…':'Save Agent'}
           </button>
-          <button onClick={onClose} className="rounded border border-white/10 px-4 py-2 text-sm text-gray-500 hover:text-white transition">Cancel</button>
+          <button onClick={saveAsTemplate} disabled={savingTemplate||!name.trim()} className="flex items-center gap-2 rounded border border-white/15 px-4 py-2 text-sm text-gray-300 hover:text-white hover:border-white/30 disabled:opacity-50 transition">
+            {savingTemplate?<Loader2 className="h-4 w-4 animate-spin"/>:<BookmarkPlus className="h-4 w-4"/>}
+            Save as Template
+          </button>
+          <button onClick={onClose} className="rounded border border-white/10 px-4 py-2 text-sm text-gray-500 hover:text-white transition ml-auto">Cancel</button>
         </div>
       </div>
     </div>
@@ -220,10 +312,12 @@ export default function AgentsPage() {
   useEffect(()=>{
     if(!localStorage.getItem('token')){navigate('/');return}
     load()
-    api.get('/agents/templates').then(r=>setTemplates(r.data)).catch(()=>{})
+    loadTemplates()
     poll.current = window.setInterval(load, 8000)
     return ()=>clearInterval(poll.current)
   },[])
+
+  const loadTemplates = () => { api.get('/agents/templates').then(r=>setTemplates(r.data)).catch(()=>{}) }
 
   const load = async () => {
     try {
@@ -237,12 +331,14 @@ export default function AgentsPage() {
   const deleteAgent = async (id:string) => { if(!confirm('Delete this agent?'))return; await api.delete(`/agents/${id}`); if(selected?.id===id)setSelected(null); await load() }
   const setStatus  = async (a:Agent,s:string) => { await api.post(`/agents/${a.id}/status`,{status:s}); await load() }
   const createTask = async (d:any) => { await api.post('/tasks',d); await load(); setShowTask(false) }
+  const saveTemplate = async (d:any) => { await api.post('/agents/templates', d); await loadTemplates() }
+  const deleteTemplate = async (id:string) => { await api.delete(`/agents/templates/${id}`); await loadTemplates() }
 
   const agentTasks = selected ? tasks.filter(t=>t.assigned_agent_id===selected.id) : []
 
   return (
     <div className="space-y-4">
-      {(showCreate||editAgent) && <AgentModal templates={templates} agent={editAgent} onSave={editAgent?updateAgent:createAgent} onClose={()=>{setShowCreate(false);setEditAgent(null)}}/>}
+      {(showCreate||editAgent) && <AgentModal templates={templates} agent={editAgent} onSave={editAgent?updateAgent:createAgent} onSaveTemplate={saveTemplate} onDeleteTemplate={deleteTemplate} onClose={()=>{setShowCreate(false);setEditAgent(null)}}/>}
       {showTask && <TaskModal agents={agents} onSave={createTask} onClose={()=>setShowTask(false)}/>}
 
       {/* Header */}
@@ -279,23 +375,25 @@ export default function AgentsPage() {
             ) : agents.map(a=>(
               <div key={a.id} onClick={()=>setSelected(a)}
                 className={`rounded-xl border cursor-pointer transition-all p-4 space-y-2.5 ${selected?.id===a.id?'border-white/25 bg-white/4':'border-white/8 bg-[#080810] hover:border-white/15'}`}>
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-start gap-2.5">
                   <div className="h-8 w-8 rounded-lg border border-white/10 bg-white/4 flex items-center justify-center text-gray-500 flex-none">
                     {ROLE_ICONS[a.role]||<Bot className="h-4 w-4"/>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{a.name}</p>
-                    <p className="text-xs text-gray-700 capitalize">{a.role.replace(/_/g,' ')}</p>
+                    <p className="text-xs text-gray-700 capitalize truncate">{a.role.replace(/_/g,' ')}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-none">
-                    <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[a.status]}`}/>
-                    <span className={`text-[10px] capitalize ${STATUS_TEXT[a.status]}`}>{a.status}</span>
+                  <div className="flex items-center gap-1.5 flex-none pt-0.5">
+                    <span className={`h-1.5 w-1.5 rounded-full flex-none ${STATUS_DOT[a.status]}`}/>
+                    <span className={`text-[10px] capitalize whitespace-nowrap ${STATUS_TEXT[a.status]}`}>{a.status}</span>
                   </div>
                 </div>
                 {a.description&&<p className="text-xs text-gray-700 line-clamp-1">{a.description}</p>}
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-gray-800">{a.model}</span>
-                  <div className="flex items-center gap-1" onClick={e=>e.stopPropagation()}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-mono text-gray-800 truncate">
+                    <span className="text-gray-600 capitalize">{a.provider}</span> · {a.model}
+                  </span>
+                  <div className="flex items-center gap-1 flex-none" onClick={e=>e.stopPropagation()}>
                     {(a.status==='working'||a.status==='planning')&&(
                       <button onClick={()=>setStatus(a,'paused')} className="rounded p-1 text-gray-700 hover:text-amber-400 transition"><Pause className="h-3 w-3"/></button>
                     )}

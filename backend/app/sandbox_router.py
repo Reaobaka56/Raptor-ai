@@ -9,7 +9,7 @@ from pydantic import BaseModel, HttpUrl, field_validator
 
 from .auth_dependencies import get_required_github_session, get_current_user as _get_user
 from .services.user_service import get_user_by_username
-from .services import sandbox_service
+from .services import sandbox_service, agent_service
 from .services.provider_key_service import SUPPORTED_PROVIDERS, key_configured
 
 logger = logging.getLogger(__name__)
@@ -213,3 +213,52 @@ def get_stats(
 ):
     user = _get_user(session)
     return sandbox_service.get_session_stats(session_id, user["id"])
+
+
+# ── Agent attach / drop ───────────────────────────────────────────────────────
+# An agent (created on the Agents page) can be attached to a sandbox session
+# so it shows up there as a working member of that session. "Dropping" an
+# agent only detaches it (agents.sandbox_id -> NULL); it does not delete the
+# agent or touch any other agent attached to the same session.
+
+@router.get("/sessions/{session_id}/agents")
+def list_session_agents(
+    session_id: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = _get_user(session)
+    if not sandbox_service.get_session(session_id, user["id"]):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return agent_service.list_agents_by_sandbox(session_id, user["id"])
+
+
+class AttachAgentRequest(BaseModel):
+    agent_id: str
+
+
+@router.post("/sessions/{session_id}/agents", status_code=201)
+def attach_agent(
+    session_id: str,
+    body: AttachAgentRequest,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = _get_user(session)
+    if not sandbox_service.get_session(session_id, user["id"]):
+        raise HTTPException(status_code=404, detail="Session not found")
+    agent = agent_service.attach_agent_to_sandbox(body.agent_id, user["id"], session_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
+@router.delete("/sessions/{session_id}/agents/{agent_id}", status_code=200)
+def drop_agent(
+    session_id: str,
+    agent_id: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = _get_user(session)
+    agent = agent_service.drop_agent_from_sandbox(agent_id, user["id"], session_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent is not attached to this session")
+    return agent

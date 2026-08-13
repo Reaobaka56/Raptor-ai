@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import {
   Terminal, Play, Square, Plus, Shield, AlertTriangle,
   ArrowLeft, Loader2, ChevronRight, Zap,
-  Eye, X, KeyRound
+  Eye, X, KeyRound, Bot, UserMinus, UserPlus
 } from 'lucide-react'
-import api, { reposApi, providerKeysApi, type RepositoryInfo, type ProviderKey } from '../api'
+import api, { reposApi, providerKeysApi, agentApi, sandboxApi, type RepositoryInfo, type ProviderKey, type Agent } from '../api'
 
 interface SandboxSession {
   id: string; name: string; status: string; agent_type: string
@@ -238,6 +238,137 @@ function AuditLog({ sessionId }: { sessionId: string }) {
   )
 }
 
+// ── Attached agents panel ─────────────────────────────────────────────────────
+const ROLE_LABEL = (role: string) => role.replace(/_/g, ' ')
+
+function AttachAgentModal({ available, onAttach, onClose }: {
+  available: Agent[]; onAttach: (agentId: string) => Promise<void>; onClose: () => void
+}) {
+  const [agentId, setAgentId] = useState(available[0]?.id || '')
+  const [attaching, setAttaching] = useState(false)
+
+  const submit = async () => {
+    if (!agentId) return
+    setAttaching(true)
+    try { await onAttach(agentId) } finally { setAttaching(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0a10] p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white">Attach an agent</h3>
+          <button onClick={onClose} className="rounded border border-white/10 p-1.5 text-gray-500 hover:text-white transition"><X className="h-4 w-4" /></button>
+        </div>
+        {available.length === 0 ? (
+          <p className="text-xs text-gray-500">All your agents are already attached here, or you haven't created any yet on the Agents page.</p>
+        ) : (
+          <>
+            <select value={agentId} onChange={e => setAgentId(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-[#101010] px-3 py-2 text-sm text-white focus:outline-none">
+              {available.map(a => <option key={a.id} value={a.id}>{a.name} · {ROLE_LABEL(a.role)}</option>)}
+            </select>
+            <button onClick={submit} disabled={attaching || !agentId}
+              className="w-full flex items-center justify-center gap-2 rounded border border-white bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
+              {attaching ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+              {attaching ? 'Attaching…' : 'Attach agent'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SessionAgents({ sessionId }: { sessionId: string }) {
+  const [attached, setAttached] = useState<Agent[]>([])
+  const [allAgents, setAllAgents] = useState<Agent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showAttach, setShowAttach] = useState(false)
+  const [droppingId, setDroppingId] = useState<string | null>(null)
+  const [confirmDropId, setConfirmDropId] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const [attachedRes, allRes] = await Promise.all([
+        sandboxApi.listAgents(sessionId),
+        agentApi.list(),
+      ])
+      setAttached(attachedRes.data)
+      setAllAgents(allRes.data)
+    } catch {} finally { setLoading(false) }
+  }, [sessionId])
+
+  useEffect(() => { load() }, [load])
+
+  const attach = async (agentId: string) => {
+    await sandboxApi.attachAgent(sessionId, agentId)
+    await load()
+    setShowAttach(false)
+  }
+
+  const drop = async (agentId: string) => {
+    setDroppingId(agentId)
+    try {
+      await sandboxApi.dropAgent(sessionId, agentId)
+      await load()
+    } catch {} finally { setDroppingId(null); setConfirmDropId(null) }
+  }
+
+  const available = allAgents.filter(a => !attached.some(x => x.id === a.id))
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black p-4 space-y-3">
+      {showAttach && <AttachAgentModal available={available} onAttach={attach} onClose={() => setShowAttach(false)} />}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-white flex items-center gap-2"><Bot className="h-4 w-4 text-gray-500" /> Agents in this session</h3>
+        <button onClick={() => setShowAttach(true)} disabled={loading}
+          className="flex items-center gap-1.5 rounded border border-white/15 px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white hover:border-white/30 transition disabled:opacity-40">
+          <UserPlus className="h-3.5 w-3.5" /> Attach Agent
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-6 text-gray-600 text-sm"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading agents…</div>
+      ) : attached.length === 0 ? (
+        <p className="text-xs text-gray-600 py-2">No agents attached to this session yet. Attach one you created on the Agents page.</p>
+      ) : (
+        <div className="space-y-2">
+          {attached.map(a => (
+            <div key={a.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+              <div className="h-8 w-8 rounded-lg border border-white/10 bg-white/4 flex items-center justify-center text-gray-500 flex-none">
+                <Bot className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{a.name}</p>
+                <p className="text-xs text-gray-600 truncate capitalize">{ROLE_LABEL(a.role)} · {a.provider} · {a.model}</p>
+              </div>
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border flex-none capitalize ${
+                a.status === 'working' || a.status === 'planning' ? 'border-green-500/20 text-green-400' :
+                a.status === 'failed' ? 'border-red-500/20 text-red-400' : 'border-white/10 text-gray-500'
+              }`}>{a.status}</span>
+              {confirmDropId === a.id ? (
+                <div className="flex items-center gap-1.5 flex-none">
+                  <button onClick={() => drop(a.id)} disabled={droppingId === a.id}
+                    className="rounded border border-red-500/30 px-2 py-1 text-[11px] text-red-400 hover:border-red-400/60 transition">
+                    {droppingId === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Confirm drop'}
+                  </button>
+                  <button onClick={() => setConfirmDropId(null)} className="rounded border border-white/10 px-2 py-1 text-[11px] text-gray-500 hover:text-white transition">Cancel</button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmDropId(a.id)} title="Drop agent from this session"
+                  className="rounded border border-white/10 p-1.5 text-gray-600 hover:text-red-400 hover:border-red-500/30 transition flex-none">
+                  <UserMinus className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Session detail ────────────────────────────────────────────────────────────
 function SessionDetail({ session, onBack, onStop }: {
   session: SandboxSession; onBack: () => void; onStop: () => void
@@ -300,6 +431,9 @@ function SessionDetail({ session, onBack, onStop }: {
           </div>
         ))}
       </div>
+
+      {/* Attached agents */}
+      <SessionAgents sessionId={session.id} />
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-white/8 pb-0">
