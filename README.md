@@ -1,6 +1,6 @@
 <div align="center">
   <img src="frontend/public/favicon.svg" alt="Raptor AI Logo" width="120" height="120" />
-  <h1>Raptor AI — Autonomous Code Review Engine</h1>
+  <h1>Raptor AI — Code Review Platform </h1>
   <p><b>Autonomous inline pull request reviews. Flawless, secure codebases.</b></p>
 </div>
 
