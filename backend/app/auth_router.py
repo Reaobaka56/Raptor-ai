@@ -5,6 +5,8 @@ import requests
 from urllib.parse import urlencode
 from typing import Optional, Dict, Any
 
+import logging
+
 from fastapi import APIRouter, Request, HTTPException
 
 from .models import GitHubLoginUrlResponse, AuthCallbackRequest, UserProfile, RepositoryInfo
@@ -13,6 +15,7 @@ from .services.user_service import upsert_user
 from .auth_dependencies import USER_SESSIONS
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
+logger = logging.getLogger(__name__)
 
 
 def _get_github_auth_headers(access_token: Optional[str]) -> Dict[str, str]:
@@ -83,6 +86,15 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
         email=email,
         avatar_url=avatar_url,
     )
+    if not db_user:
+        # Login still proceeds (see get_current_user's self-healing retry),
+        # but this is worth surfacing loudly since it means every DB-backed
+        # endpoint will 404 until it re-provisions the row.
+        logger.warning(
+            "[auth] upsert_user failed for username=%s githubId=%s — "
+            "session will be issued without a DB user row",
+            github_login, github_id,
+        )
 
     user_profile = {
         "username":  github_login,

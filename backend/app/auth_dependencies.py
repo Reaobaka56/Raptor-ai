@@ -4,8 +4,12 @@ from typing import Optional, Dict, Any
 import secrets
 from fastapi import Depends, Header, HTTPException, Request
 
+import logging
+
 from .services.session_store import save_session, get_session, delete_session, refresh_session
-from .services.user_service import get_user_by_username
+from .services.user_service import get_user_by_username, upsert_user
+
+logger = logging.getLogger(__name__)
 
 
 USER_SESSIONS: Dict[str, Any] = {}
@@ -77,11 +81,38 @@ def get_current_user(session: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Shared helper: resolve the DB user record for a session returned by
     get_required_github_session. Raises 401 if there's no session (e.g. the
     internal-auth bypass was used, which carries no user identity), or 404 if
-    the session's username has no matching user record."""
+    the session's username has no matching user record and it can't be
+    self-healed (see below)."""
     if not session:
         raise HTTPException(status_code=401, detail="This endpoint requires a user session")
-    username = session.get("user", {}).get("username", "")
+
+    profile = session.get("user", {}) or {}
+    username = profile.get("username", "")
     user = get_user_by_username(username)
+
+    if not user:
+        # The GitHub session itself is valid, but there's no matching `users`
+        # row. This happens when the DB was briefly unreachable during login
+        # (auth_router's upsert_user call is non-fatal by design, so login
+        # still succeeds and issues a session even if the upsert failed).
+        # Rather than forcing the person to log out/in again, re-provision
+        # the row from the profile fields already cached in the session and
+        # retry once before giving up.
+        github_id = profile.get("githubId")
+        if github_id:
+            logger.warning(
+                "[auth] No user row for session username=%s githubId=%s — "
+                "re-provisioning from cached session profile",
+                username, github_id,
+            )
+            user = upsert_user(
+                github_id=github_id,
+                username=username,
+                name=profile.get("name"),
+                email=profile.get("email"),
+                avatar_url=profile.get("avatarUrl"),
+            )
+
     if not user:
         raise HTTPException(status_code=404, detail="User record not found — log in again")
     return user
