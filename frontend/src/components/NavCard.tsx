@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { X, Shield, Zap, GitPullRequest, Users, Check, ArrowRight } from 'lucide-react'
+import { X, Shield, Zap, GitPullRequest, Users, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 interface NavCardProps {
-  type: 'docs' | 'pricing' | 'features'
+  type: 'docs' | 'features'
   onClose: () => void
   onLogin: () => void
 }
@@ -35,56 +35,6 @@ function DocsCard({ onClose }: { onClose: () => void }) {
   )
 }
 
-function PricingCard({ onLogin, onClose }: { onLogin: () => void; onClose: () => void }) {
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      {[
-        {
-          name: 'Starter', price: 'Free', sub: 'forever',
-          features: ['5 repositories', '100 PRs/month', 'Security scanning', 'Community support'],
-          cta: 'Get started', highlight: false,
-        },
-        {
-          name: 'Team', price: '$29', sub: '/month',
-          features: ['Unlimited repos', 'Unlimited PRs', 'Auto-fix PRs', 'Team memory', 'Priority support'],
-          cta: 'Start free trial', highlight: true,
-        },
-        {
-          name: 'Enterprise', price: 'Custom', sub: 'contact us',
-          features: ['SSO / SAML', 'Custom rules', 'Audit logs', 'SLA guarantee', 'Dedicated support'],
-          cta: 'Contact us', highlight: false,
-        },
-      ].map(({ name, price, sub, features, cta, highlight }) => (
-        <div key={name} className={`rounded-xl border p-5 space-y-4 ${highlight ? 'border-white bg-white/6' : 'border-white/10'}`}>
-          <div>
-            <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">{name}</p>
-            <div className="flex items-end gap-1 mt-1.5">
-              <span className="text-2xl font-bold text-white">{price}</span>
-              <span className="text-xs text-gray-600 mb-0.5">{sub}</span>
-            </div>
-          </div>
-          <ul className="space-y-1.5">
-            {features.map(f => (
-              <li key={f} className="flex items-center gap-2 text-xs text-gray-400">
-                <Check className="h-3 w-3 text-white/40 flex-none" />{f}
-              </li>
-            ))}
-          </ul>
-          <button
-            onClick={() => { if (name !== 'Enterprise') { onClose(); onLogin(); } }}
-            className={`w-full rounded-lg py-2 text-xs font-bold transition ${
-              highlight
-                ? 'bg-white text-black hover:bg-gray-100'
-                : 'border border-white/15 text-gray-400 hover:border-white/30 hover:text-white'
-            }`}>
-            {cta}
-          </button>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 function FeaturesCard() {
   return (
     <div className="grid grid-cols-1 gap-2">
@@ -110,11 +60,10 @@ function FeaturesCard() {
 
 const CARD_TITLES: Record<string, string> = {
   docs: 'Documentation',
-  pricing: 'Pricing',
   features: 'Features',
 }
 
-export default function NavCard({ type, onClose, onLogin }: NavCardProps) {
+export default function NavCard({ type, onClose }: NavCardProps) {
   const backdropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -127,7 +76,7 @@ export default function NavCard({ type, onClose, onLogin }: NavCardProps) {
     }
   }, [onClose])
 
-  const maxWidth = type === 'pricing' ? 'max-w-2xl' : type === 'docs' ? 'max-w-xl' : 'max-w-lg'
+  const maxWidth = type === 'docs' ? 'max-w-xl' : 'max-w-lg'
 
   return (
     <div
@@ -145,7 +94,6 @@ export default function NavCard({ type, onClose, onLogin }: NavCardProps) {
         </div>
         <div className="p-5">
           {type === 'docs' && <DocsCard onClose={onClose} />}
-          {type === 'pricing' && <PricingCard onLogin={onLogin} onClose={onClose} />}
           {type === 'features' && <FeaturesCard />}
         </div>
       </div>

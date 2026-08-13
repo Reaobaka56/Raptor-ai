@@ -5,23 +5,11 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from .db import get_conn, release_conn
+from .db import get_conn, release_conn, row_to_dict as _row_to_dict
 
 logger = logging.getLogger(__name__)
 
 
-def _row_to_dict(cur, row) -> Optional[Dict[str, Any]]:
-    if not row:
-        return None
-    cols = [d[0] for d in cur.description]
-    d = dict(zip(cols, row))
-    for key in ("id", "owner_id", "from_agent_id", "to_agent_id", "task_id"):
-        if key in d and d[key] is not None:
-            d[key] = str(d[key])
-    for key in ("created_at",):
-        if key in d and d[key] is not None and hasattr(d[key], "isoformat"):
-            d[key] = d[key].isoformat()
-    return d
 
 
 def send_message(owner_id: str, data: Dict[str, Any]) -> Dict[str, Any]:

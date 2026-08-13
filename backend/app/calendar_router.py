@@ -9,8 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from .auth_dependencies import get_required_github_session
-from .services.user_service import get_user_by_username
+from .auth_dependencies import get_required_github_session, get_current_user
 from .services.db import get_conn, release_conn
 
 logger = logging.getLogger(__name__)
@@ -18,11 +17,7 @@ router = APIRouter(prefix="/api/calendar", tags=["Calendar"])
 
 
 def _get_user_id(session: Dict[str, Any]) -> str:
-    username = session.get("user", {}).get("username", "")
-    user = get_user_by_username(username)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user["id"]
+    return get_current_user(session)["id"]
 
 
 class Meeting(BaseModel):

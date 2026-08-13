@@ -54,3 +54,19 @@ def release_conn(conn):
             conn.close()
         except Exception:
             pass
+
+
+def row_to_dict(cur, row) -> Optional[dict]:
+    """Convert a single cursor row into a plain dict, JSON-safely serializing
+    UUIDs (via .hex) and datetimes/dates (via .isoformat). Shared across
+    services so row-shaping logic isn't copy-pasted per file."""
+    if row is None:
+        return None
+    cols = [d[0] for d in cur.description]
+    d = dict(zip(cols, row))
+    for k, v in d.items():
+        if hasattr(v, "isoformat"):
+            d[k] = v.isoformat()
+        elif hasattr(v, "hex"):
+            d[k] = str(v)
+    return d

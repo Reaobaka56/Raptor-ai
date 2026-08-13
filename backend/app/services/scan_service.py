@@ -108,7 +108,8 @@ async def run_scan(
     If post_comments=True and a github_token is available, posts an inline
     GitHub PR review after analysis.
     """
-    from ..github_utils import parse_github_scan_target, get_github_auth_headers, get_configured_github_token
+    from ..github_utils import parse_github_scan_target, get_github_auth_headers
+    from ..auth_dependencies import get_configured_github_token
 
     repo_name, requested_pr_number = parse_github_scan_target(target)
 

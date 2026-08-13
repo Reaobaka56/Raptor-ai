@@ -3,7 +3,7 @@ import logging
 import re
 from typing import Optional, List, Dict, Any
 
-from .db import get_conn, release_conn
+from .db import get_conn, release_conn, row_to_dict as _row_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +16,6 @@ def _slugify(title: str) -> str:
     return slug[:120]
 
 
-def _row_to_dict(cur, row) -> Dict[str, Any]:
-    cols = [d[0] for d in cur.description]
-    post = dict(zip(cols, row))
-    post["id"] = str(post["id"])
-    post["author_id"] = str(post["author_id"]) if post.get("author_id") else None
-    for ts in ("created_at", "updated_at", "published_at"):
-        if post.get(ts):
-            post[ts] = post[ts].isoformat()
-    return post
 
 
 def list_posts(published_only: bool = True) -> List[Dict[str, Any]]:

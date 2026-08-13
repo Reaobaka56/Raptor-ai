@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from .auth_dependencies import get_required_github_session
+from .auth_dependencies import get_required_github_session, get_current_user as _get_user
 from .services.user_service import get_user_by_username
 from .services import task_service
 from .services.provider_key_service import get_decrypted_key
@@ -17,14 +17,6 @@ from .services.db import get_conn, release_conn
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
-
-
-def _get_user(session: Dict[str, Any]) -> Dict[str, Any]:
-    username = session.get("user", {}).get("username", "")
-    user = get_user_by_username(username)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
 
 
 def _get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:

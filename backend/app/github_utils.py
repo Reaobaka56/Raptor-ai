@@ -53,6 +53,3 @@ def get_github_auth_headers(token: Optional[str] = None) -> dict:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
-
-def get_configured_github_token() -> Optional[str]:
-    return os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_PAT")

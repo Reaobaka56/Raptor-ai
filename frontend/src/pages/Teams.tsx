@@ -341,15 +341,16 @@ export default function TeamsPage() {
                 </div>
                 <p className="text-gray-400 font-semibold">No teams yet</p>
                 <p className="text-gray-600 text-sm max-w-xs mx-auto">Create a team or join one with a token from a team leader.</p>
-                <div className="flex gap-2"><button onClick={() => setShowJoin(true)}
-          className="flex items-center gap-1.5 rounded border border-white/10 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:bg-white/5 hover:text-white transition">
-          <UserPlus className="h-3.5 w-3.5" /> Join
-        </button><button onClick={() => setShowCreate(true)}
-                  className="inline-flex items-center gap-2 rounded border border-white/20 px-4 py-2 text-sm text-white hover:bg-white hover:text-black transition">
-                  <Plus className="h-4 w-4" /> Create your first team
-                </button>
-                <button onClick={() => setShowJoin(true)} className="inline-flex items-center gap-2 rounded border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"><UserPlus className="h-4 w-4" /> Join a Team</button>
-              </div>
+                <div className="flex gap-2 justify-center">
+                  <button onClick={() => setShowCreate(true)}
+                    className="inline-flex items-center gap-2 rounded border border-white/20 px-4 py-2 text-sm text-white hover:bg-white hover:text-black transition">
+                    <Plus className="h-4 w-4" /> Create your first team
+                  </button>
+                  <button onClick={() => setShowJoin(true)}
+                    className="inline-flex items-center gap-2 rounded border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition">
+                    <UserPlus className="h-4 w-4" /> Join a Team
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">

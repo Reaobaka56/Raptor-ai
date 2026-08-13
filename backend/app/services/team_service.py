@@ -4,7 +4,7 @@ import re
 import secrets
 from typing import Optional, List, Dict, Any
 
-from .db import get_conn, release_conn
+from .db import get_conn, release_conn, row_to_dict as _row
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +16,6 @@ def _slugify(name: str) -> str:
     return re.sub(r"-+", "-", slug)[:80]
 
 
-def _row(cur, row) -> Dict[str, Any]:
-    cols = [d[0] for d in cur.description]
-    d = dict(zip(cols, row))
-    for k, v in d.items():
-        if hasattr(v, "isoformat"):
-            d[k] = v.isoformat()
-        elif hasattr(v, "hex"):          # UUID
-            d[k] = str(v)
-    return d
 
 
 

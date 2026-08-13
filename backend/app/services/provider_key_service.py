@@ -2,7 +2,7 @@
 import base64, hashlib, os
 from typing import Any, Dict, List, Optional
 from cryptography.fernet import Fernet
-from .db import get_conn, release_conn
+from .db import get_conn, release_conn, row_to_dict as _row
 
 SUPPORTED_PROVIDERS = {"openai", "anthropic", "google", "gemini", "mistral", "groq"}
 
@@ -15,12 +15,6 @@ def mask_key(key: str) -> str:
     if len(key) <= 8: return "••••"
     return f"{key[:4]}••••••••{key[-4:]}"
 
-def _row(cur, row) -> Dict[str, Any]:
-    cols=[d[0] for d in cur.description]; d=dict(zip(cols,row))
-    for k,v in d.items():
-        if hasattr(v,'isoformat'): d[k]=v.isoformat()
-        elif hasattr(v,'hex'): d[k]=str(v)
-    return d
 
 def _public(record: Dict[str, Any]) -> Dict[str, Any]:
     record.pop("encrypted_key", None)

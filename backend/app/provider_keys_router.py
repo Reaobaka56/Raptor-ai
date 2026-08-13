@@ -2,7 +2,7 @@
 from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from .auth_dependencies import get_required_github_session
+from .auth_dependencies import get_required_github_session, get_current_user as _user
 from .services.user_service import get_user_by_username
 from .services.provider_key_service import (
     SUPPORTED_PROVIDERS,
@@ -13,12 +13,6 @@ from .services.provider_key_service import (
 )
 
 router = APIRouter(prefix="/api/provider-keys", tags=["Provider Keys"])
-
-def _user(session: Dict[str, Any]) -> Dict[str, Any]:
-    username=session.get("user",{}).get("username","")
-    user=get_user_by_username(username)
-    if not user: raise HTTPException(status_code=404, detail="User record not found")
-    return user
 
 class KeyRequest(BaseModel):
     provider: str

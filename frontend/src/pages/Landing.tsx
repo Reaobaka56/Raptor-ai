@@ -9,7 +9,6 @@ import NavCard from '../components/NavCard';
 const navItems = [
   { label: 'Features', key: 'features' },
   { label: 'Docs', key: 'docs' },
-  { label: 'Pricing', key: 'pricing' },
   { label: 'Blog', to: '/blog' },
 ];
 
@@ -152,7 +151,7 @@ export default function Landing() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
-  const [activeCard, setActiveCard] = useState<'docs' | 'pricing' | 'features' | null>(null);
+  const [activeCard, setActiveCard] = useState<'docs' | 'features' | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
 
@@ -236,7 +235,7 @@ export default function Landing() {
         <nav className="hidden md:flex items-center gap-8 text-sm text-gray-400">
           {navItems.map(item => (
             'key' in item ? (
-              <button key={item.key} onClick={() => setActiveCard(item.key as 'docs' | 'pricing' | 'features')}
+              <button key={item.key} onClick={() => setActiveCard(item.key as 'docs' | 'features')}
                 className="hover:text-white transition-colors">
                 {item.label}
               </button>
@@ -270,7 +269,7 @@ export default function Landing() {
               {navItems.map(item => (
                 'key' in item ? (
                   <button key={item.key}
-                    onClick={() => { setMobileMenuOpen(false); setActiveCard(item.key as 'docs' | 'pricing' | 'features'); }}
+                    onClick={() => { setMobileMenuOpen(false); setActiveCard(item.key as 'docs' | 'features'); }}
                     className="block w-full text-left py-3 text-lg font-semibold text-gray-300 border-b border-white/8 hover:text-white transition">
                     {item.label}
                   </button>
@@ -382,40 +381,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Pricing ── */}
-      <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
-        <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">Pricing</p>
-        <h2 className="text-3xl md:text-4xl font-bold mb-12">Simple, honest pricing.</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          {[
-            { name: 'Starter', price: 'Free', sub: 'forever', features: ['5 repos', '100 PRs/month', 'Security scanning', 'Community support'], cta: 'Get started', highlight: false },
-            { name: 'Team', price: '$29', sub: 'per month', features: ['Unlimited repos', 'Unlimited PRs', 'Auto-fix PRs', 'Team memory', 'Priority support'], cta: 'Start free trial', highlight: true },
-            { name: 'Enterprise', price: 'Custom', sub: 'contact us', features: ['SSO / SAML', 'Custom rules', 'Audit logs', 'SLA', 'Dedicated support'], cta: 'Contact us', highlight: false },
-          ].map(({ name, price, sub, features, cta, highlight }) => (
-            <div key={name} className={`rounded-2xl border p-6 space-y-6 ${highlight ? 'border-white bg-white/5' : 'border-white/10'}`}>
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wider font-mono">{name}</p>
-                <div className="flex items-end gap-1 mt-2">
-                  <span className="text-3xl font-bold text-white">{price}</span>
-                  <span className="text-xs text-gray-600 mb-1">{sub}</span>
-                </div>
-              </div>
-              <ul className="space-y-2">
-                {features.map(f => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-gray-400">
-                    <span className="h-1 w-1 rounded-full bg-white/30 flex-none" />{f}
-                  </li>
-                ))}
-              </ul>
-              <button onClick={name !== 'Enterprise' ? handleGithubLogin : undefined}
-                className={`w-full rounded-full py-2.5 text-sm font-bold transition ${highlight ? 'bg-white text-black hover:bg-gray-100' : 'border border-white/15 text-gray-300 hover:border-white/30 hover:text-white'}`}>
-                {cta}
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ── FAQ ── */}
       <section className="px-4 md:px-12 pb-32 max-w-2xl mx-auto">
         <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">FAQ</p>
@@ -467,7 +432,7 @@ export default function Landing() {
           <div className="grid grid-cols-2 gap-x-16 gap-y-2 text-sm">
             <p className="text-xs font-bold text-white mb-2 col-span-1">Product</p>
             <p className="text-xs font-bold text-white mb-2 col-span-1">Company</p>
-            {[['Docs', '/docs'], ['Blog', '/blog'], ['Pricing', '/pricing'], ['Privacy', '/privacy'], ['Terms', '/terms'], ['Changelog', '/changelog']].map(([label, to], i) => (
+            {[['Docs', '/docs'], ['Blog', '/blog'], ['Privacy', '/privacy'], ['Terms', '/terms'], ['Changelog', '/changelog']].map(([label, to], i) => (
               <Link key={label} to={to} className={`text-xs text-gray-600 hover:text-white transition ${i >= 3 ? '' : ''}`}>
                 {label}
               </Link>

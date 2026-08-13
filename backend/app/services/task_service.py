@@ -7,23 +7,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .db import get_conn, release_conn
+from .db import get_conn, release_conn, row_to_dict as _row_to_dict
 
 logger = logging.getLogger(__name__)
 
 
-def _row_to_dict(cur, row) -> Optional[Dict[str, Any]]:
-    if not row:
-        return None
-    cols = [d[0] for d in cur.description]
-    d = dict(zip(cols, row))
-    for key in ("id", "owner_id", "assigned_agent_id", "parent_task_id"):
-        if key in d and d[key] is not None:
-            d[key] = str(d[key])
-    for key in ("created_at", "updated_at", "started_at", "completed_at"):
-        if key in d and d[key] is not None and hasattr(d[key], "isoformat"):
-            d[key] = d[key].isoformat()
-    return d
 
 
 def create_task(owner_id: str, data: Dict[str, Any]) -> Dict[str, Any]:

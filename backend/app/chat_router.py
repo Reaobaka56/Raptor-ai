@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from .auth_dependencies import get_required_github_session
+from .auth_dependencies import get_required_github_session, get_current_user
 from .services.user_service import get_user_by_username, get_user_by_id
 from .services.db import get_conn, release_conn
 
@@ -18,15 +18,7 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 # ── DB helpers ─────────────────────────────────────────────────────────────────
 
 def _get_user_id(session: Dict[str, Any]) -> str:
-    user = session.get("user", {})
-    uid = user.get("id")
-    if not uid:
-        username = user.get("username", "")
-        db_user = get_user_by_username(username)
-        if not db_user:
-            raise HTTPException(status_code=404, detail="User not in database — please log in again")
-        uid = db_user["id"]
-    return uid
+    return get_current_user(session)["id"]
 
 
 def _row(cur, row) -> Dict[str, Any]:

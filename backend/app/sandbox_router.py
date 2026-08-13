@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, HttpUrl, field_validator
 
-from .auth_dependencies import get_required_github_session
+from .auth_dependencies import get_required_github_session, get_current_user as _get_user
 from .services.user_service import get_user_by_username
 from .services import sandbox_service
 from .services.provider_key_service import SUPPORTED_PROVIDERS, key_configured
@@ -27,14 +27,6 @@ PREMIUM_TIER_LIMITS = {
     "max_session_minutes": 240,
     "max_memory_mb": 2048,
 }
-
-
-def _get_user(session: Dict[str, Any]) -> Dict[str, Any]:
-    username = session.get("user", {}).get("username", "")
-    user = get_user_by_username(username)
-    if not user:
-        raise HTTPException(status_code=404, detail="User record not found")
-    return user
 
 
 def _tier_limits(username: str) -> dict:

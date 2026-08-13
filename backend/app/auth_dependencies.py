@@ -5,6 +5,7 @@ import secrets
 from fastapi import Depends, Header, HTTPException, Request
 
 from .services.session_store import save_session, get_session, delete_session, refresh_session
+from .services.user_service import get_user_by_username
 
 
 USER_SESSIONS: Dict[str, Any] = {}
@@ -70,3 +71,17 @@ def get_configured_github_token() -> Optional[str]:
     if token.startswith(("your_", "optional_")):
         return None
     return token
+
+
+def get_current_user(session: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Shared helper: resolve the DB user record for a session returned by
+    get_required_github_session. Raises 401 if there's no session (e.g. the
+    internal-auth bypass was used, which carries no user identity), or 404 if
+    the session's username has no matching user record."""
+    if not session:
+        raise HTTPException(status_code=401, detail="This endpoint requires a user session")
+    username = session.get("user", {}).get("username", "")
+    user = get_user_by_username(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User record not found — log in again")
+    return user

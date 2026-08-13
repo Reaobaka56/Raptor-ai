@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from .auth_dependencies import get_required_github_session
+from .auth_dependencies import get_required_github_session, get_current_user as _get_db_user
 from .services.user_service import get_user_by_username
 from .services.db import get_conn, release_conn
 from .services.team_service import (
@@ -24,14 +24,6 @@ router = APIRouter(prefix="/api/teams", tags=["Teams"])
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _get_db_user(session: Dict[str, Any]) -> Dict[str, Any]:
-    username = session.get("user", {}).get("username", "")
-    user = get_user_by_username(username)
-    if not user:
-        raise HTTPException(status_code=404, detail="User record not found — log in again")
-    return user
-
 
 def _require_team_role(team_id: str, user_id: str, min_role: str) -> str:
     """Returns the user's actual role if >= min_role, else raises 403."""
