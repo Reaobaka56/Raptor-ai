@@ -399,7 +399,13 @@ def ensure_join_token(team_id: str) -> Optional[str]:
     finally: release_conn(conn)
 
 
+class AlreadyTeamMemberError(Exception):
+    """Raised when a user tries to join a team via token they're already a member of."""
+
+
 def join_team_by_token(user_id: str, token: str) -> Optional[Dict[str, Any]]:
+    """Join a team by its plaintext join token. Raises AlreadyTeamMemberError if the
+    user is already a member of the target team; returns None if the token is invalid."""
     conn = get_conn()
     if not conn: return None
     try:
@@ -408,6 +414,14 @@ def join_team_by_token(user_id: str, token: str) -> Optional[Dict[str, Any]]:
             row = cur.fetchone()
             if not row: return None
             team_id = row[0]
+
+            cur.execute(
+                "SELECT id FROM team_members WHERE team_id = %s AND user_id = %s",
+                (team_id, user_id),
+            )
+            if cur.fetchone():
+                raise AlreadyTeamMemberError()
+
             cur.execute("""
                 INSERT INTO team_members(team_id, user_id, role)
                 VALUES(%s, %s, 'member')
@@ -415,6 +429,8 @@ def join_team_by_token(user_id: str, token: str) -> Optional[Dict[str, Any]]:
             """, (team_id, user_id))
             conn.commit()
         return get_team(str(team_id))
+    except AlreadyTeamMemberError:
+        raise
     except Exception:
         logger.exception("[team_service] join_team_by_token failed")
         try: conn.rollback()

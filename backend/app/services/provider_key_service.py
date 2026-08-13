@@ -67,6 +67,28 @@ def delete_key(user_id: str, provider: str) -> bool:
             conn.commit(); return cur.rowcount>0
     finally: release_conn(conn)
 
+def get_decrypted_key(user_id: str, provider: str) -> Optional[str]:
+    """Fetch and decrypt a user's stored API key for a provider, or None if not configured."""
+    conn = get_conn()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT encrypted_key FROM user_provider_keys WHERE user_id=%s::uuid AND provider=%s",
+                (user_id, provider.lower().strip()),
+            )
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return None
+            try:
+                return _fernet().decrypt(row[0].encode()).decode()
+            except Exception:
+                return None
+    finally:
+        release_conn(conn)
+
+
 def key_configured(user_id: str, provider: str) -> bool:
     conn=get_conn()
     if not conn: return False

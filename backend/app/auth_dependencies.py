@@ -43,23 +43,23 @@ def get_optional_github_session(
     return session
 
 
-def get_required_github_session(
-    session: Optional[Dict[str, Any]] = Depends(get_optional_github_session),
-    internal_auth: bool = Depends(lambda: False),
-) -> Optional[Dict[str, Any]]:
-    if session:
-        return session
-    if internal_auth:
-        return None
-    raise HTTPException(status_code=401, detail="Invalid or expired session context")
-
-
 def get_internal_api_token(authorization: Optional[str] = Header(default=None)) -> bool:
     if not authorization or not authorization.startswith("Bearer "):
         return False
     token = authorization.removeprefix("Bearer ").strip()
     expected = os.getenv("INTERNAL_API_TOKEN")
     return bool(expected and secrets.compare_digest(token, expected))
+
+
+def get_required_github_session(
+    session: Optional[Dict[str, Any]] = Depends(get_optional_github_session),
+    internal_auth: bool = Depends(get_internal_api_token),
+) -> Optional[Dict[str, Any]]:
+    if session:
+        return session
+    if internal_auth:
+        return None
+    raise HTTPException(status_code=401, detail="Invalid or expired session context")
 
 
 def get_configured_github_token() -> Optional[str]:

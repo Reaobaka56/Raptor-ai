@@ -175,14 +175,14 @@ export const teamsApi = {
   regenerateToken: (teamId: string) => api.post<{ join_token: string }>(`/teams/${teamId}/join-token/regenerate`),
 }
 
-export interface ProviderKey { id: string; provider: string; label: string; model?: string; key_preview: string; is_active: boolean; created_at: string }
+export interface ProviderKey { id: string; provider: string; key_mask: string; created_at: string; updated_at: string }
 export const providerKeysApi = {
-  providers: () => api.get<Record<string, { name: string; models: string[] }>>('/keys/providers'),
-  list: () => api.get<ProviderKey[]>('/keys'),
-  save: (provider: string, api_key: string, label = 'My Key', model?: string) =>
-    api.post<ProviderKey>('/keys', { provider, api_key, label, model }),
-  test: (id: string) => api.post(`/keys/${id}/test`),
-  delete: (id: string) => api.delete(`/keys/${id}`),
+  providers: () => api.get<{ providers: string[] }>('/provider-keys/providers'),
+  list: () => api.get<ProviderKey[]>('/provider-keys'),
+  save: (provider: string, api_key: string) =>
+    api.put<ProviderKey>('/provider-keys', { provider, api_key }),
+  test: (provider: string) => api.post<{ ok: boolean; error?: string }>(`/provider-keys/${provider}/test`),
+  delete: (provider: string) => api.delete(`/provider-keys/${provider}`),
 }
 
 // ── Existing APIs ──────────────────────────────────────────────────────────────

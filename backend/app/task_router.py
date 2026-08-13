@@ -12,6 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from .auth_dependencies import get_required_github_session
 from .services.user_service import get_user_by_username
 from .services import task_service
+from .services.provider_key_service import get_decrypted_key
 from .services.db import get_conn, release_conn
 
 logger = logging.getLogger(__name__)
@@ -24,33 +25,6 @@ def _get_user(session: Dict[str, Any]) -> Dict[str, Any]:
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
-
-
-def _get_user_api_key(user_id: str, provider: str) -> Optional[str]:
-    """Get decrypted API key for a user+provider combo. Falls back to env var."""
-    import hashlib
-    conn = get_conn()
-    if not conn:
-        return None
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT key_encrypted FROM user_api_keys WHERE user_id=%s::uuid AND provider=%s AND is_active=TRUE ORDER BY created_at DESC LIMIT 1",
-                (user_id, provider)
-            )
-            row = cur.fetchone()
-            if not row:
-                return None
-            # Decrypt
-            secret = os.getenv("SECRET_KEY", "raptor-default-secret-change-in-production")
-            key = hashlib.sha256(secret.encode()).digest()
-            data = bytes.fromhex(row[0])
-            decrypted = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
-            return decrypted.decode()
-    except Exception:
-        return None
-    finally:
-        release_conn(conn)
 
 
 def _get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
@@ -202,7 +176,7 @@ def _run_task_sync(task_id: str, owner_id: str, agent: Dict[str, Any]) -> None:
         system_prompt = agent.get("system_prompt") or ""
 
         # Get API key — user's BYOK first, then env var
-        api_key = _get_user_api_key(owner_id, provider)
+        api_key = get_decrypted_key(owner_id, provider)
 
         if not api_key:
             if provider in ("gemini", "google"):
