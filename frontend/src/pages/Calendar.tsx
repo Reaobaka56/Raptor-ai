@@ -29,12 +29,10 @@ async function fetchMeetings(): Promise<Meeting[]> {
   try { const r = await api.get('/calendar/meetings'); return r.data || [] }
   catch { return [] }
 }
-async function addMeetingApi(m: Omit<Meeting,'id'>): Promise<Meeting | null> {
-  try {
-    const id = crypto.randomUUID()
-    const r = await api.post('/calendar/meetings', { ...m, id })
-    return r.data
-  } catch { return null }
+async function addMeetingApi(m: Omit<Meeting,'id'>): Promise<Meeting> {
+  const id = crypto.randomUUID()
+  const r = await api.post('/calendar/meetings', { ...m, id })
+  return r.data
 }
 async function deleteMeetingApi(id: string): Promise<void> {
   try { await api.delete(`/calendar/meetings/${id}`) } catch {}
@@ -159,9 +157,13 @@ export default function CalendarPage() {
   }
 
   const handleSave = async (data: Omit<Meeting,'id'>) => {
-    const saved = await addMeetingApi(data)
-    if (saved) setMeetings(prev => [...prev, saved])
-    setShowForm(false)
+    try {
+      const saved = await addMeetingApi(data)
+      setMeetings(prev => [...prev, saved])
+      setShowForm(false)
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Failed to schedule meeting')
+    }
   }
 
   const handleDelete = async (id: string) => {
