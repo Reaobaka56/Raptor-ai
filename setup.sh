@@ -38,7 +38,6 @@ fi
 # Setup database
 echo ""
 echo "Setting up database..."
-npx prisma generate
 
 # Check if PostgreSQL is running
 if command -v pg_isready &> /dev/null; then
@@ -47,13 +46,18 @@ if command -v pg_isready &> /dev/null; then
         read -p "Run migrations? (y/n) " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            npx prisma migrate dev --name init
+            for f in backend/migrations/*.sql; do
+                echo "Applying $f"
+                psql "$DATABASE_URL" < "$f"
+            done
         fi
     else
-        echo "PostgreSQL is not running. Start it and run: npx prisma migrate dev --name init"
+        echo "PostgreSQL is not running. Start it, then run:"
+        echo "  for f in backend/migrations/*.sql; do psql \$DATABASE_URL < \$f; done"
     fi
 else
-    echo "PostgreSQL not found. Install PostgreSQL and run: npx prisma migrate dev --name init"
+    echo "PostgreSQL not found. Install PostgreSQL, then run:"
+    echo "  for f in backend/migrations/*.sql; do psql \$DATABASE_URL < \$f; done"
 fi
 
 echo ""
@@ -62,7 +66,7 @@ echo "Setup complete!"
 echo ""
 echo "Next steps:"
 echo "1. Edit .env with your GitHub App and Claude API credentials"
-echo "2. Run database migrations: npx prisma migrate dev --name init"
+echo "2. Run database migrations: for f in backend/migrations/*.sql; do psql \$DATABASE_URL < \$f; done"
 echo "3. Start backend: npm run dev"
 echo "4. Start frontend: cd frontend && npm run dev"
 echo ""

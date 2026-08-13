@@ -19,26 +19,6 @@ def _slugify(name: str) -> str:
 
 
 
-def ensure_team_token_columns() -> None:
-    """Idempotently add team token columns for deployments that only ran older migrations."""
-    conn = get_conn()
-    if not conn:
-        return
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                ALTER TABLE teams ADD COLUMN IF NOT EXISTS join_token_hash TEXT;
-                ALTER TABLE teams ADD COLUMN IF NOT EXISTS join_token_created_at TIMESTAMPTZ;
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_join_token_hash ON teams(join_token_hash) WHERE join_token_hash IS NOT NULL;
-            """)
-            conn.commit()
-    except Exception:
-        logger.exception("[team_service] ensure_team_token_columns failed")
-        try: conn.rollback()
-        except Exception: pass
-    finally:
-        release_conn(conn)
-
 # ── Teams ─────────────────────────────────────────────────────────────────────
 
 def create_team(owner_id: str, name: str) -> Optional[Dict[str, Any]]:
@@ -81,7 +61,6 @@ def create_team(owner_id: str, name: str) -> Optional[Dict[str, Any]]:
 
 
 def get_team(team_id: str) -> Optional[Dict[str, Any]]:
-    ensure_team_token_columns()
     conn = get_conn()
     if not conn:
         return None

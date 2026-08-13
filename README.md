@@ -95,11 +95,21 @@ SECRET_KEY=your-random-32-char-secret
 ### 2. Run Migrations
 
 ```bash
+for f in backend/migrations/*.sql; do psql $DATABASE_URL < "$f"; done
+```
+
+Or apply them individually, in order:
+
+```bash
+psql $DATABASE_URL < backend/migrations/001_memory_tables.sql
+psql $DATABASE_URL < backend/migrations/002_reviews_table.sql
 psql $DATABASE_URL < backend/migrations/003_users_teams_blog.sql
 psql $DATABASE_URL < backend/migrations/004_chat_messages.sql
 psql $DATABASE_URL < backend/migrations/005_sandbox.sql
-psql $DATABASE_URL < backend/migrations/006_api_keys.sql
-psql $DATABASE_URL < backend/migrations/007_join_tokens.sql
+psql $DATABASE_URL < backend/migrations/006_agents_tasks.sql
+psql $DATABASE_URL < backend/migrations/007_provider_keys_team_tokens.sql
+psql $DATABASE_URL < backend/migrations/008_join_tokens.sql
+psql $DATABASE_URL < backend/migrations/009_agent_templates.sql
 ```
 
 ### 3. Start Backend
