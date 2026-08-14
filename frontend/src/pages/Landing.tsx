@@ -192,6 +192,11 @@ export default function Landing() {
       <div className="bg-orb bg-orb-2" aria-hidden="true" />
       <div className="bg-orb bg-orb-3" aria-hidden="true" />
 
+      {/* Animated background logo watermark */}
+      <div className="bg-logo-wrap" aria-hidden="true">
+        <TRexIcon className="bg-logo-mark" />
+      </div>
+
       {/* Session expired banner */}
       {sessionExpired && (
         <div className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-between bg-amber-500/90 backdrop-blur-sm px-4 py-2.5 text-sm font-semibold text-black">
