@@ -87,10 +87,14 @@ def build_rate_limit_rules() -> Tuple[RateLimitRule, ...]:
     )
 
 
-def _extract_username_from_request(request: Request) -> Optional[str]:
+async def _extract_username_from_request(request: Request) -> Optional[str]:
     """
     Extract the authenticated username from the Bearer token in the request.
     Used to grant admin/premium bypass before hitting the rate limiter.
+
+    Sessions live in Postgres (see session_store.py), not Redis, so this can
+    fail independently of the Redis-backed rate limiter below — any error
+    here just means no bypass is granted, never a blocked request.
     """
     auth_header = request.headers.get("authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -101,7 +105,7 @@ def _extract_username_from_request(request: Request) -> Optional[str]:
     try:
         # Import here to avoid circular import
         from .services.session_store import get_session
-        session = get_session(token)
+        session = await get_session(token)
         if session:
             return session.get("user", {}).get("username")
     except Exception:
@@ -133,7 +137,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         # Check for admin/premium bypass FIRST
-        username = _extract_username_from_request(request)
+        username = await _extract_username_from_request(request)
         if username and username.lower() in ADMIN_USERNAMES:
             # Premium/admin — no rate limiting at all
             return await call_next(request)

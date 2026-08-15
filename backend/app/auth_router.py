@@ -10,7 +10,7 @@ import logging
 from fastapi import APIRouter, Request, HTTPException
 
 from .models import GitHubLoginUrlResponse, AuthCallbackRequest, UserProfile, RepositoryInfo
-from .services.session_store import save_session
+from .services.session_store import save_session, SessionStoreUnavailable
 from .services.user_service import upsert_user
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
@@ -115,13 +115,13 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
     }
 
     try:
-        save_session(session_token, session_obj)
-    except Exception:
+        await save_session(session_token, session_obj)
+    except SessionStoreUnavailable:
         # Previously fell back to a per-process in-memory dict, which meant
         # the session token handed back to the client would only work on
         # whichever instance issued it — silent, instance-local auth. Fail
         # the login instead so the client gets a clear error and can retry.
-        logger.error("[auth] Redis unavailable while saving session for username=%s", github_login)
+        logger.error("[auth] Session store unavailable while saving session for username=%s", github_login)
         raise HTTPException(status_code=503, detail="Auth service temporarily unavailable, please try again")
 
     return {"token": session_token, "user": user_profile, "repositories": session_obj["repositories"]}

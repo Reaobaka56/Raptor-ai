@@ -6,7 +6,9 @@ from fastapi import Depends, Header, HTTPException, Request
 
 import logging
 
-from .services.session_store import save_session, get_session, delete_session, refresh_session
+from .services.session_store import (
+    save_session, get_session, delete_session, refresh_session, SessionStoreUnavailable,
+)
 from .services.user_service import get_user_by_username, upsert_user
 
 logger = logging.getLogger(__name__)
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
 
 
-def get_optional_github_session(
+async def get_optional_github_session(
     authorization: Optional[str] = Header(default=None),
     session_token: Optional[str] = Header(default=None),
 ) -> Optional[Dict[str, Any]]:
@@ -30,8 +32,8 @@ def get_optional_github_session(
         return None
 
     try:
-        session = get_session(token)
-    except Exception:
+        session = await get_session(token)
+    except SessionStoreUnavailable:
         # Previously fell back to a per-process in-memory session dict here.
         # That meant a Redis blip silently downgraded auth to per-instance
         # state — a session created on replica A would look logged-out on
@@ -39,7 +41,7 @@ def get_optional_github_session(
         # only had to beat that instance's local dict. Fail loudly instead:
         # treat it as "not authenticated" and let the caller see a 401
         # rather than serve degraded, instance-local auth.
-        logger.error("[auth] Redis unavailable while resolving session token")
+        logger.error("[auth] Session store unavailable while resolving session token")
         raise HTTPException(status_code=503, detail="Auth service temporarily unavailable")
 
     if not session:
@@ -47,7 +49,7 @@ def get_optional_github_session(
 
     # Sliding TTL refresh
     try:
-        refresh_session(token)
+        await refresh_session(token)
     except Exception:
         pass
 
