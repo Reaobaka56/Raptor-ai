@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   Folder, ArrowLeft, ChevronRight, GitCommit,
-  Loader2, AlertCircle, ExternalLink, Copy, Check
+  Loader2, AlertCircle, ExternalLink, Copy, Check, RefreshCw
 } from 'lucide-react'
 import { repoExplorerApi, type RepoTreeItem, type Commit, type CommitDetail } from '../api'
 import { formatDistanceToNow } from 'date-fns'
@@ -179,6 +179,8 @@ export default function RepoExplorer() {
   const [error, setError] = useState('')
   const [commitPage, setCommitPage] = useState(1)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [lastSynced, setLastSynced] = useState<Date | null>(null)
 
   if (!owner || !repo) return null
 
@@ -223,6 +225,32 @@ export default function RepoExplorer() {
     fetchTree()
   }, [owner, repo])
 
+  // Auto-sync: silently poll for new commits while the Commits tab is open
+  const syncCommits = async () => {
+    setSyncing(true)
+    try {
+      const res = await repoExplorerApi.getCommits(owner, repo, branch, '', 1)
+      setCommits(prev => {
+        const known = new Set(prev.map(c => c.sha))
+        const fresh = res.data.filter(c => !known.has(c.sha))
+        return fresh.length ? [...fresh, ...prev] : prev
+      })
+      setLastSynced(new Date())
+    } catch {
+      // silent — auto-sync failures shouldn't interrupt the user
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  useEffect(() => {
+    if (view !== 'commits') return
+    setLastSynced(new Date())
+    const interval = setInterval(syncCommits, 20000)
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, branch, owner, repo])
+
   const openFile = (path: string) => { setCurrentFile(path); setView('file') }
   const openCommit = (sha: string) => { setCurrentCommit(sha); setView('commit-detail') }
 
@@ -248,6 +276,12 @@ export default function RepoExplorer() {
             className={`rounded border px-3 py-1.5 text-xs font-semibold transition ${view === 'commits' || view === 'commit-detail' ? 'border-white bg-white text-black' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'}`}>
             Commits
           </button>
+          {(view === 'commits' || view === 'commit-detail') && (
+            <span className="flex items-center gap-1.5 text-[11px] text-gray-600" title="Commits auto-sync every 20s">
+              <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin text-gray-400' : ''}`} />
+              {syncing ? 'Syncing…' : lastSynced ? `Synced ${formatDistanceToNow(lastSynced, { addSuffix: true })}` : ''}
+            </span>
+          )}
           {branches.length > 0 && (
             <select value={branch}
               onChange={e => { setBranch(e.target.value); if (view === 'tree') fetchTree(currentPath, e.target.value) }}

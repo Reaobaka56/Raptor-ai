@@ -53,14 +53,8 @@ export default function SignInModal({ onClose, onLogin }: SignInModalProps) {
           <X className="h-4 w-4" />
         </button>
 
-        {/* Centered Logo & Header */}
-        <div className="flex flex-col items-center text-center mt-4 mb-8">
-          {/* Realistic, centered GitHub Logo with glassmorphic glow */}
-          <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 shadow-[0_8px_32px_rgba(255,255,255,0.05),inset_0_1px_1px_rgba(255,255,255,0.2)] mb-5 overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 via-transparent to-white/5 opacity-80" />
-            <Github className="h-10 w-10 text-white relative z-10 transition-transform duration-300 group-hover:scale-105" />
-          </div>
-          
+        {/* Header */}
+        <div className="flex flex-col items-center text-center mt-2 mb-8">
           <h2 className="text-xl font-bold tracking-tight text-white">Sign in to Raptor AI</h2>
           <p className="mt-1 text-sm text-gray-400">Connect your GitHub account</p>
         </div>
