@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/calendar", tags=["Calendar"])
 
 
-def _get_user_id(session: Dict[str, Any]) -> str:
-    return get_current_user(session)["id"]
+async def _get_user_id(session: Dict[str, Any]) -> str:
+    user = await get_current_user(session)
+    return user["id"]
 
 
 class Meeting(BaseModel):
@@ -31,148 +32,133 @@ class Meeting(BaseModel):
     link: Optional[str] = None
 
 
-def _ensure_meetings_column():
-    """Add meetings JSONB column to users if it doesn't exist yet."""
-    conn = get_conn()
+_meetings_column_ready = False
+
+
+async def _ensure_meetings_column():
+    """Add meetings JSONB column to users if it doesn't exist yet. Runs at
+    most once per process (was previously a module-import-time side effect,
+    which can't work now that get_conn() is async — there's no event loop
+    yet at import time — so it's lazily run on first request instead)."""
+    global _meetings_column_ready
+    if _meetings_column_ready:
+        return
+    conn = await get_conn()
     if not conn:
         return
     try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS meetings JSONB NOT NULL DEFAULT '[]'::jsonb
-            """)
-            conn.commit()
+        await conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS meetings JSONB NOT NULL DEFAULT '[]'::jsonb
+        """)
+        _meetings_column_ready = True
     except Exception:
-        try: conn.rollback()
-        except: pass
+        logger.exception("_ensure_meetings_column failed")
     finally:
-        release_conn(conn)
-
-
-# Ensure column exists on module load
-try:
-    _ensure_meetings_column()
-except Exception:
-    pass
+        await release_conn(conn)
 
 
 @router.get("/meetings")
-def get_meetings(session: Dict[str, Any] = Depends(get_required_github_session)):
-    _ensure_meetings_column()
-    user_id = _get_user_id(session)
-    conn = get_conn()
+async def get_meetings(session: Dict[str, Any] = Depends(get_required_github_session)):
+    await _ensure_meetings_column()
+    user_id = await _get_user_id(session)
+    conn = await get_conn()
     if not conn:
         return []
     try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT meetings FROM users WHERE id = %s::uuid", (user_id,))
-            row = cur.fetchone()
-            if not row:
-                return []
-            return row[0] if row[0] else []
+        row = await conn.fetchrow("SELECT meetings FROM users WHERE id = $1::uuid", user_id)
+        if not row:
+            return []
+        return row["meetings"] if row["meetings"] else []
     except Exception:
         logger.exception("get_meetings failed")
         return []
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
 @router.put("/meetings")
-def save_meetings(
+async def save_meetings(
     meetings: List[Meeting],
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
     """Replace the user's entire meetings list (client is source of truth)."""
-    _ensure_meetings_column()
-    user_id = _get_user_id(session)
-    conn = get_conn()
+    await _ensure_meetings_column()
+    user_id = await _get_user_id(session)
+    conn = await get_conn()
     if not conn:
         raise HTTPException(status_code=503, detail="Database unavailable")
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE users SET meetings = %s::jsonb WHERE id = %s::uuid",
-                (json.dumps([m.dict() for m in meetings]), user_id),
-            )
-            conn.commit()
-            return {"saved": len(meetings)}
+        await conn.execute(
+            "UPDATE users SET meetings = $1::jsonb WHERE id = $2::uuid",
+            json.dumps([m.dict() for m in meetings]), user_id,
+        )
+        return {"saved": len(meetings)}
     except Exception:
         logger.exception("save_meetings failed")
-        try: conn.rollback()
-        except: pass
         raise HTTPException(status_code=500, detail="Failed to save meetings")
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
 @router.post("/meetings", status_code=201)
-def add_meeting(
+async def add_meeting(
     meeting: Meeting,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    _ensure_meetings_column()
-    user_id = _get_user_id(session)
-    conn = get_conn()
+    await _ensure_meetings_column()
+    user_id = await _get_user_id(session)
+    conn = await get_conn()
     if not conn:
         raise HTTPException(status_code=503, detail="Database unavailable")
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE users
-                SET meetings = meetings || %s::jsonb
-                WHERE id = %s::uuid
-                """,
-                (json.dumps([meeting.dict()]), user_id),
-            )
-            if cur.rowcount == 0:
-                # No matching user row — don't report success on a no-op write.
-                conn.rollback()
-                raise HTTPException(status_code=404, detail="User record not found — log in again")
-            conn.commit()
-            return meeting
+        result = await conn.execute(
+            """
+            UPDATE users
+            SET meetings = meetings || $1::jsonb
+            WHERE id = $2::uuid
+            """,
+            json.dumps([meeting.dict()]), user_id,
+        )
+        if result.split()[-1] == "0":
+            # No matching user row — don't report success on a no-op write.
+            raise HTTPException(status_code=404, detail="User record not found — log in again")
+        return meeting
     except HTTPException:
         raise
     except Exception:
         logger.exception("add_meeting failed")
-        try: conn.rollback()
-        except: pass
         raise HTTPException(status_code=500, detail="Failed to add meeting")
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
 @router.delete("/meetings/{meeting_id}", status_code=204)
-def delete_meeting(
+async def delete_meeting(
     meeting_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    _ensure_meetings_column()
-    user_id = _get_user_id(session)
-    conn = get_conn()
+    await _ensure_meetings_column()
+    user_id = await _get_user_id(session)
+    conn = await get_conn()
     if not conn:
         raise HTTPException(status_code=503, detail="Database unavailable")
     try:
-        with conn.cursor() as cur:
-            # Remove the meeting with matching id from the JSONB array
-            cur.execute(
-                """
-                UPDATE users
-                SET meetings = COALESCE((
-                    SELECT jsonb_agg(m)
-                    FROM jsonb_array_elements(meetings) AS m
-                    WHERE m->>'id' != %s
-                ), '[]'::jsonb)
-                WHERE id = %s::uuid
-                """,
-                (meeting_id, user_id),
-            )
-            conn.commit()
+        # Remove the meeting with matching id from the JSONB array
+        await conn.execute(
+            """
+            UPDATE users
+            SET meetings = COALESCE((
+                SELECT jsonb_agg(m)
+                FROM jsonb_array_elements(meetings) AS m
+                WHERE m->>'id' != $1
+            ), '[]'::jsonb)
+            WHERE id = $2::uuid
+            """,
+            meeting_id, user_id,
+        )
     except Exception:
         logger.exception("delete_meeting failed")
-        try: conn.rollback()
-        except: pass
         raise HTTPException(status_code=500, detail="Failed to delete meeting")
     finally:
-        release_conn(conn)
+        await release_conn(conn)

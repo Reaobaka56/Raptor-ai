@@ -83,7 +83,7 @@ def get_configured_github_token() -> Optional[str]:
     return token
 
 
-def get_current_user(session: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+async def get_current_user(session: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Shared helper: resolve the DB user record for a session returned by
     get_required_github_session. Raises 401 if there's no session (e.g. the
     internal-auth bypass was used, which carries no user identity), or 404 if
@@ -94,7 +94,7 @@ def get_current_user(session: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
     profile = session.get("user", {}) or {}
     username = profile.get("username", "")
-    user = get_user_by_username(username)
+    user = await get_user_by_username(username)
 
     if not user:
         # The GitHub session itself is valid, but there's no matching `users`
@@ -111,7 +111,7 @@ def get_current_user(session: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 "re-provisioning from cached session profile",
                 username, github_id,
             )
-            user = upsert_user(
+            user = await upsert_user(
                 github_id=github_id,
                 username=username,
                 name=profile.get("name"),

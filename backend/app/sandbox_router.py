@@ -71,24 +71,24 @@ class ExecuteRequest(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("/sessions")
-def list_sessions(session: Dict[str, Any] = Depends(get_required_github_session)):
-    user = _get_user(session)
-    return sandbox_service.list_sessions(user["id"])
+async def list_sessions(session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _get_user(session)
+    return await sandbox_service.list_sessions(user["id"])
 
 
 @router.post("/sessions", status_code=201)
-def create_session(
+async def create_session(
     body: CreateSessionRequest,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
+    user = await _get_user(session)
     limits = _tier_limits(user["username"])
 
     provider = body.provider.lower() if body.provider else None
     provider_key_source = body.provider_key_source if body.provider_key_source in ("platform", "user") else "platform"
     if provider and provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(status_code=400, detail="Unsupported provider")
-    if provider_key_source == "user" and (not provider or not key_configured(user["id"], provider)):
+    if provider_key_source == "user" and (not provider or not await key_configured(user["id"], provider)):
         raise HTTPException(status_code=400, detail="Add a personal API key for this provider before using it in Sandbox")
 
     # Merge policy with tier limits
@@ -109,7 +109,7 @@ def create_session(
     }
 
     try:
-        return sandbox_service.create_session(
+        return await sandbox_service.create_session(
             owner_id=user["id"],
             name=body.name,
             repo_url=body.repo_url,
@@ -130,61 +130,61 @@ def create_session(
 
 
 @router.get("/sessions/{session_id}")
-def get_session(
+async def get_session(
     session_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    s = sandbox_service.get_session(session_id, user["id"])
+    user = await _get_user(session)
+    s = await sandbox_service.get_session(session_id, user["id"])
     if not s:
         raise HTTPException(status_code=404, detail="Session not found")
     return s
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
-def stop_session(
+async def stop_session(
     session_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    if not sandbox_service.stop_session(session_id, user["id"]):
+    user = await _get_user(session)
+    if not await sandbox_service.stop_session(session_id, user["id"]):
         raise HTTPException(status_code=404, detail="Session not found")
 
 
 @router.post("/sessions/{session_id}/pause", status_code=200)
-def pause_session(
+async def pause_session(
     session_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    if not sandbox_service.pause_session(session_id, user["id"]):
+    user = await _get_user(session)
+    if not await sandbox_service.pause_session(session_id, user["id"]):
         raise HTTPException(status_code=404, detail="Session not found or not running")
     return {"status": "paused"}
 
 
 @router.post("/sessions/{session_id}/resume", status_code=200)
-def resume_session(
+async def resume_session(
     session_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    if not sandbox_service.resume_session(session_id, user["id"]):
+    user = await _get_user(session)
+    if not await sandbox_service.resume_session(session_id, user["id"]):
         raise HTTPException(status_code=404, detail="Session not found or not paused")
     return {"status": "running"}
 
 
 @router.post("/sessions/{session_id}/execute")
-def execute(
+async def execute(
     session_id: str,
     body: ExecuteRequest,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
+    user = await _get_user(session)
     limits = _tier_limits(user["username"])
     timeout = min(body.timeout, 60)  # cap at 60s for free, more for premium
 
     try:
-        return sandbox_service.execute_command(
+        return await sandbox_service.execute_command(
             session_id=session_id,
             owner_id=user["id"],
             command=body.command,
@@ -197,22 +197,22 @@ def execute(
 
 
 @router.get("/sessions/{session_id}/events")
-def get_events(
+async def get_events(
     session_id: str,
     limit: int = Query(default=100, ge=1, le=500),
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    return sandbox_service.get_events(session_id, user["id"], limit=limit)
+    user = await _get_user(session)
+    return await sandbox_service.get_events(session_id, user["id"], limit=limit)
 
 
 @router.get("/sessions/{session_id}/stats")
-def get_stats(
+async def get_stats(
     session_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    return sandbox_service.get_session_stats(session_id, user["id"])
+    user = await _get_user(session)
+    return await sandbox_service.get_session_stats(session_id, user["id"])
 
 
 # ── Agent attach / drop ───────────────────────────────────────────────────────
@@ -222,14 +222,14 @@ def get_stats(
 # agent or touch any other agent attached to the same session.
 
 @router.get("/sessions/{session_id}/agents")
-def list_session_agents(
+async def list_session_agents(
     session_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    if not sandbox_service.get_session(session_id, user["id"]):
+    user = await _get_user(session)
+    if not await sandbox_service.get_session(session_id, user["id"]):
         raise HTTPException(status_code=404, detail="Session not found")
-    return agent_service.list_agents_by_sandbox(session_id, user["id"])
+    return await agent_service.list_agents_by_sandbox(session_id, user["id"])
 
 
 class AttachAgentRequest(BaseModel):
@@ -237,28 +237,28 @@ class AttachAgentRequest(BaseModel):
 
 
 @router.post("/sessions/{session_id}/agents", status_code=201)
-def attach_agent(
+async def attach_agent(
     session_id: str,
     body: AttachAgentRequest,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    if not sandbox_service.get_session(session_id, user["id"]):
+    user = await _get_user(session)
+    if not await sandbox_service.get_session(session_id, user["id"]):
         raise HTTPException(status_code=404, detail="Session not found")
-    agent = agent_service.attach_agent_to_sandbox(body.agent_id, user["id"], session_id)
+    agent = await agent_service.attach_agent_to_sandbox(body.agent_id, user["id"], session_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent
 
 
 @router.delete("/sessions/{session_id}/agents/{agent_id}", status_code=200)
-def drop_agent(
+async def drop_agent(
     session_id: str,
     agent_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    agent = agent_service.drop_agent_from_sandbox(agent_id, user["id"], session_id)
+    user = await _get_user(session)
+    agent = await agent_service.drop_agent_from_sandbox(agent_id, user["id"], session_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent is not attached to this session")
     return agent

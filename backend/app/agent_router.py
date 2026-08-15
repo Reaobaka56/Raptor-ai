@@ -13,38 +13,38 @@ router = APIRouter(prefix="/api/agents", tags=["Agents"])
 
 
 @router.get("/templates")
-def get_templates(session: Dict[str, Any] = Depends(get_required_github_session)):
-    user = _get_user(session)
-    return agent_service.get_agent_templates(owner_id=user["id"])
+async def get_templates(session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _get_user(session)
+    return await agent_service.get_agent_templates(owner_id=user["id"])
 
 
 @router.post("/templates", status_code=201)
-def create_template(
+async def create_template(
     data: dict,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
+    user = await _get_user(session)
     if not (data.get("name") or "").strip():
         raise HTTPException(status_code=400, detail="Template name is required")
-    return agent_service.create_custom_template(user["id"], data)
+    return await agent_service.create_custom_template(user["id"], data)
 
 
 @router.delete("/templates/{template_id}", status_code=204)
-def delete_template(
+async def delete_template(
     template_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    if not agent_service.delete_custom_template(template_id, user["id"]):
+    user = await _get_user(session)
+    if not await agent_service.delete_custom_template(template_id, user["id"]):
         raise HTTPException(status_code=404, detail="Template not found")
 
 
 @router.post("", status_code=201)
-def create_agent(
+async def create_agent(
     data: dict,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
+    user = await _get_user(session)
     # Optional inline API key: if the caller included one alongside the
     # provider, save it via the single canonical provider-keys path instead
     # of duplicating key-storage logic here.
@@ -53,74 +53,74 @@ def create_agent(
     if api_key:
         if provider not in SUPPORTED_PROVIDERS:
             raise HTTPException(status_code=400, detail="Unsupported provider for API key")
-        if not upsert_key(user["id"], provider, api_key):
+        if not await upsert_key(user["id"], provider, api_key):
             raise HTTPException(status_code=400, detail="Failed to save API key")
-    return agent_service.create_agent(user["id"], data)
+    return await agent_service.create_agent(user["id"], data)
 
 
 @router.get("")
-def list_agents(session: Dict[str, Any] = Depends(get_required_github_session)):
-    user = _get_user(session)
-    return agent_service.list_agents(user["id"])
+async def list_agents(session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _get_user(session)
+    return await agent_service.list_agents(user["id"])
 
 
 @router.get("/{agent_id}")
-def get_agent(
+async def get_agent(
     agent_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    agent = agent_service.get_agent(agent_id, user["id"])
+    user = await _get_user(session)
+    agent = await agent_service.get_agent(agent_id, user["id"])
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent
 
 
 @router.patch("/{agent_id}")
-def update_agent(
+async def update_agent(
     agent_id: str,
     data: dict,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    agent = agent_service.update_agent(agent_id, user["id"], data)
+    user = await _get_user(session)
+    agent = await agent_service.update_agent(agent_id, user["id"], data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent
 
 
 @router.delete("/{agent_id}", status_code=204)
-def delete_agent(
+async def delete_agent(
     agent_id: str,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    if not agent_service.delete_agent(agent_id, user["id"]):
+    user = await _get_user(session)
+    if not await agent_service.delete_agent(agent_id, user["id"]):
         raise HTTPException(status_code=404, detail="Agent not found")
 
 
 @router.get("/{agent_id}/activity")
-def get_activity(
+async def get_activity(
     agent_id: str,
     limit: int = 100,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    return agent_service.get_activity_log(user["id"], agent_id, limit)
+    user = await _get_user(session)
+    return await agent_service.get_activity_log(user["id"], agent_id, limit)
 
 
 @router.post("/{agent_id}/status")
-def update_status(
+async def update_status(
     agent_id: str,
     data: dict,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
+    user = await _get_user(session)
     status = data.get("status")
     if not status:
         raise HTTPException(status_code=400, detail="Missing status")
     try:
-        agent = agent_service.update_agent_status(agent_id, user["id"], status)
+        agent = await agent_service.update_agent_status(agent_id, user["id"], status)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
         return agent

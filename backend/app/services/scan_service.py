@@ -224,8 +224,7 @@ async def run_scan(
             review_text = f"{new_review.summary or ''} {issue_titles}"
             embedding = generate_embedding(review_text)
 
-            await asyncio.to_thread(
-                memory_service.store_review_embedding,
+            await memory_service.store_review_embedding(
                 new_review.id,
                 repo_name,
                 new_review.prNumber,

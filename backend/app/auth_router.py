@@ -78,7 +78,7 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
     email        = user_data.get("email")
 
     # Persist / update the user record in PostgreSQL (non-fatal if DB is down)
-    db_user = upsert_user(
+    db_user = await upsert_user(
         github_id=github_id,
         username=github_login,
         name=name,

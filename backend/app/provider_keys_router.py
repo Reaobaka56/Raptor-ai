@@ -27,18 +27,21 @@ def providers():
     }
 
 @router.get("")
-def my_keys(session: Dict[str, Any] = Depends(get_required_github_session)):
-    return list_keys(_user(session)["id"])
+async def my_keys(session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _user(session)
+    return await list_keys(user["id"])
 
 @router.put("", status_code=200)
-def save_key(body: KeyRequest, session: Dict[str, Any] = Depends(get_required_github_session)):
-    rec=upsert_key(_user(session)["id"], body.provider, body.api_key)
+async def save_key(body: KeyRequest, session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _user(session)
+    rec = await upsert_key(user["id"], body.provider, body.api_key)
     if not rec: raise HTTPException(status_code=400, detail="Unsupported provider or invalid key")
     return rec
 
 @router.delete("/{provider}", status_code=204)
-def remove_key(provider: str, session: Dict[str, Any] = Depends(get_required_github_session)):
-    delete_key(_user(session)["id"], provider)
+async def remove_key(provider: str, session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _user(session)
+    await delete_key(user["id"], provider)
 
 
 def _validate_key(provider: str, api_key: str) -> Dict[str, Any]:
@@ -109,11 +112,12 @@ def _validate_key(provider: str, api_key: str) -> Dict[str, Any]:
 
 
 @router.post("/{provider}/test")
-def test_key(provider: str, session: Dict[str, Any] = Depends(get_required_github_session)):
+async def test_key(provider: str, session: Dict[str, Any] = Depends(get_required_github_session)):
     provider = provider.lower().strip()
     if provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(status_code=400, detail="Unsupported provider")
-    api_key = get_decrypted_key(_user(session)["id"], provider)
+    user = await _user(session)
+    api_key = await get_decrypted_key(user["id"], provider)
     if not api_key:
         return {"ok": False, "error": "No key configured for this provider"}
     return _validate_key(provider, api_key)

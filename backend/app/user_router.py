@@ -9,13 +9,13 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 
 
 @router.get("/me")
-def get_me(session: Dict[str, Any] = Depends(get_required_github_session)):
+async def get_me(session: Dict[str, Any] = Depends(get_required_github_session)):
     """Return the full DB user record for the logged-in user."""
     username = session.get("user", {}).get("username")
     if not username:
         raise HTTPException(status_code=401, detail="No username in session")
 
-    db_user = get_user_by_username(username)
+    db_user = await get_user_by_username(username)
     if db_user:
         return db_user
 
@@ -24,16 +24,16 @@ def get_me(session: Dict[str, Any] = Depends(get_required_github_session)):
 
 
 @router.get("/me/is-admin")
-def check_admin(session: Dict[str, Any] = Depends(get_required_github_session)):
+async def check_admin(session: Dict[str, Any] = Depends(get_required_github_session)):
     username = session.get("user", {}).get("username", "")
-    return {"isAdmin": is_admin(username)}
+    return {"isAdmin": await is_admin(username)}
 
 
 @router.get("/{username}")
-def get_public_profile(username: str,
-                       session: Optional[Dict[str, Any]] = Depends(get_optional_github_session)):
+async def get_public_profile(username: str,
+                              session: Optional[Dict[str, Any]] = Depends(get_optional_github_session)):
     """Public profile — only returns non-sensitive fields."""
-    user = get_user_by_username(username)
+    user = await get_user_by_username(username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {

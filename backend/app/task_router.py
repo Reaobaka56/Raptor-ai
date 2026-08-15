@@ -1,13 +1,12 @@
 """
 Task router — REST API for agent tasks with real LLM execution.
 """
-import asyncio
 import logging
 import os
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from .auth_dependencies import get_required_github_session, get_current_user as _get_user
 from .services.user_service import get_user_by_username
@@ -19,30 +18,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
 
 
-def _get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
-    conn = get_conn()
+async def _get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT id, name, role, description, system_prompt, model, provider,
-                          tools, permissions, status, config
-                   FROM agents WHERE id=%s::uuid AND owner_id=%s::uuid""",
-                (agent_id, owner_id)
-            )
-            row = cur.fetchone()
-            if not row:
-                return None
-            cols = [d[0] for d in cur.description]
-            a = dict(zip(cols, row))
-            a["id"] = str(a["id"])
-            return a
+        row = await conn.fetchrow(
+            """SELECT id, name, role, description, system_prompt, model, provider,
+                      tools, permissions, status, config
+               FROM agents WHERE id=$1::uuid AND owner_id=$2::uuid""",
+            agent_id, owner_id,
+        )
+        if not row:
+            return None
+        a = dict(row)
+        a["id"] = str(a["id"])
+        return a
     except Exception:
+        logger.exception("_get_agent failed")
         return None
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
+
+# NOTE: these remain synchronous blocking HTTP calls (requests / google-genai
+# sync client). Converting them to async HTTP clients is scaling-plan item 4
+# and hasn't been done yet — calling them from an async background task means
+# each task execution blocks the event loop for its duration. Not ideal, but
+# it's the same behavior as before this migration (previously blocked a
+# worker thread instead), so it isn't a regression — just still open work.
 
 def _execute_with_gemini(api_key: str, model: str, system_prompt: str, task_prompt: str) -> str:
     """Call Google Gemini with the given system prompt and task."""
@@ -116,45 +120,41 @@ def _execute_with_groq(api_key: str, model: str, system_prompt: str, task_prompt
     return resp.json()["choices"][0]["message"]["content"]
 
 
-def _run_task_sync(task_id: str, owner_id: str, agent: Dict[str, Any]) -> None:
-    """Synchronous task execution — called in a background thread."""
-    conn = get_conn()
+async def _run_task(task_id: str, owner_id: str, agent: Dict[str, Any]) -> None:
+    """Task execution — run as a FastAPI background task (FastAPI awaits
+    async background-task callables natively)."""
+    conn = await get_conn()
     if not conn:
         return
 
-    def _update(status: str, output: str = None, error: str = None):
+    async def _update(status: str, output: str = None, error: str = None):
         try:
-            with conn.cursor() as cur:
-                if output is not None:
-                    cur.execute(
-                        "UPDATE tasks SET status=%s, output=%s, completed_at=now() WHERE id=%s::uuid",
-                        (status, output, task_id)
-                    )
-                elif error is not None:
-                    cur.execute(
-                        "UPDATE tasks SET status=%s, errors=errors||%s::jsonb WHERE id=%s::uuid",
-                        (status, f'[{{"error":"{error}"}}]', task_id)
-                    )
-                else:
-                    cur.execute("UPDATE tasks SET status=%s WHERE id=%s::uuid", (status, task_id))
-                conn.commit()
+            if output is not None:
+                await conn.execute(
+                    "UPDATE tasks SET status=$1, output=$2, completed_at=now() WHERE id=$3::uuid",
+                    status, output, task_id,
+                )
+            elif error is not None:
+                await conn.execute(
+                    "UPDATE tasks SET status=$1, errors=errors||$2::jsonb WHERE id=$3::uuid",
+                    status, f'[{{"error":"{error}"}}]', task_id,
+                )
+            else:
+                await conn.execute("UPDATE tasks SET status=$1 WHERE id=$2::uuid", status, task_id)
         except Exception:
-            try: conn.rollback()
-            except: pass
+            logger.exception("_run_task _update failed")
 
     try:
         # Get task details
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT title, description, input_context FROM tasks WHERE id=%s::uuid",
-                (task_id,)
-            )
-            row = cur.fetchone()
-            if not row:
-                return
-            title, description, context = row
+        row = await conn.fetchrow(
+            "SELECT title, description, input_context FROM tasks WHERE id=$1::uuid",
+            task_id,
+        )
+        if not row:
+            return
+        title, description, context = row["title"], row["description"], row["input_context"]
 
-        _update("in_progress")
+        await _update("in_progress")
 
         # Build task prompt
         task_prompt = f"Task: {title}"
@@ -168,7 +168,7 @@ def _run_task_sync(task_id: str, owner_id: str, agent: Dict[str, Any]) -> None:
         system_prompt = agent.get("system_prompt") or ""
 
         # Get API key — user's BYOK first, then env var
-        api_key = get_decrypted_key(owner_id, provider)
+        api_key = await get_decrypted_key(owner_id, provider)
 
         if not api_key:
             if provider in ("gemini", "google"):
@@ -187,10 +187,10 @@ def _run_task_sync(task_id: str, owner_id: str, agent: Dict[str, Any]) -> None:
             model = "gemini-2.5-pro"
 
         if not api_key:
-            _update("failed", error="No API key configured. Add a key in Settings → API Keys.")
+            await _update("failed", error="No API key configured. Add a key in Settings → API Keys.")
             return
 
-        # Execute
+        # Execute (still sync/blocking — see module note above)
         start = time.time()
         if provider in ("gemini", "google"):
             output = _execute_with_gemini(api_key, model, system_prompt, task_prompt)
@@ -204,79 +204,75 @@ def _run_task_sync(task_id: str, owner_id: str, agent: Dict[str, Any]) -> None:
             output = _execute_with_gemini(api_key, model, system_prompt, task_prompt)
 
         duration = int((time.time() - start) * 1000)
-        _update("done", output=output)
+        await _update("done", output=output)
 
         # Update agent status back to idle
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE agents SET status='idle', current_task_id=NULL WHERE id=%s::uuid",
-                (agent["id"],)
-            )
-            conn.commit()
+        await conn.execute(
+            "UPDATE agents SET status='idle', current_task_id=NULL WHERE id=$1::uuid",
+            agent["id"],
+        )
 
         logger.info("Task %s completed in %dms", task_id, duration)
 
     except Exception as e:
         logger.exception("Task %s failed", task_id)
-        _update("failed", error=str(e)[:500])
+        await _update("failed", error=str(e)[:500])
         try:
-            with conn.cursor() as cur:
-                cur.execute("UPDATE agents SET status='idle' WHERE id=%s::uuid", (agent["id"],))
-                conn.commit()
+            await conn.execute("UPDATE agents SET status='idle' WHERE id=$1::uuid", agent["id"])
         except Exception:
             pass
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("", status_code=201)
-def create_task(data: dict, session: Dict[str, Any] = Depends(get_required_github_session)):
-    user = _get_user(session)
-    return task_service.create_task(user["id"], data)
+async def create_task(data: dict, session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _get_user(session)
+    return await task_service.create_task(user["id"], data)
 
 
 @router.get("")
-def list_tasks(
+async def list_tasks(
     status: Optional[str] = None,
     agent_id: Optional[str] = None,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    return task_service.list_tasks(user["id"], status, agent_id)
+    user = await _get_user(session)
+    return await task_service.list_tasks(user["id"], status, agent_id)
 
 
 @router.get("/{task_id}")
-def get_task(task_id: str, session: Dict[str, Any] = Depends(get_required_github_session)):
-    user = _get_user(session)
-    task = task_service.get_task(task_id, user["id"])
+async def get_task(task_id: str, session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _get_user(session)
+    task = await task_service.get_task(task_id, user["id"])
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
 
 @router.patch("/{task_id}")
-def update_task(
+async def update_task(
     task_id: str, data: dict,
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
-    user = _get_user(session)
-    task = task_service.update_task(task_id, user["id"], data)
+    user = await _get_user(session)
+    task = await task_service.update_task(task_id, user["id"], data)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
 
 @router.delete("/{task_id}", status_code=204)
-def delete_task(task_id: str, session: Dict[str, Any] = Depends(get_required_github_session)):
-    user = _get_user(session)
-    if not task_service.delete_task(task_id, user["id"]):
+async def delete_task(task_id: str, session: Dict[str, Any] = Depends(get_required_github_session)):
+    user = await _get_user(session)
+    if not await task_service.delete_task(task_id, user["id"]):
         raise HTTPException(status_code=404, detail="Task not found")
 
 
 @router.post("/{task_id}/execute")
-def execute_task(
+async def execute_task(
     task_id: str,
     background_tasks: BackgroundTasks,
     session: Dict[str, Any] = Depends(get_required_github_session),
@@ -286,10 +282,10 @@ def execute_task(
     Supports Gemini, OpenAI, Anthropic, and Groq.
     Uses the user's BYOK key if configured, falls back to platform default.
     """
-    user = _get_user(session)
+    user = await _get_user(session)
 
     # Get task
-    task = task_service.get_task(task_id, user["id"])
+    task = await task_service.get_task(task_id, user["id"])
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.get("status") == "in_progress":
@@ -298,26 +294,24 @@ def execute_task(
         raise HTTPException(status_code=400, detail="Task has no assigned agent")
 
     # Get agent
-    agent = _get_agent(task["assigned_agent_id"], user["id"])
+    agent = await _get_agent(task["assigned_agent_id"], user["id"])
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     # Mark agent as working
-    conn = get_conn()
+    conn = await get_conn()
     if conn:
         try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE agents SET status='working', current_task_id=%s::uuid WHERE id=%s::uuid",
-                    (task_id, agent["id"])
-                )
-                conn.commit()
+            await conn.execute(
+                "UPDATE agents SET status='working', current_task_id=$1::uuid WHERE id=$2::uuid",
+                task_id, agent["id"],
+            )
         except Exception:
-            pass
+            logger.exception("execute_task: failed to mark agent working")
         finally:
-            release_conn(conn)
+            await release_conn(conn)
 
     # Run in background so request returns immediately
-    background_tasks.add_task(_run_task_sync, task_id, user["id"], agent)
+    background_tasks.add_task(_run_task, task_id, user["id"], agent)
 
     return {"status": "started", "task_id": task_id, "agent": agent["name"]}

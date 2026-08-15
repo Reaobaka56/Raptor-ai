@@ -1,6 +1,6 @@
 import requests
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Dict, List
+from typing import Dict, List, Optional
 from types import SimpleNamespace
 
 from .auth_dependencies import get_required_github_session
@@ -30,6 +30,10 @@ def _serialize_review_row(row: dict) -> dict:
 
 
 def _fetch_github_repositories(access_token: str) -> List[RepositoryInfo]:
+    # NOTE: still a sync `requests` call — this is item 4 of the scaling
+    # plan (async AI/HTTP calls) and hasn't been touched yet. It's only
+    # invoked from a route handler below and isn't on the DB pool, so it
+    # wasn't part of this auth-outage fix; left as-is.
     repos: List[RepositoryInfo] = []
     url = "https://api.github.com/user/repos"
     params = {"per_page": 100, "type": "all"}
@@ -71,83 +75,72 @@ def _fetch_github_repositories(access_token: str) -> List[RepositoryInfo]:
 
 
 @router.get("/repos", response_model=List[RepositoryInfo])
-def list_repositories(session: dict = Depends(get_required_github_session)):
+async def list_repositories(session: dict = Depends(get_required_github_session)):
     return _fetch_github_repositories(session["access_token"])
 
 
 @router.get("/reviews", response_model=List[Review])
-def get_all_reviews():
-    conn = get_conn()
+async def get_all_reviews():
+    conn = await get_conn()
     if not conn:
         return []
 
     try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM reviews ORDER BY created_at DESC LIMIT 50")
-        rows = cur.fetchall()
-        cols = [d[0] for d in cur.description]
-        return [_serialize_review_row(dict(zip(cols, row))) for row in rows]
+        rows = await conn.fetch("SELECT * FROM reviews ORDER BY created_at DESC LIMIT 50")
+        return [_serialize_review_row(dict(row)) for row in rows]
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
 @router.get("/reviews/{review_id}", response_model=Review)
-def get_review_by_id(review_id: str):
-    conn = get_conn()
+async def get_review_by_id(review_id: str):
+    conn = await get_conn()
     if not conn:
         raise HTTPException(status_code=404, detail="Review not found")
 
     try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM reviews WHERE id = %s", (review_id,))
-        row = cur.fetchone()
+        row = await conn.fetchrow("SELECT * FROM reviews WHERE id = $1", review_id)
         if not row:
             raise HTTPException(status_code=404, detail="Review not found")
-        cols = [d[0] for d in cur.description]
-        return _serialize_review_row(dict(zip(cols, row)))
+        return _serialize_review_row(dict(row))
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def _fetch_review_from_db(review_id: str) -> dict | None:
-    conn = get_conn()
+async def _fetch_review_from_db(review_id: str) -> Optional[dict]:
+    conn = await get_conn()
     if not conn:
         return None
 
     try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM reviews WHERE id = %s", (review_id,))
-        row = cur.fetchone()
+        row = await conn.fetchrow("SELECT * FROM reviews WHERE id = $1", review_id)
         if not row:
             return None
-        cols = [d[0] for d in cur.description]
-        return _serialize_review_row(dict(zip(cols, row)))
+        return _serialize_review_row(dict(row))
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def _update_review_fix_pr(review_id: str, fix_pr_number: int, fix_pr_url: str):
-    conn = get_conn()
+async def _update_review_fix_pr(review_id: str, fix_pr_number: int, fix_pr_url: str):
+    conn = await get_conn()
     if not conn:
         return
 
     try:
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE reviews SET fix_pr_number = %s, fix_pr_url = %s, status = %s WHERE id = %s",
-            (fix_pr_number, fix_pr_url, "pr_created", review_id),
+        await conn.execute(
+            "UPDATE reviews SET fix_pr_number = $1, fix_pr_url = $2, status = $3 WHERE id = $4",
+            fix_pr_number, fix_pr_url, "pr_created", review_id,
         )
-        conn.commit()
     except Exception:
         # Best-effort persistence; do not fail the fix PR creation if DB update is unavailable.
         pass
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
 @router.post("/reviews/{review_id}/pull-request", response_model=CreatePRResponse)
-def create_fix_pull_request(review_id: str):
-    review = _fetch_review_from_db(review_id)
+async def create_fix_pull_request(review_id: str):
+    review = await _fetch_review_from_db(review_id)
     if not review:
         for candidate in MOCK_REVIEWS:
             if candidate.get("id") == review_id:
@@ -166,12 +159,14 @@ def create_fix_pull_request(review_id: str):
         )
 
     try:
+        # github_app_service.create_fix_pull_request is still sync (item 4,
+        # not addressed here — same as _fetch_github_repositories above).
         pr = github_app_service.create_fix_pull_request(SimpleNamespace(**review))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"GitHub App pull request creation failed: {exc}") from exc
 
     if review is not None and review.get("id"):
-        _update_review_fix_pr(review_id, pr["number"], pr["html_url"])
+        await _update_review_fix_pr(review_id, pr["number"], pr["html_url"])
 
     if isinstance(review, dict):
         review["status"] = "pr_created"

@@ -19,15 +19,15 @@ router = APIRouter(prefix="/api/blog", tags=["Blog"])
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _require_admin(session: Dict[str, Any]) -> Dict[str, Any]:
+async def _require_admin(session: Dict[str, Any]) -> Dict[str, Any]:
     username = session.get("user", {}).get("username", "")
-    if not is_admin(username):
+    if not await is_admin(username):
         raise HTTPException(status_code=403, detail="Admin access required")
     return session
 
 
-def _get_author_id(username: str) -> str:
-    user = get_user_by_username(username)
+async def _get_author_id(username: str) -> str:
+    user = await get_user_by_username(username)
     if not user:
         raise HTTPException(status_code=404, detail="Author user record not found — log in first")
     return user["id"]
@@ -56,22 +56,22 @@ class PostUpdate(BaseModel):
 # ── Public endpoints ───────────────────────────────────────────────────────────
 
 @router.get("")
-def get_posts(session: Optional[Dict[str, Any]] = Depends(get_optional_github_session)):
+async def get_posts(session: Optional[Dict[str, Any]] = Depends(get_optional_github_session)):
     """
     Public: returns published posts only.
     Admin sees all posts (including drafts).
     """
     username = (session or {}).get("user", {}).get("username", "")
-    published_only = not is_admin(username)
-    return list_posts(published_only=published_only)
+    published_only = not await is_admin(username)
+    return await list_posts(published_only=published_only)
 
 
 @router.get("/{slug}")
-def get_single_post(slug: str,
-                    session: Optional[Dict[str, Any]] = Depends(get_optional_github_session)):
+async def get_single_post(slug: str,
+                           session: Optional[Dict[str, Any]] = Depends(get_optional_github_session)):
     username = (session or {}).get("user", {}).get("username", "")
-    published_only = not is_admin(username)
-    post = get_post(slug, published_only=published_only)
+    published_only = not await is_admin(username)
+    post = await get_post(slug, published_only=published_only)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     return post
@@ -80,12 +80,12 @@ def get_single_post(slug: str,
 # ── Admin endpoints ────────────────────────────────────────────────────────────
 
 @router.post("", status_code=201)
-def create(body: PostCreate,
-           session: Dict[str, Any] = Depends(get_required_github_session)):
-    _require_admin(session)
+async def create(body: PostCreate,
+                  session: Dict[str, Any] = Depends(get_required_github_session)):
+    await _require_admin(session)
     username = session["user"]["username"]
-    author_id = _get_author_id(username)
-    post = create_post(
+    author_id = await _get_author_id(username)
+    post = await create_post(
         author_id=author_id,
         title=body.title,
         summary=body.summary,
@@ -100,18 +100,18 @@ def create(body: PostCreate,
 
 
 @router.patch("/{slug}")
-def update(slug: str, body: PostUpdate,
-           session: Dict[str, Any] = Depends(get_required_github_session)):
-    _require_admin(session)
-    post = update_post(slug, **body.model_dump(exclude_none=True))
+async def update(slug: str, body: PostUpdate,
+                  session: Dict[str, Any] = Depends(get_required_github_session)):
+    await _require_admin(session)
+    post = await update_post(slug, **body.model_dump(exclude_none=True))
     if not post:
         raise HTTPException(status_code=404, detail="Post not found or update failed")
     return post
 
 
 @router.delete("/{slug}", status_code=204)
-def delete(slug: str,
-           session: Dict[str, Any] = Depends(get_required_github_session)):
-    _require_admin(session)
-    if not delete_post(slug):
+async def delete(slug: str,
+                  session: Dict[str, Any] = Depends(get_required_github_session)):
+    await _require_admin(session)
+    if not await delete_post(slug):
         raise HTTPException(status_code=404, detail="Post not found")

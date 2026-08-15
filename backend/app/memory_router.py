@@ -15,8 +15,8 @@ from .auth_dependencies import get_required_github_session
 router = APIRouter(prefix="/memory", tags=["Team Memory"])
 
 
-def require_authenticated_session():
-    return get_required_github_session()
+def require_authenticated_session(session: Optional[dict] = Depends(get_required_github_session)):
+    return session
 
 
 # ---------------------------------------------------------------------------
@@ -105,10 +105,10 @@ class OnboardingGuide(BaseModel):
 # Convention Rules Endpoints
 # ---------------------------------------------------------------------------
 @router.post("/rules", response_model=RuleResponse)
-def add_rule(req: AddRuleRequest, session: Optional[dict] = Depends(require_authenticated_session)):
+async def add_rule(req: AddRuleRequest, session: Optional[dict] = Depends(require_authenticated_session)):
     """Add a plain-English convention rule. It gets embedded for semantic matching."""
     embedding = generate_embedding(req.rule_text)
-    result = memory_service.add_convention_rule(
+    result = await memory_service.add_convention_rule(
         rule_text=req.rule_text,
         embedding=embedding,
         repo=req.repo,
@@ -118,15 +118,15 @@ def add_rule(req: AddRuleRequest, session: Optional[dict] = Depends(require_auth
 
 
 @router.get("/rules", response_model=List[RuleResponse])
-def get_rules(repo: str = Query(default="*", description="Filter by repo")):
+async def get_rules(repo: str = Query(default="*", description="Filter by repo")):
     """List all active convention rules."""
-    return memory_service.list_convention_rules(repo=repo)
+    return await memory_service.list_convention_rules(repo=repo)
 
 
 @router.delete("/rules/{rule_id}")
-def remove_rule(rule_id: int, session: Optional[dict] = Depends(require_authenticated_session)):
+async def remove_rule(rule_id: int, session: Optional[dict] = Depends(require_authenticated_session)):
     """Disable (soft-delete) a convention rule."""
-    success = memory_service.delete_convention_rule(rule_id)
+    success = await memory_service.delete_convention_rule(rule_id)
     if not success:
         raise HTTPException(status_code=404, detail="Rule not found")
     return {"status": "deleted", "id": rule_id}
@@ -136,9 +136,9 @@ def remove_rule(rule_id: int, session: Optional[dict] = Depends(require_authenti
 # Feedback Endpoints
 # ---------------------------------------------------------------------------
 @router.post("/feedback", response_model=FeedbackResponse)
-def submit_feedback(req: FeedbackRequest, session: Optional[dict] = Depends(require_authenticated_session)):
+async def submit_feedback(req: FeedbackRequest, session: Optional[dict] = Depends(require_authenticated_session)):
     """Submit thumbs-up/down feedback on a specific review issue."""
-    result = memory_service.store_feedback(
+    result = await memory_service.store_feedback(
         review_id=req.review_id,
         issue_index=req.issue_index,
         thumbs_up=req.thumbs_up,
@@ -148,29 +148,29 @@ def submit_feedback(req: FeedbackRequest, session: Optional[dict] = Depends(requ
 
 
 @router.get("/feedback/{review_id}", response_model=List[FeedbackResponse])
-def get_review_feedback(review_id: int):
+async def get_review_feedback(review_id: int):
     """Get all feedback for a specific review."""
-    return memory_service.get_feedback_for_review(review_id)
+    return await memory_service.get_feedback_for_review(review_id)
 
 
 @router.get("/feedback-stats", response_model=FeedbackStats)
-def get_feedback_statistics(repo: Optional[str] = None):
+async def get_feedback_statistics(repo: Optional[str] = None):
     """Get aggregated feedback statistics."""
-    return memory_service.get_feedback_stats(repo=repo)
+    return await memory_service.get_feedback_stats(repo=repo)
 
 
 # ---------------------------------------------------------------------------
 # Similar Reviews (RAG Context)
 # ---------------------------------------------------------------------------
 @router.get("/similar", response_model=List[SimilarReview])
-def find_similar_reviews(
+async def find_similar_reviews(
     query: str = Query(..., min_length=3, description="Text to search for similar past reviews"),
     repo: Optional[str] = None,
     top_k: int = Query(default=5, ge=1, le=20),
 ):
     """Find past reviews similar to the given query text."""
     embedding = generate_embedding(query)
-    results = memory_service.retrieve_similar_reviews(
+    results = await memory_service.retrieve_similar_reviews(
         embedding=embedding, repo=repo, top_k=top_k
     )
     return results
@@ -180,7 +180,7 @@ def find_similar_reviews(
 # Onboarding Guide
 # ---------------------------------------------------------------------------
 @router.get("/onboarding/{repo:path}", response_model=OnboardingGuide)
-def get_onboarding_guide(repo: str):
+async def get_onboarding_guide(repo: str):
     """Generate an onboarding guide for the given repository."""
-    guide = memory_service.generate_onboarding_guide(repo=repo)
+    guide = await memory_service.generate_onboarding_guide(repo=repo)
     return guide

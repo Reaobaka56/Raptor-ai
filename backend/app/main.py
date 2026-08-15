@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import sys, os
 
 from .state import app, START_TIME
+from .services.db import init_pool
 
 # Register routers
 from .auth_router import router as auth_router
@@ -49,6 +50,14 @@ static_dir = os.path.join(
 )
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+@app.on_event("startup")
+async def _startup():
+    # Warm the asyncpg pool at boot instead of lazily on first request, so
+    # the first real request doesn't pay pool-creation latency and so pool
+    # errors surface in startup logs rather than as a 503 on someone's login.
+    await init_pool()
 
 
 @app.get("/health", tags=["Telemetry"])
