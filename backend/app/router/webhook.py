@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import os
 import json
+import logging
 import time
 from typing import Optional
 
@@ -48,8 +49,8 @@ async def github_webhook(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    # Log to in-memory list
-    from ..state import LIVE_WEBHOOK_LOGS
+    # Log to the shared Redis-backed webhook log (visible from any instance)
+    from ..state import append_webhook_log
     from ..models import WebhookLogItem
 
     event_log = WebhookLogItem(
@@ -59,10 +60,12 @@ async def github_webhook(
         status=200,
         time="just now",
     )
-    LIVE_WEBHOOK_LOGS.append(event_log)
-    # Keep log bounded
-    if len(LIVE_WEBHOOK_LOGS) > 200:
-        LIVE_WEBHOOK_LOGS.pop(0)
+    try:
+        append_webhook_log(event_log)
+    except Exception:
+        # Best-effort logging only — never fail webhook processing (which
+        # GitHub retries on non-2xx) just because the log write failed.
+        logging.getLogger(__name__).exception("[webhook] failed to persist webhook log entry")
 
     # Only process PR events we care about
     action = payload.get("action", "")

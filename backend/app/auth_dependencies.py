@@ -12,7 +12,6 @@ from .services.user_service import get_user_by_username, upsert_user
 logger = logging.getLogger(__name__)
 
 
-USER_SESSIONS: Dict[str, Any] = {}
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
 
 
@@ -30,11 +29,18 @@ def get_optional_github_session(
     if not token:
         return None
 
-    session = None
     try:
         session = get_session(token)
     except Exception:
-        session = USER_SESSIONS.get(token)
+        # Previously fell back to a per-process in-memory session dict here.
+        # That meant a Redis blip silently downgraded auth to per-instance
+        # state — a session created on replica A would look logged-out on
+        # replica B, and any session_token guessed against one instance
+        # only had to beat that instance's local dict. Fail loudly instead:
+        # treat it as "not authenticated" and let the caller see a 401
+        # rather than serve degraded, instance-local auth.
+        logger.error("[auth] Redis unavailable while resolving session token")
+        raise HTTPException(status_code=503, detail="Auth service temporarily unavailable")
 
     if not session:
         return None
