@@ -36,74 +36,80 @@ def _public(record: Dict[str, Any]) -> Dict[str, Any]:
     record.pop("encrypted_key", None)
     return record
 
-def list_keys(user_id: str) -> List[Dict[str, Any]]:
-    conn=get_conn()
+async def list_keys(user_id: str) -> List[Dict[str, Any]]:
+    conn = await get_conn()
     if not conn: return []
     try:
-        with conn.cursor() as cur:
-            cur.execute("""
+        rows = await conn.fetch(
+            """
               SELECT id, provider, key_mask, created_at, updated_at
-              FROM user_provider_keys WHERE user_id=%s::uuid ORDER BY provider
-            """, (user_id,))
-            return [_public(_row(cur,r)) for r in cur.fetchall()]
-    finally: release_conn(conn)
+              FROM user_provider_keys WHERE user_id=$1::uuid ORDER BY provider
+            """, user_id,
+        )
+        return [_public(_row(r)) for r in rows]
+    finally:
+        await release_conn(conn)
 
-def upsert_key(user_id: str, provider: str, api_key: str) -> Optional[Dict[str, Any]]:
-    provider=provider.lower().strip()
+async def upsert_key(user_id: str, provider: str, api_key: str) -> Optional[Dict[str, Any]]:
+    provider = provider.lower().strip()
     if provider not in SUPPORTED_PROVIDERS or not api_key.strip(): return None
-    encrypted=_fernet().encrypt(api_key.strip().encode()).decode()
-    conn=get_conn()
+    encrypted = _fernet().encrypt(api_key.strip().encode()).decode()
+    conn = await get_conn()
     if not conn: return None
     try:
-        with conn.cursor() as cur:
-            cur.execute("""
+        row = await conn.fetchrow(
+            """
               INSERT INTO user_provider_keys(user_id, provider, encrypted_key, key_mask)
-              VALUES (%s::uuid,%s,%s,%s)
+              VALUES ($1::uuid,$2,$3,$4)
               ON CONFLICT(user_id, provider) DO UPDATE
               SET encrypted_key=EXCLUDED.encrypted_key, key_mask=EXCLUDED.key_mask, updated_at=now()
               RETURNING id, provider, key_mask, created_at, updated_at
-            """, (user_id,provider,encrypted,mask_key(api_key.strip())))
-            conn.commit(); return _public(_row(cur,cur.fetchone()))
-    except Exception:
-        conn.rollback(); raise
-    finally: release_conn(conn)
+            """, user_id, provider, encrypted, mask_key(api_key.strip()),
+        )
+        return _public(_row(row))
+    finally:
+        await release_conn(conn)
 
-def delete_key(user_id: str, provider: str) -> bool:
-    conn=get_conn()
+async def delete_key(user_id: str, provider: str) -> bool:
+    conn = await get_conn()
     if not conn: return False
     try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM user_provider_keys WHERE user_id=%s::uuid AND provider=%s", (user_id, provider.lower()))
-            conn.commit(); return cur.rowcount>0
-    finally: release_conn(conn)
+        result = await conn.execute(
+            "DELETE FROM user_provider_keys WHERE user_id=$1::uuid AND provider=$2",
+            user_id, provider.lower(),
+        )
+        return result.split()[-1] != "0"
+    finally:
+        await release_conn(conn)
 
-def get_decrypted_key(user_id: str, provider: str) -> Optional[str]:
+async def get_decrypted_key(user_id: str, provider: str) -> Optional[str]:
     """Fetch and decrypt a user's stored API key for a provider, or None if not configured."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT encrypted_key FROM user_provider_keys WHERE user_id=%s::uuid AND provider=%s",
-                (user_id, provider.lower().strip()),
-            )
-            row = cur.fetchone()
-            if not row or not row[0]:
-                return None
-            try:
-                return _fernet().decrypt(row[0].encode()).decode()
-            except Exception:
-                return None
+        row = await conn.fetchrow(
+            "SELECT encrypted_key FROM user_provider_keys WHERE user_id=$1::uuid AND provider=$2",
+            user_id, provider.lower().strip(),
+        )
+        if not row or not row["encrypted_key"]:
+            return None
+        try:
+            return _fernet().decrypt(row["encrypted_key"].encode()).decode()
+        except Exception:
+            return None
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def key_configured(user_id: str, provider: str) -> bool:
-    conn=get_conn()
+async def key_configured(user_id: str, provider: str) -> bool:
+    conn = await get_conn()
     if not conn: return False
     try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM user_provider_keys WHERE user_id=%s::uuid AND provider=%s", (user_id, provider.lower()))
-            return cur.fetchone() is not None
-    finally: release_conn(conn)
+        row = await conn.fetchrow(
+            "SELECT 1 FROM user_provider_keys WHERE user_id=$1::uuid AND provider=$2",
+            user_id, provider.lower(),
+        )
+        return row is not None
+    finally:
+        await release_conn(conn)
