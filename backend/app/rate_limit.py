@@ -1,14 +1,18 @@
+import logging
 import os
 import re
-import threading
 import time
-from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Deque, Dict, Iterable, Optional, Pattern, Tuple
+from typing import Iterable, Optional, Pattern, Tuple
 
+import redis
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+from .services.redis_client import get_redis
+
+logger = logging.getLogger(__name__)
 
 ADMIN_USERNAMES = {"reaobaka56"}
 PREMIUM_MULTIPLIER = 10   # premium users get 10x limits
@@ -105,20 +109,27 @@ def _extract_username_from_request(request: Request) -> Optional[str]:
     return None
 
 
-class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
+class RedisRateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Per-client fixed-window rate limiter.
-    
+    Per-client fixed-window rate limiter backed by Redis (INCR + TTL), so
+    limits are shared across every backend instance instead of counted
+    per-process.
+
     Tiers:
     - Admin/premium accounts (reaobaka56): unlimited — all limits bypassed
     - Regular users: standard limits from env vars
+
+    Fail-open by design: if Redis is unreachable, the request is allowed
+    through (and logged) rather than taking the whole API down over a
+    rate-limiter dependency. This differs from session auth, which fails
+    closed — a missed rate-limit window is a much smaller risk than an
+    availability outage.
     """
 
     def __init__(self, app, rules: Iterable[RateLimitRule]):
         super().__init__(app)
         self.rules = tuple(rules)
-        self.hits: Dict[Tuple[str, str], Deque[float]] = defaultdict(deque)
-        self.lock = threading.RLock()
+        self.redis = get_redis()
 
     async def dispatch(self, request: Request, call_next) -> Response:
         # Check for admin/premium bypass FIRST
@@ -129,7 +140,7 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
 
         rule = self._rule_for_path(request.url.path)
         client_key = self._client_key(request)
-        now = time.monotonic()
+        now = time.time()
 
         allowed, remaining, reset_seconds = self._record_hit(rule, client_key, now)
         if not allowed:
@@ -167,21 +178,34 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
         return "unknown"
 
     def _record_hit(self, rule: RateLimitRule, client_key: str, now: float) -> Tuple[bool, int, int]:
-        bucket_key = (rule.name, client_key)
-        window_start = now - rule.window_seconds
-        with self.lock:
-            bucket = self.hits[bucket_key]
-            while bucket and bucket[0] <= window_start:
-                bucket.popleft()
+        # Fixed window: bucket index = which window_seconds-sized slot `now`
+        # falls into. All instances hitting the same bucket share the same
+        # Redis key, so the count is global regardless of which replica
+        # served the request.
+        window_index = int(now // rule.window_seconds)
+        window_reset_at = (window_index + 1) * rule.window_seconds
+        reset_seconds = max(1, int(window_reset_at - now))
+        redis_key = f"ratelimit:{rule.name}:{client_key}:{window_index}"
 
-            if len(bucket) >= rule.max_requests:
-                reset_seconds = max(1, int(bucket[0] + rule.window_seconds - now))
-                return False, 0, reset_seconds
+        try:
+            pipe = self.redis.pipeline()
+            pipe.incr(redis_key, 1)
+            # TTL a little past the window boundary so a slow request right
+            # at the edge doesn't get an evicted key mid-check.
+            pipe.expire(redis_key, rule.window_seconds + 5)
+            count, _ = pipe.execute()
+        except redis.RedisError:
+            logger.error(
+                "[rate_limit] Redis unavailable, failing open for rule=%s client=%s",
+                rule.name, client_key,
+            )
+            return True, rule.max_requests, rule.window_seconds
 
-            bucket.append(now)
-            remaining = max(0, rule.max_requests - len(bucket))
-            reset_seconds = max(1, int(bucket[0] + rule.window_seconds - now))
-            return True, remaining, reset_seconds
+        if count > rule.max_requests:
+            return False, 0, reset_seconds
+
+        remaining = max(0, rule.max_requests - count)
+        return True, remaining, reset_seconds
 
     def _headers(self, rule, remaining, reset_seconds, retry_after=None):
         headers = {

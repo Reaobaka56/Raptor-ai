@@ -2,12 +2,11 @@ import os
 import json
 from typing import Optional, Dict, Any
 
-import redis
+from .redis_client import get_redis
 
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-_redis = redis.from_url(REDIS_URL, decode_responses=True)
+_redis = get_redis()
 
 
 def save_session(token: str, session: Dict[str, Any]) -> None:
