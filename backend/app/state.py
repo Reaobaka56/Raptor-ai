@@ -113,15 +113,34 @@ WEBHOOK_LOG_MAX = 200
 
 
 def append_webhook_log(event_log) -> None:
-    """Push a WebhookLogItem onto the shared, bounded Redis log."""
+    """Push a WebhookLogItem onto the shared, bounded Redis log.
+
+    Best-effort: Redis is optional infra (see auth/session storage, which
+    moved to Postgres and no longer depends on it). If Redis isn't
+    configured/reachable, log and drop the event rather than 500ing the
+    webhook POST that triggered it — losing a log entry is much cheaper
+    than GitHub retrying (or giving up on) a webhook delivery.
+    """
     payload = event_log.model_dump() if hasattr(event_log, "model_dump") else dict(event_log)
-    r = _get_redis()
-    r.lpush(WEBHOOK_LOG_KEY, _json.dumps(payload, default=str))
-    r.ltrim(WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 1)
+    try:
+        r = _get_redis()
+        r.lpush(WEBHOOK_LOG_KEY, _json.dumps(payload, default=str))
+        r.ltrim(WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 1)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "[webhook_log] Redis unavailable, dropping webhook log entry", exc_info=True
+        )
 
 
 def get_webhook_logs(limit: int = WEBHOOK_LOG_MAX) -> list:
-    """Most-recent-first list of webhook event dicts."""
-    r = _get_redis()
-    raw = r.lrange(WEBHOOK_LOG_KEY, 0, limit - 1)
-    return [_json.loads(item) for item in raw]
+    """Most-recent-first list of webhook event dicts. Returns [] rather than
+    raising if Redis is unavailable — same best-effort reasoning as above."""
+    try:
+        r = _get_redis()
+        raw = r.lrange(WEBHOOK_LOG_KEY, 0, limit - 1)
+        return [_json.loads(item) for item in raw]
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "[webhook_log] Redis unavailable, returning empty log", exc_info=True
+        )
+        return []
