@@ -212,128 +212,108 @@ ALL_TOOLS = [
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+_AGENT_COLUMNS = """id, owner_id, name, role, description, system_prompt,
+                    model, provider, tools, permissions, status,
+                    sandbox_id, current_task_id, config, knowledge_sources,
+                    created_at, updated_at"""
 
 
-def _log_activity(owner_id: str, agent_id: Optional[str], activity_type: str,
-                  description: str, metadata: dict = None) -> None:
+async def _log_activity(owner_id: str, agent_id: Optional[str], activity_type: str,
+                         description: str, metadata: dict = None) -> None:
     """Write an entry to the agent activity log. Best-effort."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """INSERT INTO agent_activity_log
-                       (owner_id, agent_id, activity_type, description, metadata)
-                   VALUES (%s::uuid, %s::uuid, %s, %s, %s::jsonb)""",
-                (owner_id, agent_id, activity_type, description,
-                 json.dumps(metadata or {})),
-            )
-            conn.commit()
+        await conn.execute(
+            """INSERT INTO agent_activity_log
+                   (owner_id, agent_id, activity_type, description, metadata)
+               VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb)""",
+            owner_id, agent_id, activity_type, description,
+            json.dumps(metadata or {}),
+        )
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] _log_activity failed")
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 
-def create_agent(owner_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+async def create_agent(owner_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new agent. Returns the created agent dict."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         raise RuntimeError("Database unavailable")
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """INSERT INTO agents
-                       (owner_id, name, role, description, system_prompt,
-                        model, provider, tools, permissions, config, knowledge_sources)
-                   VALUES (%s::uuid, %s, %s, %s, %s, %s, %s,
-                           %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
-                   RETURNING id, owner_id, name, role, description, system_prompt,
-                             model, provider, tools, permissions, status,
-                             sandbox_id, current_task_id, config, knowledge_sources,
-                             created_at, updated_at""",
-                (
-                    owner_id,
-                    data.get("name", "Untitled Agent"),
-                    data.get("role", "custom"),
-                    data.get("description"),
-                    data.get("system_prompt"),
-                    data.get("model", "gemini-2.5-pro"),
-                    data.get("provider", "google"),
-                    json.dumps(data.get("tools", [])),
-                    json.dumps(data.get("permissions", {})),
-                    json.dumps(data.get("config", {})),
-                    json.dumps(data.get("knowledge_sources", [])),
-                ),
-            )
-            conn.commit()
-            agent = _row_to_dict(cur, cur.fetchone())
+        row = await conn.fetchrow(
+            f"""INSERT INTO agents
+                   (owner_id, name, role, description, system_prompt,
+                    model, provider, tools, permissions, config, knowledge_sources)
+               VALUES ($1::uuid, $2, $3, $4, $5, $6, $7,
+                       $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb)
+               RETURNING {_AGENT_COLUMNS}""",
+            owner_id,
+            data.get("name", "Untitled Agent"),
+            data.get("role", "custom"),
+            data.get("description"),
+            data.get("system_prompt"),
+            data.get("model", "gemini-2.5-pro"),
+            data.get("provider", "google"),
+            json.dumps(data.get("tools", [])),
+            json.dumps(data.get("permissions", {})),
+            json.dumps(data.get("config", {})),
+            json.dumps(data.get("knowledge_sources", [])),
+        )
+        agent = _row_to_dict(row)
 
-            _log_activity(owner_id, agent["id"], "system",
-                          f"Agent '{agent['name']}' created with role '{agent['role']}'")
-            return agent
+        await _log_activity(owner_id, agent["id"], "system",
+                             f"Agent '{agent['name']}' created with role '{agent['role']}'")
+        return agent
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] create_agent failed")
         raise
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
+async def get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
     """Get a single agent by ID."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT id, owner_id, name, role, description, system_prompt,
-                          model, provider, tools, permissions, status,
-                          sandbox_id, current_task_id, config, knowledge_sources,
-                          created_at, updated_at
-                   FROM agents
-                   WHERE id = %s::uuid AND owner_id = %s::uuid""",
-                (agent_id, owner_id),
-            )
-            return _row_to_dict(cur, cur.fetchone())
+        row = await conn.fetchrow(
+            f"""SELECT {_AGENT_COLUMNS}
+               FROM agents
+               WHERE id = $1::uuid AND owner_id = $2::uuid""",
+            agent_id, owner_id,
+        )
+        return _row_to_dict(row)
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def list_agents(owner_id: str) -> List[Dict[str, Any]]:
+async def list_agents(owner_id: str) -> List[Dict[str, Any]]:
     """List all agents for an owner."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return []
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT id, owner_id, name, role, description, system_prompt,
-                          model, provider, tools, permissions, status,
-                          sandbox_id, current_task_id, config, knowledge_sources,
-                          created_at, updated_at
-                   FROM agents
-                   WHERE owner_id = %s::uuid
-                   ORDER BY created_at DESC
-                   LIMIT 100""",
-                (owner_id,),
-            )
-            rows = cur.fetchall()
-            return [_row_to_dict(cur, row) for row in rows]
+        rows = await conn.fetch(
+            f"""SELECT {_AGENT_COLUMNS}
+               FROM agents
+               WHERE owner_id = $1::uuid
+               ORDER BY created_at DESC
+               LIMIT 100""",
+            owner_id,
+        )
+        return [_row_to_dict(row) for row in rows]
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def update_agent(agent_id: str, owner_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def update_agent(agent_id: str, owner_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Update agent fields. Only provided fields are updated."""
     allowed_fields = {
         "name", "role", "description", "system_prompt", "model", "provider",
@@ -341,49 +321,43 @@ def update_agent(agent_id: str, owner_id: str, data: Dict[str, Any]) -> Optional
     }
     updates = {k: v for k, v in data.items() if k in allowed_fields}
     if not updates:
-        return get_agent(agent_id, owner_id)
+        return await get_agent(agent_id, owner_id)
 
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return None
     try:
         set_parts = []
-        values = []
+        values: List[Any] = []
         for key, val in updates.items():
+            values.append(json.dumps(val) if key in ("tools", "permissions", "config", "knowledge_sources") else val)
+            idx = len(values)
             if key in ("tools", "permissions", "config", "knowledge_sources"):
-                set_parts.append(f"{key} = %s::jsonb")
-                values.append(json.dumps(val))
+                set_parts.append(f"{key} = ${idx}::jsonb")
             else:
-                set_parts.append(f"{key} = %s")
-                values.append(val)
+                set_parts.append(f"{key} = ${idx}")
         set_parts.append("updated_at = now()")
         values.extend([agent_id, owner_id])
+        id_idx = len(values) - 1
+        owner_idx = len(values)
 
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""UPDATE agents SET {', '.join(set_parts)}
-                    WHERE id = %s::uuid AND owner_id = %s::uuid
-                    RETURNING id, owner_id, name, role, description, system_prompt,
-                              model, provider, tools, permissions, status,
-                              sandbox_id, current_task_id, config, knowledge_sources,
-                              created_at, updated_at""",
-                values,
-            )
-            conn.commit()
-            return _row_to_dict(cur, cur.fetchone())
+        row = await conn.fetchrow(
+            f"""UPDATE agents SET {', '.join(set_parts)}
+                WHERE id = ${id_idx}::uuid AND owner_id = ${owner_idx}::uuid
+                RETURNING {_AGENT_COLUMNS}""",
+            *values,
+        )
+        return _row_to_dict(row)
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] update_agent failed")
         raise
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def update_agent_status(agent_id: str, owner_id: str, new_status: str) -> Optional[Dict[str, Any]]:
+async def update_agent_status(agent_id: str, owner_id: str, new_status: str) -> Optional[Dict[str, Any]]:
     """Transition agent to a new status with validation."""
-    agent = get_agent(agent_id, owner_id)
+    agent = await get_agent(agent_id, owner_id)
     if not agent:
         return None
 
@@ -395,158 +369,124 @@ def update_agent_status(agent_id: str, owner_id: str, new_status: str) -> Option
             f"Valid transitions: {valid_next}"
         )
 
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """UPDATE agents SET status = %s, updated_at = now()
-                   WHERE id = %s::uuid AND owner_id = %s::uuid
-                   RETURNING id, owner_id, name, role, description, system_prompt,
-                             model, provider, tools, permissions, status,
-                             sandbox_id, current_task_id, config, knowledge_sources,
-                             created_at, updated_at""",
-                (new_status, agent_id, owner_id),
-            )
-            conn.commit()
-            result = _row_to_dict(cur, cur.fetchone())
+        row = await conn.fetchrow(
+            f"""UPDATE agents SET status = $1, updated_at = now()
+               WHERE id = $2::uuid AND owner_id = $3::uuid
+               RETURNING {_AGENT_COLUMNS}""",
+            new_status, agent_id, owner_id,
+        )
+        result = _row_to_dict(row)
 
-            _log_activity(owner_id, agent_id, "status_change",
-                          f"Agent '{agent['name']}' status: {current} → {new_status}",
-                          {"from": current, "to": new_status})
-            return result
+        await _log_activity(owner_id, agent_id, "status_change",
+                             f"Agent '{agent['name']}' status: {current} → {new_status}",
+                             {"from": current, "to": new_status})
+        return result
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] update_agent_status failed")
         raise
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def delete_agent(agent_id: str, owner_id: str) -> bool:
+async def delete_agent(agent_id: str, owner_id: str) -> bool:
     """Delete an agent. Returns True if deleted."""
-    agent = get_agent(agent_id, owner_id)
+    agent = await get_agent(agent_id, owner_id)
     if not agent:
         return False
 
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return False
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM agents WHERE id = %s::uuid AND owner_id = %s::uuid",
-                (agent_id, owner_id),
-            )
-            conn.commit()
-            deleted = cur.rowcount > 0
-            if deleted:
-                _log_activity(owner_id, agent_id, "system",
-                              f"Agent '{agent['name']}' deleted")
-            return deleted
+        result = await conn.execute(
+            "DELETE FROM agents WHERE id = $1::uuid AND owner_id = $2::uuid",
+            agent_id, owner_id,
+        )
+        deleted = result.split()[-1] != "0"
+        if deleted:
+            await _log_activity(owner_id, agent_id, "system",
+                                 f"Agent '{agent['name']}' deleted")
+        return deleted
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] delete_agent failed")
         raise
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def list_agents_by_sandbox(sandbox_id: str, owner_id: str) -> List[Dict[str, Any]]:
+async def list_agents_by_sandbox(sandbox_id: str, owner_id: str) -> List[Dict[str, Any]]:
     """List agents currently attached to a given sandbox session."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return []
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT id, owner_id, name, role, description, system_prompt,
-                          model, provider, tools, permissions, status,
-                          sandbox_id, current_task_id, config, knowledge_sources,
-                          created_at, updated_at
-                   FROM agents
-                   WHERE sandbox_id = %s::uuid AND owner_id = %s::uuid
-                   ORDER BY created_at DESC""",
-                (sandbox_id, owner_id),
-            )
-            rows = cur.fetchall()
-            return [_row_to_dict(cur, row) for row in rows]
+        rows = await conn.fetch(
+            f"""SELECT {_AGENT_COLUMNS}
+               FROM agents
+               WHERE sandbox_id = $1::uuid AND owner_id = $2::uuid
+               ORDER BY created_at DESC""",
+            sandbox_id, owner_id,
+        )
+        return [_row_to_dict(row) for row in rows]
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def attach_agent_to_sandbox(agent_id: str, owner_id: str, sandbox_id: str) -> Optional[Dict[str, Any]]:
+async def attach_agent_to_sandbox(agent_id: str, owner_id: str, sandbox_id: str) -> Optional[Dict[str, Any]]:
     """Attach an existing agent to a sandbox session."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """UPDATE agents SET sandbox_id = %s::uuid, updated_at = now()
-                   WHERE id = %s::uuid AND owner_id = %s::uuid
-                   RETURNING id, owner_id, name, role, description, system_prompt,
-                             model, provider, tools, permissions, status,
-                             sandbox_id, current_task_id, config, knowledge_sources,
-                             created_at, updated_at""",
-                (sandbox_id, agent_id, owner_id),
-            )
-            conn.commit()
-            result = _row_to_dict(cur, cur.fetchone())
-            if result:
-                _log_activity(owner_id, agent_id, "system",
-                              f"Agent '{result['name']}' attached to sandbox session")
-            return result
+        row = await conn.fetchrow(
+            f"""UPDATE agents SET sandbox_id = $1::uuid, updated_at = now()
+               WHERE id = $2::uuid AND owner_id = $3::uuid
+               RETURNING {_AGENT_COLUMNS}""",
+            sandbox_id, agent_id, owner_id,
+        )
+        result = _row_to_dict(row)
+        if result:
+            await _log_activity(owner_id, agent_id, "system",
+                                 f"Agent '{result['name']}' attached to sandbox session")
+        return result
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] attach_agent_to_sandbox failed")
         raise
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def drop_agent_from_sandbox(agent_id: str, owner_id: str, sandbox_id: str) -> Optional[Dict[str, Any]]:
+async def drop_agent_from_sandbox(agent_id: str, owner_id: str, sandbox_id: str) -> Optional[Dict[str, Any]]:
     """Drop (safely unassign) an agent from a sandbox session. This does not
     delete the agent — it just detaches it, so other agents attached to the
     same sandbox are unaffected."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """UPDATE agents SET sandbox_id = NULL, updated_at = now()
-                   WHERE id = %s::uuid AND owner_id = %s::uuid AND sandbox_id = %s::uuid
-                   RETURNING id, owner_id, name, role, description, system_prompt,
-                             model, provider, tools, permissions, status,
-                             sandbox_id, current_task_id, config, knowledge_sources,
-                             created_at, updated_at""",
-                (agent_id, owner_id, sandbox_id),
-            )
-            conn.commit()
-            result = _row_to_dict(cur, cur.fetchone())
-            if result:
-                _log_activity(owner_id, agent_id, "system",
-                              f"Agent '{result['name']}' dropped from sandbox session")
-            return result
+        row = await conn.fetchrow(
+            f"""UPDATE agents SET sandbox_id = NULL, updated_at = now()
+               WHERE id = $1::uuid AND owner_id = $2::uuid AND sandbox_id = $3::uuid
+               RETURNING {_AGENT_COLUMNS}""",
+            agent_id, owner_id, sandbox_id,
+        )
+        result = _row_to_dict(row)
+        if result:
+            await _log_activity(owner_id, agent_id, "system",
+                                 f"Agent '{result['name']}' dropped from sandbox session")
+        return result
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] drop_agent_from_sandbox failed")
         raise
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def get_agent_templates(owner_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+async def get_agent_templates(owner_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """Return built-in agent role templates, merged with the caller's custom
     (user-created) templates when owner_id is provided. Custom templates are
     keyed by their UUID and flagged with is_custom=True so the UI can offer
@@ -555,128 +495,112 @@ def get_agent_templates(owner_id: Optional[str] = None) -> Dict[str, Dict[str, A
         key: {**tpl, "is_custom": False} for key, tpl in AGENT_TEMPLATES.items()
     }
     if owner_id:
-        templates.update({t["id"]: t for t in list_custom_templates(owner_id)})
+        custom = await list_custom_templates(owner_id)
+        templates.update({t["id"]: t for t in custom})
     return templates
 
 
-def list_custom_templates(owner_id: str) -> List[Dict[str, Any]]:
-    conn = get_conn()
+async def list_custom_templates(owner_id: str) -> List[Dict[str, Any]]:
+    conn = await get_conn()
     if not conn:
         return []
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT id, name, role, description, system_prompt, tools, permissions, created_at
-                   FROM agent_templates WHERE owner_id = %s::uuid ORDER BY created_at DESC""",
-                (owner_id,),
-            )
-            rows = cur.fetchall()
-            out = []
-            for row in rows:
-                d = _row_to_dict(cur, row)
-                d["is_custom"] = True
-                out.append(d)
-            return out
+        rows = await conn.fetch(
+            """SELECT id, name, role, description, system_prompt, tools, permissions, created_at
+               FROM agent_templates WHERE owner_id = $1::uuid ORDER BY created_at DESC""",
+            owner_id,
+        )
+        out = []
+        for row in rows:
+            d = _row_to_dict(row)
+            d["is_custom"] = True
+            out.append(d)
+        return out
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def create_custom_template(owner_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    conn = get_conn()
+async def create_custom_template(owner_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """INSERT INTO agent_templates (owner_id, name, role, description, system_prompt, tools, permissions)
-                   VALUES (%s::uuid, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
-                   RETURNING id, name, role, description, system_prompt, tools, permissions, created_at""",
-                (
-                    owner_id,
-                    data.get("name", "Untitled Template"),
-                    data.get("role", "custom"),
-                    data.get("description"),
-                    data.get("system_prompt"),
-                    json.dumps(data.get("tools", [])),
-                    json.dumps(data.get("permissions", {})),
-                ),
-            )
-            conn.commit()
-            result = _row_to_dict(cur, cur.fetchone())
-            if result:
-                result["is_custom"] = True
-            return result
+        row = await conn.fetchrow(
+            """INSERT INTO agent_templates (owner_id, name, role, description, system_prompt, tools, permissions)
+               VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+               RETURNING id, name, role, description, system_prompt, tools, permissions, created_at""",
+            owner_id,
+            data.get("name", "Untitled Template"),
+            data.get("role", "custom"),
+            data.get("description"),
+            data.get("system_prompt"),
+            json.dumps(data.get("tools", [])),
+            json.dumps(data.get("permissions", {})),
+        )
+        result = _row_to_dict(row)
+        if result:
+            result["is_custom"] = True
+        return result
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] create_custom_template failed")
         raise
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def delete_custom_template(template_id: str, owner_id: str) -> bool:
-    conn = get_conn()
+async def delete_custom_template(template_id: str, owner_id: str) -> bool:
+    conn = await get_conn()
     if not conn:
         return False
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM agent_templates WHERE id = %s::uuid AND owner_id = %s::uuid",
-                (template_id, owner_id),
-            )
-            conn.commit()
-            return cur.rowcount > 0
+        result = await conn.execute(
+            "DELETE FROM agent_templates WHERE id = $1::uuid AND owner_id = $2::uuid",
+            template_id, owner_id,
+        )
+        return result.split()[-1] != "0"
     except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        logger.exception("[agent_service] delete_custom_template failed")
         raise
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def get_activity_log(owner_id: str, agent_id: Optional[str] = None,
-                     limit: int = 100) -> List[Dict[str, Any]]:
+async def get_activity_log(owner_id: str, agent_id: Optional[str] = None,
+                            limit: int = 100) -> List[Dict[str, Any]]:
     """Get recent activity log entries."""
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return []
     try:
-        with conn.cursor() as cur:
-            if agent_id:
-                cur.execute(
-                    """SELECT id, owner_id, agent_id, activity_type, description,
-                              metadata, created_at
-                       FROM agent_activity_log
-                       WHERE owner_id = %s::uuid AND agent_id = %s::uuid
-                       ORDER BY created_at DESC
-                       LIMIT %s""",
-                    (owner_id, agent_id, limit),
-                )
-            else:
-                cur.execute(
-                    """SELECT id, owner_id, agent_id, activity_type, description,
-                              metadata, created_at
-                       FROM agent_activity_log
-                       WHERE owner_id = %s::uuid
-                       ORDER BY created_at DESC
-                       LIMIT %s""",
-                    (owner_id, limit),
-                )
-            rows = cur.fetchall()
-            result = []
-            cols = [d[0] for d in cur.description]
-            for row in rows:
-                d = dict(zip(cols, row))
-                for key in ("id", "owner_id", "agent_id"):
-                    if d.get(key):
-                        d[key] = str(d[key])
-                if d.get("created_at") and hasattr(d["created_at"], "isoformat"):
-                    d["created_at"] = d["created_at"].isoformat()
-                result.append(d)
-            return result
+        if agent_id:
+            rows = await conn.fetch(
+                """SELECT id, owner_id, agent_id, activity_type, description,
+                          metadata, created_at
+                   FROM agent_activity_log
+                   WHERE owner_id = $1::uuid AND agent_id = $2::uuid
+                   ORDER BY created_at DESC
+                   LIMIT $3""",
+                owner_id, agent_id, limit,
+            )
+        else:
+            rows = await conn.fetch(
+                """SELECT id, owner_id, agent_id, activity_type, description,
+                          metadata, created_at
+                   FROM agent_activity_log
+                   WHERE owner_id = $1::uuid
+                   ORDER BY created_at DESC
+                   LIMIT $2""",
+                owner_id, limit,
+            )
+        result = []
+        for row in rows:
+            d = dict(row)
+            for key in ("id", "owner_id", "agent_id"):
+                if d.get(key):
+                    d[key] = str(d[key])
+            if d.get("created_at") and hasattr(d["created_at"], "isoformat"):
+                d["created_at"] = d["created_at"].isoformat()
+            result.append(d)
+        return result
     finally:
-        release_conn(conn)
+        await release_conn(conn)

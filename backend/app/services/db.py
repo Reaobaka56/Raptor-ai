@@ -2,13 +2,15 @@ import logging
 import os
 from typing import Optional
 
+import asyncpg
+
 logger = logging.getLogger(__name__)
 DB_URL = os.getenv("DATABASE_URL") or os.getenv("PGVECTOR_CONN_STRING")
 
-_pool = None
+_pool: Optional[asyncpg.Pool] = None
 
 
-def init_pool(minconn: int = 2, maxconn: int = 10):
+async def init_pool(minconn: int = 2, maxconn: int = 10):
     global _pool
     if not DB_URL:
         logger.warning("[db] DATABASE_URL/PGVECTOR_CONN_STRING not configured; skipping connection pool initialization")
@@ -16,8 +18,7 @@ def init_pool(minconn: int = 2, maxconn: int = 10):
     if _pool is not None:
         return _pool
     try:
-        from psycopg2 import pool
-        _pool = pool.ThreadedConnectionPool(minconn, maxconn, dsn=DB_URL)
+        _pool = await asyncpg.create_pool(dsn=DB_URL, min_size=minconn, max_size=maxconn)
         return _pool
     except Exception:
         logger.exception("[db] Failed to create connection pool")
@@ -25,48 +26,46 @@ def init_pool(minconn: int = 2, maxconn: int = 10):
         return None
 
 
-def get_conn():
+async def get_conn() -> Optional[asyncpg.pool.PoolConnectionProxy]:
+    """Acquire a connection from the pool. Must be paired with release_conn
+    in a finally block. Returns None if the pool/DB isn't configured."""
     global _pool
     if _pool is None:
-        init_pool()
-    if _pool:
-        return _pool.getconn()
-    if not DB_URL:
+        await init_pool()
+    if _pool is None:
         return None
-    logger.warning("[db] Falling back to unpooled direct connection because the connection pool is unavailable")
-    import psycopg2
-    conn = psycopg2.connect(DB_URL)
-    conn.autocommit = True
-    return conn
+    return await _pool.acquire()
 
 
-def release_conn(conn):
+async def release_conn(conn) -> None:
     global _pool
-    if not conn:
+    if not conn or _pool is None:
         return
     try:
-        if _pool:
-            _pool.putconn(conn)
-        else:
-            conn.close()
+        await _pool.release(conn)
     except Exception:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        logger.exception("[db] Failed to release connection back to pool")
 
 
-def row_to_dict(cur, row) -> Optional[dict]:
-    """Convert a single cursor row into a plain dict, JSON-safely serializing
-    UUIDs (via .hex) and datetimes/dates (via .isoformat). Shared across
-    services so row-shaping logic isn't copy-pasted per file."""
+def row_to_dict(row) -> Optional[dict]:
+    """Convert an asyncpg Record into a plain, JSON-safe dict — serializes
+    UUIDs (via str) and datetimes/dates (via .isoformat()). Shared across
+    services so row-shaping logic isn't copy-pasted per file.
+
+    NOTE: signature changed from the psycopg2 version (which took
+    `(cur, row)`); asyncpg Records carry their own column names, so only
+    the row itself is needed now.
+    """
     if row is None:
         return None
-    cols = [d[0] for d in cur.description]
-    d = dict(zip(cols, row))
+    d = dict(row)
     for k, v in d.items():
         if hasattr(v, "isoformat"):
             d[k] = v.isoformat()
-        elif hasattr(v, "hex"):
+        elif hasattr(v, "hex") and not isinstance(v, (str, bytes, bytearray, int)):
             d[k] = str(v)
     return d
+
+
+def rows_to_dicts(rows) -> list:
+    return [row_to_dict(r) for r in rows]

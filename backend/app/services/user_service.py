@@ -11,14 +11,27 @@ logger = logging.getLogger(__name__)
 
 ADMIN_USERNAME = "reaobaka56"
 
+_USER_COLUMNS = """id, github_id, username, name, email, avatar_url,
+                   role, account_status, created_at, last_login_at"""
 
-def upsert_user(github_id: int, username: str, name: Optional[str],
-                email: Optional[str], avatar_url: Optional[str]) -> Optional[Dict[str, Any]]:
+
+def _shape_user(row) -> Optional[Dict[str, Any]]:
+    if not row:
+        return None
+    user = dict(row)
+    user["id"] = str(user["id"])
+    user["created_at"] = user["created_at"].isoformat() if user["created_at"] else None
+    user["last_login_at"] = user["last_login_at"].isoformat() if user["last_login_at"] else None
+    return user
+
+
+async def upsert_user(github_id: int, username: str, name: Optional[str],
+                       email: Optional[str], avatar_url: Optional[str]) -> Optional[Dict[str, Any]]:
     """
     Insert or update a user record on every GitHub login.
     Returns the full user row as a dict, or None if the DB is unavailable.
     """
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         logger.warning("[user_service] DB unavailable — skipping user upsert for %s", username)
         return None
@@ -27,108 +40,66 @@ def upsert_user(github_id: int, username: str, name: Optional[str],
     role = "admin" if username.lower() == ADMIN_USERNAME.lower() else "user"
 
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO users (github_id, username, name, email, avatar_url, role, last_login_at)
-                VALUES (%s, %s, %s, %s, %s, %s, now())
-                ON CONFLICT (github_id) DO UPDATE SET
-                    username      = EXCLUDED.username,
-                    name          = EXCLUDED.name,
-                    email         = COALESCE(EXCLUDED.email, users.email),
-                    avatar_url    = EXCLUDED.avatar_url,
-                    role          = CASE WHEN users.username = %s THEN 'admin' ELSE users.role END,
-                    last_login_at = now()
-                RETURNING id, github_id, username, name, email, avatar_url,
-                          role, account_status, created_at, last_login_at
-                """,
-                (github_id, username, name, email, avatar_url, role, ADMIN_USERNAME),
-            )
-            conn.commit()
-            row = cur.fetchone()
-            if not row:
-                return None
-            cols = [d[0] for d in cur.description]
-            user = dict(zip(cols, row))
-            # Convert UUID and datetimes to strings for JSON serialisation
-            user["id"] = str(user["id"])
-            user["created_at"] = user["created_at"].isoformat() if user["created_at"] else None
-            user["last_login_at"] = user["last_login_at"].isoformat() if user["last_login_at"] else None
-            return user
+        row = await conn.fetchrow(
+            f"""
+            INSERT INTO users (github_id, username, name, email, avatar_url, role, last_login_at)
+            VALUES ($1, $2, $3, $4, $5, $6, now())
+            ON CONFLICT (github_id) DO UPDATE SET
+                username      = EXCLUDED.username,
+                name          = EXCLUDED.name,
+                email         = COALESCE(EXCLUDED.email, users.email),
+                avatar_url    = EXCLUDED.avatar_url,
+                role          = CASE WHEN users.username = $7 THEN 'admin' ELSE users.role END,
+                last_login_at = now()
+            RETURNING {_USER_COLUMNS}
+            """,
+            github_id, username, name, email, avatar_url, role, ADMIN_USERNAME,
+        )
+        return _shape_user(row)
     except Exception:
         logger.exception("[user_service] Failed to upsert user %s", username)
-        try:
-            conn.rollback()
-        except Exception:
-            pass
         return None
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-    conn = get_conn()
+async def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, github_id, username, name, email, avatar_url,
-                       role, account_status, created_at, last_login_at
-                FROM users WHERE username = %s LIMIT 1
-                """,
-                (username,),
-            )
-            row = cur.fetchone()
-            if not row:
-                return None
-            cols = [d[0] for d in cur.description]
-            user = dict(zip(cols, row))
-            user["id"] = str(user["id"])
-            user["created_at"] = user["created_at"].isoformat() if user["created_at"] else None
-            user["last_login_at"] = user["last_login_at"].isoformat() if user["last_login_at"] else None
-            return user
+        row = await conn.fetchrow(
+            f"SELECT {_USER_COLUMNS} FROM users WHERE username = $1 LIMIT 1",
+            username,
+        )
+        return _shape_user(row)
     except Exception:
         logger.exception("[user_service] Failed to fetch user %s", username)
         return None
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
-    conn = get_conn()
+async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, github_id, username, name, email, avatar_url,
-                       role, account_status, created_at, last_login_at
-                FROM users WHERE id = %s LIMIT 1
-                """,
-                (user_id,),
-            )
-            row = cur.fetchone()
-            if not row:
-                return None
-            cols = [d[0] for d in cur.description]
-            user = dict(zip(cols, row))
-            user["id"] = str(user["id"])
-            user["created_at"] = user["created_at"].isoformat() if user["created_at"] else None
-            user["last_login_at"] = user["last_login_at"].isoformat() if user["last_login_at"] else None
-            return user
+        row = await conn.fetchrow(
+            f"SELECT {_USER_COLUMNS} FROM users WHERE id::text = $1 LIMIT 1",
+            user_id,
+        )
+        return _shape_user(row)
     except Exception:
         logger.exception("[user_service] Failed to fetch user by id %s", user_id)
         return None
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def is_admin(username: str) -> bool:
+async def is_admin(username: str) -> bool:
     """Fast check — always true for the owner, otherwise check DB role."""
     if username.lower() == ADMIN_USERNAME.lower():
         return True
-    user = get_user_by_username(username)
+    user = await get_user_by_username(username)
     return bool(user and user.get("role") == "admin")

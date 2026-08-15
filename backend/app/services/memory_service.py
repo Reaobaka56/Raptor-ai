@@ -10,24 +10,25 @@ Handles:
 """
 
 import os
-import json
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
-from .embedding_service import EMBEDDING_DIM
+from .embedding_service import EMBEDDING_DIM  # noqa: F401 (re-exported for callers)
 
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Postgres connection helpers  (sync via psycopg2 — keeps things simple)
+# Postgres connection helpers (async via asyncpg)
 # ---------------------------------------------------------------------------
 from ..services.db import get_conn, release_conn
 import logging
 
 logger = logging.getLogger(__name__)
 
+_migrations_ran = False
 
-def _get_conn():
+
+async def _get_conn():
     """Get a Postgres connection from the pool, or return None for mock mode."""
     db_url = (
         os.getenv("PGVECTOR_CONN_STRING")
@@ -39,11 +40,14 @@ def _get_conn():
         return None
 
     try:
-        conn = get_conn()
+        conn = await get_conn()
         if conn:
             try:
-                # Ensure migrations run once per connection acquisition path
-                _run_migrations(conn)
+                # Migrations only need to run once per process, not once per
+                # connection acquisition — asyncpg pool connections are
+                # reused, and re-running the migration file on every request
+                # is wasted work.
+                await _run_migrations(conn)
             except Exception:
                 logger.exception("Failed to run memory migrations")
             return conn
@@ -52,8 +56,11 @@ def _get_conn():
     return None
 
 
-def _run_migrations(conn):
-    """Run the memory-tables migration idempotently."""
+async def _run_migrations(conn):
+    """Run the memory-tables migration idempotently (once per process)."""
+    global _migrations_ran
+    if _migrations_ran:
+        return
     migration_path = os.path.join(
         os.path.dirname(__file__), "..", "..", "migrations", "001_memory_tables.sql"
     )
@@ -61,12 +68,14 @@ def _run_migrations(conn):
         with open(migration_path, "r") as f:
             sql = f.read()
         try:
-            cur = conn.cursor()
-            cur.execute(sql)
-            cur.close()
+            # asyncpg's execute() supports multiple ;-separated statements
+            # as long as no parameters are passed.
+            await conn.execute(sql)
             logger.info("[memory_service] Migration 001_memory_tables applied successfully")
+            _migrations_ran = True
         except Exception as e:
             logger.warning("[memory_service] Migration warning (may already exist): %s", e)
+            _migrations_ran = True
 
 
 # ---------------------------------------------------------------------------
@@ -84,10 +93,15 @@ def _next_mock_id() -> int:
     return _MOCK_ID_COUNTER
 
 
+def _iso(row: Dict[str, Any], key: str = "created_at") -> None:
+    if hasattr(row.get(key), "isoformat"):
+        row[key] = row[key].isoformat()
+
+
 # ---------------------------------------------------------------------------
 # Review Embeddings
 # ---------------------------------------------------------------------------
-def store_review_embedding(
+async def store_review_embedding(
     review_id: int,
     repo: str,
     pr_number: int,
@@ -96,25 +110,19 @@ def store_review_embedding(
     embedding: List[float],
 ) -> int:
     """Persist a review embedding. Returns the row id."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
-            cur.execute(
+            row = await conn.fetchrow(
                 """INSERT INTO review_embeddings
                        (review_id, repo, pr_number, issue_titles, summary, embedding)
-                   VALUES (%s, %s, %s, %s, %s, %s::vector)
+                   VALUES ($1, $2, $3, $4, $5, $6::vector)
                    RETURNING id""",
-                (review_id, repo, pr_number, issue_titles, summary, str(embedding)),
+                review_id, repo, pr_number, issue_titles, summary, str(embedding),
             )
-            row_id = cur.fetchone()[0]
-            cur.close()
-            return row_id
+            return row["id"]
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         row = {
             "id": _next_mock_id(),
@@ -130,51 +138,44 @@ def store_review_embedding(
         return row["id"]
 
 
-def retrieve_similar_reviews(
+async def retrieve_similar_reviews(
     embedding: List[float],
     repo: Optional[str] = None,
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
     """Return the top-k most similar past reviews by cosine distance."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
+            emb = str(embedding)
             if repo:
-                cur.execute(
+                rows = await conn.fetch(
                     """SELECT id, review_id, repo, pr_number, issue_titles, summary,
-                              1 - (embedding <=> %s::vector) AS similarity,
+                              1 - (embedding <=> $1::vector) AS similarity,
                               created_at
                        FROM review_embeddings
-                       WHERE repo = %s
-                       ORDER BY embedding <=> %s::vector
-                       LIMIT %s""",
-                    (str(embedding), repo, str(embedding), top_k),
+                       WHERE repo = $2
+                       ORDER BY embedding <=> $1::vector
+                       LIMIT $3""",
+                    emb, repo, top_k,
                 )
             else:
-                cur.execute(
+                rows = await conn.fetch(
                     """SELECT id, review_id, repo, pr_number, issue_titles, summary,
-                              1 - (embedding <=> %s::vector) AS similarity,
+                              1 - (embedding <=> $1::vector) AS similarity,
                               created_at
                        FROM review_embeddings
-                       ORDER BY embedding <=> %s::vector
-                       LIMIT %s""",
-                    (str(embedding), str(embedding), top_k),
+                       ORDER BY embedding <=> $1::vector
+                       LIMIT $2""",
+                    emb, top_k,
                 )
-            columns = [d[0] for d in cur.description]
-            results = [dict(zip(columns, row)) for row in cur.fetchall()]
-            cur.close()
-            # Serialise datetimes
+            results = [dict(r) for r in rows]
             for r in results:
-                if hasattr(r.get("created_at"), "isoformat"):
-                    r["created_at"] = r["created_at"].isoformat()
+                _iso(r)
                 r["similarity"] = float(r.get("similarity", 0))
             return results
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         # Mock: return all stored embeddings with fake similarity
         results = []
@@ -185,41 +186,34 @@ def retrieve_similar_reviews(
         return results[:top_k]
 
 
-def list_review_memories(repo: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+async def list_review_memories(repo: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
     """Return recent stored review memories for generated repo summaries."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
             if repo:
-                cur.execute(
+                rows = await conn.fetch(
                     """SELECT id, review_id, repo, pr_number, issue_titles, summary, created_at
                        FROM review_embeddings
-                       WHERE repo = %s
+                       WHERE repo = $1
                        ORDER BY created_at DESC
-                       LIMIT %s""",
-                    (repo, limit),
+                       LIMIT $2""",
+                    repo, limit,
                 )
             else:
-                cur.execute(
+                rows = await conn.fetch(
                     """SELECT id, review_id, repo, pr_number, issue_titles, summary, created_at
                        FROM review_embeddings
                        ORDER BY created_at DESC
-                       LIMIT %s""",
-                    (limit,),
+                       LIMIT $1""",
+                    limit,
                 )
-            columns = [d[0] for d in cur.description]
-            results = [dict(zip(columns, row)) for row in cur.fetchall()]
-            cur.close()
+            results = [dict(r) for r in rows]
             for r in results:
-                if hasattr(r.get("created_at"), "isoformat"):
-                    r["created_at"] = r["created_at"].isoformat()
+                _iso(r)
             return results
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
 
     results = []
     for row in sorted(_MOCK_REVIEW_EMBEDDINGS, key=lambda r: r.get("created_at", ""), reverse=True):
@@ -240,10 +234,10 @@ def _split_issue_titles(issue_titles: str) -> List[str]:
     return titles
 
 
-def get_onboarding_stats(repo: str) -> Dict[str, Any]:
+async def get_onboarding_stats(repo: str) -> Dict[str, Any]:
     """Generate onboarding statistics from stored review memories and feedback."""
-    review_memories = list_review_memories(repo=repo, limit=500)
-    feedback = get_feedback_stats(repo=repo)
+    review_memories = await list_review_memories(repo=repo, limit=500)
+    feedback = await get_feedback_stats(repo=repo)
     pattern_counts: Dict[str, int] = {}
     issue_total = 0
     pr_numbers = set()
@@ -266,7 +260,7 @@ def get_onboarding_stats(repo: str) -> Dict[str, Any]:
         "reviewCount": len(review_memories),
         "pullRequestCount": len([p for p in pr_numbers if p is not None]),
         "issueCount": issue_total,
-        "conventionRuleCount": len(list_convention_rules(repo=repo)),
+        "conventionRuleCount": len(await list_convention_rules(repo=repo)),
         "feedbackTotal": feedback["total"],
         "feedbackAccepted": feedback["positive"],
         "feedbackRejected": feedback["negative"],
@@ -279,34 +273,27 @@ def get_onboarding_stats(repo: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Convention Rules
 # ---------------------------------------------------------------------------
-def add_convention_rule(
+async def add_convention_rule(
     rule_text: str,
     embedding: List[float],
     repo: str = "*",
     org: str = "*",
 ) -> Dict[str, Any]:
     """Add a plain-English convention rule."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
-            cur.execute(
+            row = await conn.fetchrow(
                 """INSERT INTO convention_rules (repo, org, rule_text, embedding)
-                   VALUES (%s, %s, %s, %s::vector)
+                   VALUES ($1, $2, $3, $4::vector)
                    RETURNING id, repo, org, rule_text, enabled, created_at""",
-                (repo, org, rule_text, str(embedding)),
+                repo, org, rule_text, str(embedding),
             )
-            columns = [d[0] for d in cur.description]
-            row = dict(zip(columns, cur.fetchone()))
-            cur.close()
-            if hasattr(row.get("created_at"), "isoformat"):
-                row["created_at"] = row["created_at"].isoformat()
-            return row
+            result = dict(row)
+            _iso(result)
+            return result
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         row = {
             "id": _next_mock_id(),
@@ -320,39 +307,32 @@ def add_convention_rule(
         return row
 
 
-def list_convention_rules(repo: str = "*") -> List[Dict[str, Any]]:
+async def list_convention_rules(repo: str = "*") -> List[Dict[str, Any]]:
     """Return all convention rules, optionally filtered by repo."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
             if repo == "*":
-                cur.execute(
+                rows = await conn.fetch(
                     """SELECT id, repo, org, rule_text, enabled, created_at
                        FROM convention_rules
                        WHERE enabled = TRUE
                        ORDER BY created_at DESC"""
                 )
             else:
-                cur.execute(
+                rows = await conn.fetch(
                     """SELECT id, repo, org, rule_text, enabled, created_at
                        FROM convention_rules
-                       WHERE enabled = TRUE AND (repo = %s OR repo = '*')
+                       WHERE enabled = TRUE AND (repo = $1 OR repo = '*')
                        ORDER BY created_at DESC""",
-                    (repo,),
+                    repo,
                 )
-            columns = [d[0] for d in cur.description]
-            results = [dict(zip(columns, row)) for row in cur.fetchall()]
-            cur.close()
+            results = [dict(r) for r in rows]
             for r in results:
-                if hasattr(r.get("created_at"), "isoformat"):
-                    r["created_at"] = r["created_at"].isoformat()
+                _iso(r)
             return results
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         if repo == "*":
             return [r for r in _MOCK_CONVENTION_RULES if r.get("enabled", True)]
@@ -362,23 +342,17 @@ def list_convention_rules(repo: str = "*") -> List[Dict[str, Any]]:
         ]
 
 
-def delete_convention_rule(rule_id: int) -> bool:
+async def delete_convention_rule(rule_id: int) -> bool:
     """Soft-delete (disable) a convention rule."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE convention_rules SET enabled = FALSE WHERE id = %s", (rule_id,)
+            result = await conn.execute(
+                "UPDATE convention_rules SET enabled = FALSE WHERE id = $1", rule_id,
             )
-            affected = cur.rowcount
-            cur.close()
-            return affected > 0
+            return result.split()[-1] != "0"
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         for r in _MOCK_CONVENTION_RULES:
             if r["id"] == rule_id:
@@ -387,39 +361,34 @@ def delete_convention_rule(rule_id: int) -> bool:
         return False
 
 
-def find_relevant_rules(
+async def find_relevant_rules(
     embedding: List[float],
     repo: str = "*",
     threshold: float = 0.65,
     top_k: int = 10,
 ) -> List[Dict[str, Any]]:
     """Find convention rules that are semantically close to the given embedding."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
-            cur.execute(
+            emb = str(embedding)
+            rows = await conn.fetch(
                 """SELECT id, repo, org, rule_text,
-                          1 - (embedding <=> %s::vector) AS similarity
+                          1 - (embedding <=> $1::vector) AS similarity
                    FROM convention_rules
                    WHERE enabled = TRUE
-                     AND (repo = %s OR repo = '*')
-                     AND 1 - (embedding <=> %s::vector) >= %s
-                   ORDER BY embedding <=> %s::vector
-                   LIMIT %s""",
-                (str(embedding), repo, str(embedding), threshold, str(embedding), top_k),
+                     AND (repo = $2 OR repo = '*')
+                     AND 1 - (embedding <=> $1::vector) >= $3
+                   ORDER BY embedding <=> $1::vector
+                   LIMIT $4""",
+                emb, repo, threshold, top_k,
             )
-            columns = [d[0] for d in cur.description]
-            results = [dict(zip(columns, row)) for row in cur.fetchall()]
-            cur.close()
+            results = [dict(r) for r in rows]
             for r in results:
                 r["similarity"] = float(r.get("similarity", 0))
             return results
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         return [
             {**r, "similarity": 0.70}
@@ -431,34 +400,27 @@ def find_relevant_rules(
 # ---------------------------------------------------------------------------
 # Feedback
 # ---------------------------------------------------------------------------
-def store_feedback(
+async def store_feedback(
     review_id: int,
     issue_index: int,
     thumbs_up: bool,
     comment: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Record thumbs-up/down feedback for a specific issue in a review."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
-            cur.execute(
+            row = await conn.fetchrow(
                 """INSERT INTO review_feedback (review_id, issue_index, thumbs_up, comment)
-                   VALUES (%s, %s, %s, %s)
+                   VALUES ($1, $2, $3, $4)
                    RETURNING id, review_id, issue_index, thumbs_up, comment, created_at""",
-                (review_id, issue_index, thumbs_up, comment),
+                review_id, issue_index, thumbs_up, comment,
             )
-            columns = [d[0] for d in cur.description]
-            row = dict(zip(columns, cur.fetchone()))
-            cur.close()
-            if hasattr(row.get("created_at"), "isoformat"):
-                row["created_at"] = row["created_at"].isoformat()
-            return row
+            result = dict(row)
+            _iso(result)
+            return result
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         row = {
             "id": _next_mock_id(),
@@ -472,65 +434,55 @@ def store_feedback(
         return row
 
 
-def get_feedback_for_review(review_id: int) -> List[Dict[str, Any]]:
+async def get_feedback_for_review(review_id: int) -> List[Dict[str, Any]]:
     """Return all feedback entries for a given review."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
-            cur.execute(
+            rows = await conn.fetch(
                 """SELECT id, review_id, issue_index, thumbs_up, comment, created_at
                    FROM review_feedback
-                   WHERE review_id = %s
+                   WHERE review_id = $1
                    ORDER BY issue_index""",
-                (review_id,),
+                review_id,
             )
-            columns = [d[0] for d in cur.description]
-            results = [dict(zip(columns, row)) for row in cur.fetchall()]
-            cur.close()
+            results = [dict(r) for r in rows]
             for r in results:
-                if hasattr(r.get("created_at"), "isoformat"):
-                    r["created_at"] = r["created_at"].isoformat()
+                _iso(r)
             return results
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         return [f for f in _MOCK_FEEDBACK if f["review_id"] == review_id]
 
 
-def get_feedback_stats(repo: Optional[str] = None) -> Dict[str, Any]:
+async def get_feedback_stats(repo: Optional[str] = None) -> Dict[str, Any]:
     """Aggregate feedback stats: total, positive, negative, suppression rate."""
-    conn = _get_conn()
+    conn = await _get_conn()
     if conn:
         try:
-            cur = conn.cursor()
             if repo:
-                cur.execute(
+                row = await conn.fetchrow(
                     """SELECT
                          COUNT(*) AS total,
                          SUM(CASE WHEN f.thumbs_up THEN 1 ELSE 0 END) AS positive,
                          SUM(CASE WHEN NOT f.thumbs_up THEN 1 ELSE 0 END) AS negative
                        FROM review_feedback f
                        JOIN review_embeddings re ON re.review_id = f.review_id
-                       WHERE re.repo = %s""",
-                    (repo,),
+                       WHERE re.repo = $1""",
+                    repo,
                 )
             else:
-                cur.execute(
+                row = await conn.fetchrow(
                     """SELECT
                          COUNT(*) AS total,
                          SUM(CASE WHEN thumbs_up THEN 1 ELSE 0 END) AS positive,
                          SUM(CASE WHEN NOT thumbs_up THEN 1 ELSE 0 END) AS negative
                        FROM review_feedback"""
                 )
-            row = cur.fetchone()
-            cur.close()
-            total = row[0] or 0
-            positive = row[1] or 0
-            negative = row[2] or 0
+            total = row["total"] or 0
+            positive = row["positive"] or 0
+            negative = row["negative"] or 0
             return {
                 "total": total,
                 "positive": positive,
@@ -538,10 +490,7 @@ def get_feedback_stats(repo: Optional[str] = None) -> Dict[str, Any]:
                 "suppressionRate": round(negative / total, 2) if total else 0.0,
             }
         finally:
-            try:
-                release_conn(conn)
-            except Exception:
-                pass
+            await release_conn(conn)
     else:
         feedback_rows = _MOCK_FEEDBACK
         if repo:
@@ -561,11 +510,11 @@ def get_feedback_stats(repo: Optional[str] = None) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Onboarding Guide Generator
 # ---------------------------------------------------------------------------
-def generate_onboarding_guide(repo: str) -> Dict[str, Any]:
+async def generate_onboarding_guide(repo: str) -> Dict[str, Any]:
     """Build an onboarding guide from stored scan data, rules, and feedback."""
-    review_memories = list_review_memories(repo=repo, limit=50)
-    rules = list_convention_rules(repo=repo)
-    stats = get_onboarding_stats(repo=repo)
+    review_memories = await list_review_memories(repo=repo, limit=50)
+    rules = await list_convention_rules(repo=repo)
+    stats = await get_onboarding_stats(repo=repo)
 
     recurring_patterns = [
         f"{item['title']} ({item['count']} occurrence{'s' if item['count'] != 1 else ''})"

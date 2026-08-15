@@ -16,156 +16,132 @@ def _slugify(title: str) -> str:
     return slug[:120]
 
 
-
-
-def list_posts(published_only: bool = True) -> List[Dict[str, Any]]:
-    conn = get_conn()
+async def list_posts(published_only: bool = True) -> List[Dict[str, Any]]:
+    conn = await get_conn()
     if not conn:
         return []
     try:
-        with conn.cursor() as cur:
-            if published_only:
-                cur.execute(
-                    """
-                    SELECT p.*, u.username as author_username, u.avatar_url as author_avatar
-                    FROM blog_posts p
-                    LEFT JOIN users u ON u.id = p.author_id
-                    WHERE p.published = TRUE
-                    ORDER BY p.published_at DESC
-                    """
-                )
-            else:
-                cur.execute(
-                    """
-                    SELECT p.*, u.username as author_username, u.avatar_url as author_avatar
-                    FROM blog_posts p
-                    LEFT JOIN users u ON u.id = p.author_id
-                    ORDER BY p.created_at DESC
-                    """
-                )
-            rows = cur.fetchall()
-            return [_row_to_dict(cur, r) for r in rows]
+        if published_only:
+            rows = await conn.fetch(
+                """
+                SELECT p.*, u.username as author_username, u.avatar_url as author_avatar
+                FROM blog_posts p
+                LEFT JOIN users u ON u.id = p.author_id
+                WHERE p.published = TRUE
+                ORDER BY p.published_at DESC
+                """
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT p.*, u.username as author_username, u.avatar_url as author_avatar
+                FROM blog_posts p
+                LEFT JOIN users u ON u.id = p.author_id
+                ORDER BY p.created_at DESC
+                """
+            )
+        return [_row_to_dict(r) for r in rows]
     except Exception:
         logger.exception("[blog_service] list_posts failed")
         return []
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def get_post(slug: str, published_only: bool = True) -> Optional[Dict[str, Any]]:
-    conn = get_conn()
+async def get_post(slug: str, published_only: bool = True) -> Optional[Dict[str, Any]]:
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            query = """
-                SELECT p.*, u.username as author_username, u.avatar_url as author_avatar
-                FROM blog_posts p
-                LEFT JOIN users u ON u.id = p.author_id
-                WHERE p.slug = %s
-            """
-            params = [slug]
-            if published_only:
-                query += " AND p.published = TRUE"
-            cur.execute(query, params)
-            row = cur.fetchone()
-            return _row_to_dict(cur, row) if row else None
+        query = """
+            SELECT p.*, u.username as author_username, u.avatar_url as author_avatar
+            FROM blog_posts p
+            LEFT JOIN users u ON u.id = p.author_id
+            WHERE p.slug = $1
+        """
+        if published_only:
+            query += " AND p.published = TRUE"
+        row = await conn.fetchrow(query, slug)
+        return _row_to_dict(row) if row else None
     except Exception:
         logger.exception("[blog_service] get_post failed for slug %s", slug)
         return None
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def create_post(author_id: str, title: str, summary: Optional[str],
-                content: str, category: str, featured_image: Optional[str],
-                published: bool) -> Optional[Dict[str, Any]]:
+async def create_post(author_id: str, title: str, summary: Optional[str],
+                       content: str, category: str, featured_image: Optional[str],
+                       published: bool) -> Optional[Dict[str, Any]]:
     slug = _slugify(title)
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO blog_posts
-                    (author_id, slug, title, summary, content, category, featured_image,
-                     published, published_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
-                        CASE WHEN %s THEN now() ELSE NULL END)
-                RETURNING *
-                """,
-                (author_id, slug, title, summary, content, category,
-                 featured_image, published, published),
-            )
-            conn.commit()
-            row = cur.fetchone()
-            return _row_to_dict(cur, row) if row else None
+        row = await conn.fetchrow(
+            """
+            INSERT INTO blog_posts
+                (author_id, slug, title, summary, content, category, featured_image,
+                 published, published_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+                    CASE WHEN $8 THEN now() ELSE NULL END)
+            RETURNING *
+            """,
+            author_id, slug, title, summary, content, category,
+            featured_image, published,
+        )
+        return _row_to_dict(row) if row else None
     except Exception:
         logger.exception("[blog_service] create_post failed")
-        try:
-            conn.rollback()
-        except Exception:
-            pass
         return None
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def update_post(slug: str, **fields) -> Optional[Dict[str, Any]]:
+async def update_post(slug: str, **fields) -> Optional[Dict[str, Any]]:
     allowed = {"title", "summary", "content", "category", "featured_image", "published"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
-        return get_post(slug, published_only=False)
+        return await get_post(slug, published_only=False)
 
-    conn = get_conn()
+    conn = await get_conn()
     if not conn:
         return None
     try:
-        with conn.cursor() as cur:
-            set_clauses = ", ".join(f"{k} = %s" for k in updates)
-            set_clauses += ", updated_at = now()"
-            # Auto-set published_at when publishing for the first time
-            if updates.get("published"):
-                set_clauses += ", published_at = COALESCE(published_at, now())"
-            values = list(updates.values()) + [slug]
-            cur.execute(
-                f"""
-                UPDATE blog_posts SET {set_clauses}
-                WHERE slug = %s
-                RETURNING *
-                """,
-                values,
-            )
-            conn.commit()
-            row = cur.fetchone()
-            return _row_to_dict(cur, row) if row else None
+        values = list(updates.values())
+        set_clauses = ", ".join(f"{k} = ${i+1}" for i, k in enumerate(updates))
+        set_clauses += ", updated_at = now()"
+        # Auto-set published_at when publishing for the first time
+        if updates.get("published"):
+            set_clauses += ", published_at = COALESCE(published_at, now())"
+        values.append(slug)
+        slug_idx = len(values)
+
+        row = await conn.fetchrow(
+            f"""
+            UPDATE blog_posts SET {set_clauses}
+            WHERE slug = ${slug_idx}
+            RETURNING *
+            """,
+            *values,
+        )
+        return _row_to_dict(row) if row else None
     except Exception:
         logger.exception("[blog_service] update_post failed for slug %s", slug)
-        try:
-            conn.rollback()
-        except Exception:
-            pass
         return None
     finally:
-        release_conn(conn)
+        await release_conn(conn)
 
 
-def delete_post(slug: str) -> bool:
-    conn = get_conn()
+async def delete_post(slug: str) -> bool:
+    conn = await get_conn()
     if not conn:
         return False
     try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM blog_posts WHERE slug = %s", (slug,))
-            conn.commit()
-            return cur.rowcount > 0
+        result = await conn.execute("DELETE FROM blog_posts WHERE slug = $1", slug)
+        return result.split()[-1] != "0"
     except Exception:
         logger.exception("[blog_service] delete_post failed for slug %s", slug)
-        try:
-            conn.rollback()
-        except Exception:
-            pass
         return False
     finally:
-        release_conn(conn)
+        await release_conn(conn)
