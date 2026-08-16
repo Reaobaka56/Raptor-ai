@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Calendar, User, ArrowRight, Plus, Edit2, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar, User, ArrowRight, Plus, Edit2, Trash2, Eye, EyeOff, Loader2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
 import { blogApi, userApi, type BlogPost } from '../api';
@@ -10,10 +10,11 @@ function formatDate(iso: string | null) {
 }
 
 // ── Admin: create/edit form ────────────────────────────────────────────────────
-function PostForm({ post, onSave, onCancel }: {
+function PostForm({ post, onSave, onCancel, error }: {
   post?: BlogPost | null;
-  onSave: (data: Partial<BlogPost>) => Promise<void>;
+  onSave: (data: Partial<BlogPost>) => Promise<boolean>;
   onCancel: () => void;
+  error?: string | null;
 }) {
   const [title, setTitle] = useState(post?.title ?? '');
   const [summary, setSummary] = useState(post?.summary ?? '');
@@ -36,6 +37,11 @@ function PostForm({ post, onSave, onCancel }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0d0d14] p-6 space-y-4 overflow-y-auto max-h-[90vh]">
         <h2 className="text-lg font-bold text-white">{post ? 'Edit Post' : 'New Post'}</h2>
+        {error && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs text-red-300">
+            {error}
+          </div>
+        )}
         <input value={title} onChange={e => setTitle(e.target.value)}
           placeholder="Title"
           className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30" />
@@ -73,18 +79,41 @@ function PostForm({ post, onSave, onCancel }: {
   );
 }
 
+/** Turns an axios error into a message that actually explains what to do next. */
+function describeApiError(err: unknown): string {
+  const anyErr = err as { response?: { status?: number; data?: { detail?: string } }; message?: string };
+  const status = anyErr?.response?.status;
+  const detail = anyErr?.response?.data?.detail;
+  if (status === 401) return 'Your session has expired. Sign out and back in, then try again.';
+  if (status === 403) return "This account doesn't have admin access to post.";
+  if (status === 503) return 'Auth service is temporarily unavailable (the server may be missing a database migration). Try again shortly.';
+  if (detail) return detail;
+  return anyErr?.message || 'Something went wrong. Please try again.';
+}
+
 export default function Blog() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editPost, setEditPost] = useState<BlogPost | null | undefined>(undefined); // undefined = closed
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [adminCheckFailed, setAdminCheckFailed] = useState(false);
+  const [actionBanner, setActionBanner] = useState<string | null>(null);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
     void loadPosts();
     if (token) {
-      userApi.isAdmin().then(r => setIsAdmin(r.data.isAdmin)).catch(() => {});
+      userApi.isAdmin()
+        .then(r => setIsAdmin(r.data.isAdmin))
+        .catch(err => {
+          // Previously swallowed silently — which meant a broken auth check
+          // looked identical to "not an admin" and the New Post button just
+          // never appeared, with no clue why.
+          console.error('[blog] admin check failed', err);
+          setAdminCheckFailed(true);
+        });
     }
   }, [token]);
 
@@ -100,26 +129,41 @@ export default function Blog() {
     }
   };
 
-  const handleSave = async (data: Partial<BlogPost>) => {
-    if (editPost) {
-      await blogApi.update(editPost.slug, data);
-    } else {
-      await blogApi.create(data);
+  const handleSave = async (data: Partial<BlogPost>): Promise<boolean> => {
+    setFormError(null);
+    try {
+      if (editPost) {
+        await blogApi.update(editPost.slug, data);
+      } else {
+        await blogApi.create(data);
+      }
+      setEditPost(undefined);
+      await loadPosts();
+      return true;
+    } catch (err) {
+      setFormError(describeApiError(err));
+      return false;
     }
-    setEditPost(undefined);
-    await loadPosts();
   };
 
   const handleDelete = async (slug: string) => {
     if (!confirm('Delete this post? This cannot be undone.')) return;
-    await blogApi.delete(slug);
-    setSelectedPost(null);
-    await loadPosts();
+    try {
+      await blogApi.delete(slug);
+      setSelectedPost(null);
+      await loadPosts();
+    } catch (err) {
+      setActionBanner(describeApiError(err));
+    }
   };
 
   const handleTogglePublish = async (post: BlogPost) => {
-    await blogApi.update(post.slug, { published: !post.published });
-    await loadPosts();
+    try {
+      await blogApi.update(post.slug, { published: !post.published });
+      await loadPosts();
+    } catch (err) {
+      setActionBanner(describeApiError(err));
+    }
   };
 
   // ── Single post view ──────────────────────────────────────────────────────
@@ -176,7 +220,8 @@ export default function Blog() {
         <PostForm
           post={editPost}
           onSave={handleSave}
-          onCancel={() => setEditPost(undefined)}
+          onCancel={() => { setEditPost(undefined); setFormError(null); }}
+          error={formError}
         />
       )}
 
@@ -190,7 +235,7 @@ export default function Blog() {
         </div>
         <div className="flex items-center gap-3">
           {isAdmin && (
-            <button onClick={() => setEditPost(null)}
+            <button onClick={() => { setFormError(null); setEditPost(null); }}
               className="flex items-center gap-1.5 rounded border border-white/20 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white hover:text-black transition">
               <Plus className="h-3.5 w-3.5" /> New Post
             </button>
@@ -200,6 +245,19 @@ export default function Blog() {
           </Link>
         </div>
       </nav>
+
+      {(adminCheckFailed || actionBanner) && (
+        <div className="max-w-4xl mx-auto px-6 pt-6">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+            <span>
+              {actionBanner ?? "Couldn't verify admin access — if you expect to see posting controls, your session may have expired. Try signing out and back in."}
+            </span>
+            <button onClick={() => { setAdminCheckFailed(false); setActionBanner(null); }} className="opacity-70 hover:opacity-100 flex-none">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-4xl mx-auto px-6 pt-16">
         <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">

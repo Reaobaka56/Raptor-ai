@@ -606,10 +606,6 @@
 }
 .bg-logo-wrap {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  width: min(70vw, 900px);
-  height: min(70vw, 900px);
   pointer-events: none;
   z-index: 0;
   transform: translate(-50%, -50%);
@@ -620,6 +616,73 @@
   height: 100%;
   color: #fff;
   animation: logoPulse 10s ease-in-out infinite;
+}
+
+/* Scattered floating dino marks — several instances at different
+   sizes/positions/speeds so the watermark reads as a field rather
+   than a single centered logo. */
+.bg-logo-wrap-1 { top: 12%;  left: 6%;   width: min(34vw, 380px); height: min(34vw, 380px); animation-duration: 26s; }
+.bg-logo-wrap-2 { top: 58%;  left: 92%;  width: min(28vw, 320px); height: min(28vw, 320px); animation-duration: 20s; animation-delay: -6s; }
+.bg-logo-wrap-3 { top: 92%;  left: 22%;  width: min(24vw, 280px); height: min(24vw, 280px); animation-duration: 30s; animation-delay: -14s; }
+.bg-logo-wrap-4 { top: 34%;  left: 50%;  width: min(18vw, 200px); height: min(18vw, 200px); animation-duration: 22s; animation-delay: -4s; }
+.bg-logo-wrap-5 { top: 78%;  left: 78%;  width: min(15vw, 160px); height: min(15vw, 160px); animation-duration: 18s; animation-delay: -10s; }
+.bg-logo-wrap-6 { top: 4%;   left: 78%;  width: min(13vw, 140px); height: min(13vw, 140px); animation-duration: 24s; animation-delay: -2s; }
+.bg-logo-wrap-2 .bg-logo-mark,
+.bg-logo-wrap-4 .bg-logo-mark { animation-delay: -3s; }
+.bg-logo-wrap-3 .bg-logo-mark,
+.bg-logo-wrap-5 .bg-logo-mark { animation-delay: -6s; }
+.bg-logo-wrap-6 .bg-logo-mark { animation-delay: -1s; }
+
+/* ─────────────────────────────────────────────
+   SCROLL-TRIGGERED REVEAL
+   ───────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes floatBadgeIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.mockup-badge {
+  opacity: 0;
+}
+.mockup-badge.is-visible {
+  animation: floatBadgeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─────────────────────────────────────────────
+   FOOTER "RAPTOR" WATERMARK
+   ───────────────────────────────────────────── */
+.footer-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.footer-watermark span {
+  font-size: clamp(5rem, 18vw, 14rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 
 /* ─────────────────────────────────────────────
