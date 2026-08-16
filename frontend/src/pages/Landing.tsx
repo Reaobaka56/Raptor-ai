@@ -60,7 +60,7 @@ const faqs = [
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-b border-white/8">
+    <div className="border-b border-white/5">
       <button onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold text-white hover:text-gray-300 transition-colors">
         {q}
@@ -94,20 +94,20 @@ function ProductMockup() {
   return (
     <div className="relative mx-auto w-full max-w-4xl select-none">
       <div className="absolute -inset-12 bg-white/3 blur-3xl rounded-full" />
-      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14] shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
+      <div className="relative overflow-hidden rounded-2xl border border-white/6 bg-[#0d0d14] shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
         {/* Title bar */}
-        <div className="flex items-center gap-2 border-b border-white/8 bg-[#08080f] px-4 py-3">
+        <div className="flex items-center gap-2 border-b border-white/5 bg-[#08080f] px-4 py-3">
           <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
           <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
           <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-          <div className="mx-auto flex items-center gap-2 rounded border border-white/8 bg-white/4 px-3 py-1 text-[11px] text-gray-500 font-mono">
+          <div className="mx-auto flex items-center gap-2 rounded border border-white/5 bg-white/4 px-3 py-1 text-[11px] text-gray-500 font-mono">
             <GitPullRequest className="h-3 w-3 text-white/30" />
             github.com/acme/api · PR #142
           </div>
           <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-400 border border-green-500/20">18s</span>
         </div>
         <div className="grid grid-cols-3 min-h-[340px]">
-          <div className="border-r border-white/8 bg-[#06060c] p-4 space-y-1">
+          <div className="border-r border-white/5 bg-[#06060c] p-4 space-y-1">
             <p className="text-[9px] font-mono uppercase tracking-widest text-gray-700 mb-3">Open PRs</p>
             {[
               { repo: 'api-gateway', pr: '#142', dot: 'bg-red-400', label: '2 critical', active: true },
@@ -168,7 +168,7 @@ function ProductMockup() {
       {/* Fade-in badge, bottom-left corner of the card */}
       <div
         ref={badgeRef}
-        className={`mockup-badge ${badgeVisible ? 'is-visible' : ''} absolute -bottom-5 -left-5 z-10 hidden sm:flex items-center gap-2.5 rounded-xl border border-white/10 bg-[#0d0d14]/95 backdrop-blur px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.6)]`}
+        className={`mockup-badge ${badgeVisible ? 'is-visible' : ''} absolute -bottom-5 -left-5 z-10 hidden sm:flex items-center gap-2.5 rounded-xl border border-white/6 bg-[#0d0d14]/95 backdrop-blur px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.6)]`}
       >
         <span className="relative flex h-2 w-2 flex-none">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
@@ -198,7 +198,7 @@ function PublicStats() {
   ]
   return (
     <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center border-t border-b border-white/8 py-16">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center border-t border-b border-white/5 py-16">
         {items.map(({ value, label }) => (
           <div key={label}>
             <p className="text-4xl font-bold text-white">{value}</p>
@@ -327,12 +327,12 @@ export default function Landing() {
         </div>
 
         {/* Mobile */}
-        <button className="md:hidden rounded border border-white/10 p-2 text-gray-400" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+        <button className="md:hidden rounded border border-white/6 p-2 text-gray-400" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 bg-black flex flex-col px-6 pt-20 pb-8">
-            <button className="absolute top-4 right-4 rounded border border-white/10 p-2 text-gray-400" onClick={() => setMobileMenuOpen(false)}>
+            <button className="absolute top-4 right-4 rounded border border-white/6 p-2 text-gray-400" onClick={() => setMobileMenuOpen(false)}>
               <X className="h-5 w-5" />
             </button>
             <nav className="space-y-1 flex-1">
@@ -340,12 +340,12 @@ export default function Landing() {
                 'key' in item ? (
                   <button key={item.key}
                     onClick={() => { setMobileMenuOpen(false); setActiveCard(item.key as 'docs' | 'features'); }}
-                    className="block w-full text-left py-3 text-lg font-semibold text-gray-300 border-b border-white/8 hover:text-white transition">
+                    className="block w-full text-left py-3 text-lg font-semibold text-gray-300 border-b border-white/5 hover:text-white transition">
                     {item.label}
                   </button>
                 ) : (
                   <Link key={item.label} to={item.to!} onClick={() => setMobileMenuOpen(false)}
-                    className="block py-3 text-lg font-semibold text-gray-300 border-b border-white/8 hover:text-white transition">
+                    className="block py-3 text-lg font-semibold text-gray-300 border-b border-white/5 hover:text-white transition">
                     {item.label}
                   </Link>
                 )
@@ -420,15 +420,15 @@ export default function Landing() {
           <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">What Raptor catches</p>
           <h2 className="text-3xl md:text-4xl font-bold mb-16">Every category of issue. Automatically.</h2>
         </Reveal>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 items-stretch">
           {[
             { icon: Shield, title: 'Security vulnerabilities', desc: 'SQL injections, XSS, secrets in code, broken authentication, missing rate limits — caught before they reach production.' },
             { icon: Zap, title: 'Performance regressions', desc: 'N+1 queries, missing indexes, unoptimised loops, memory leaks — identified with specific line numbers and fixes.' },
             { icon: Users, title: 'Team convention violations', desc: 'Raptor learns your team\'s specific patterns after 10 PRs and enforces them automatically on every new PR.' },
             { icon: GitPullRequest, title: 'Code quality issues', desc: 'Dead code, overly complex functions, missing error handling, inconsistent naming — flagged with one-click fixes.' },
           ].map(({ icon: Icon, title, desc }, i) => (
-            <Reveal key={title} delay={i * 80}>
-              <div className="rounded-2xl border border-white/8 bg-white/2 p-6 space-y-3 hover:border-white/15 transition-colors">
+            <Reveal key={title} delay={i * 80} className="h-full">
+              <div className="h-full flex flex-col rounded-2xl border border-white/5 bg-white/2 p-6 space-y-3 hover:border-white/10 transition-colors">
                 <Icon className="h-5 w-5 text-white" />
                 <h3 className="text-sm font-bold text-white">{title}</h3>
                 <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
@@ -448,9 +448,9 @@ export default function Landing() {
           </p>
         </Reveal>
 
-        <Reveal className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-16">
+        <Reveal className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-16 items-stretch">
           {providers.map((p) => (
-            <ProviderLogo key={p.name} {...p} />
+            <ProviderLogo key={p.name} {...p} className="h-full" />
           ))}
         </Reveal>
 
@@ -482,12 +482,12 @@ export default function Landing() {
           <Reveal delay={120}>
             <div className="relative mx-auto w-full max-w-md select-none">
               <div className="absolute -inset-8 bg-white/3 blur-3xl rounded-full" />
-              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14] shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
-                <div className="flex items-center gap-2 border-b border-white/8 bg-[#08080f] px-4 py-3">
+              <div className="relative overflow-hidden rounded-2xl border border-white/6 bg-[#0d0d14] shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
+                <div className="flex items-center gap-2 border-b border-white/5 bg-[#08080f] px-4 py-3">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
                   <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
                   <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-                  <div className="mx-auto flex items-center gap-2 rounded border border-white/8 bg-white/4 px-3 py-1 text-[11px] text-gray-500 font-mono">
+                  <div className="mx-auto flex items-center gap-2 rounded border border-white/5 bg-white/4 px-3 py-1 text-[11px] text-gray-500 font-mono">
                     <Plug className="h-3 w-3 text-white/30" />
                     mcp.raptor-ai.dev
                   </div>
@@ -506,7 +506,7 @@ export default function Landing() {
                   <p className="text-[9px] font-mono uppercase tracking-widest text-gray-700 pt-1">Works with</p>
                   <div className="flex flex-wrap gap-1.5">
                     {mcpClients.map((c) => (
-                      <span key={c} className="rounded-full border border-white/8 bg-white/4 px-2.5 py-1 text-[10px] text-gray-400">{c}</span>
+                      <span key={c} className="rounded-full border border-white/5 bg-white/4 px-2.5 py-1 text-[10px] text-gray-400">{c}</span>
                     ))}
                   </div>
                 </div>
@@ -519,36 +519,12 @@ export default function Landing() {
       {/* ── Stats — real data from API ── */}
       <PublicStats />
 
-      {/* ── Social proof ── */}
-      <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
-        <Reveal>
-          <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">What teams say</p>
-          <h2 className="text-3xl md:text-4xl font-bold mb-12">Teams ship faster and safer.</h2>
-        </Reveal>
-        <div className="grid gap-4 md:grid-cols-2">
-          {[
-            { quote: 'Raptor caught a SQL injection in our auth service that had been in production for 6 months. The fix PR was ready before I finished reading the alert.', name: 'Engineering Lead', company: 'FinTech startup, Cape Town' },
-            { quote: 'We went from 45-minute PR reviews to 3 minutes. The team now ships twice as fast and we have fewer bugs in production.', name: 'CTO', company: 'SaaS company, Johannesburg' },
-          ].map(({ quote, name, company }, i) => (
-            <Reveal key={name} delay={i * 100}>
-              <div className="rounded-2xl border border-white/8 bg-white/2 p-8 space-y-6">
-                <p className="text-sm text-gray-300 leading-relaxed">"{quote}"</p>
-                <div>
-                  <p className="text-xs font-bold text-white">{name}</p>
-                  <p className="text-xs text-gray-600 mt-0.5">{company}</p>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
       {/* ── FAQ ── */}
       <section className="px-4 md:px-12 pb-32 max-w-2xl mx-auto">
         <Reveal>
           <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">FAQ</p>
           <h2 className="text-3xl md:text-4xl font-bold mb-12">Frequently asked questions.</h2>
-          <div className="border-t border-white/8">
+          <div className="border-t border-white/5">
             {faqs.map(faq => <FAQItem key={faq.q} {...faq} />)}
           </div>
         </Reveal>
@@ -573,7 +549,7 @@ export default function Landing() {
       </Reveal>
 
       {/* ── Footer ── */}
-      <footer className="relative border-t border-white/8 px-6 md:px-12 py-12 overflow-hidden">
+      <footer className="relative border-t border-white/5 px-6 md:px-12 py-12 overflow-hidden">
         <div className="footer-watermark" aria-hidden="true"><span>RAPTOR</span></div>
         <div className="relative z-10 max-w-5xl mx-auto flex flex-col md:flex-row items-start justify-between gap-8">
           <div className="space-y-3">
