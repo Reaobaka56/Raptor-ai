@@ -72,7 +72,7 @@ function Glyph({ type, className }: { type: ProviderInfo['glyph']; className?: s
 
 export function ProviderLogo({ name, glyph, className = '' }: ProviderInfo & { className?: string }) {
   return (
-    <div className={`flex items-center gap-2.5 rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 text-gray-400 hover:text-white hover:border-white/20 hover:bg-white/[0.06] transition-colors ${className}`}>
+    <div className={`flex items-center gap-2.5 rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-gray-400 hover:text-white hover:border-white/10 hover:bg-white/[0.05] transition-colors ${className}`}>
       <Glyph type={glyph} className="h-4 w-4 flex-none" />
       <span className="text-xs font-semibold whitespace-nowrap">{name}</span>
     </div>
