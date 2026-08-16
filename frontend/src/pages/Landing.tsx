@@ -1,10 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Github, Mail, MapPin, Menu, Phone, X, GitPullRequest, Shield, Zap, Users, ChevronDown } from 'lucide-react';
+import { Github, Mail, MapPin, Menu, Phone, X, GitPullRequest, Shield, Zap, Users, ChevronDown, KeyRound, Building2, Plug } from 'lucide-react';
 import { TRexIcon } from '../components/TRexIcon';
 import { getGithubRedirectUri } from '../api';
 import SignInModal from '../components/SignInModal';
 import NavCard from '../components/NavCard';
+import { ProviderLogo, mcpClients, providers } from '../components/ProviderLogos';
+
+/** Fades + slides children in the first time they scroll into view. */
+function Reveal({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -60px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={`reveal ${visible ? 'is-visible' : ''} ${className}`} style={{ transitionDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  );
+}
 
 const navItems = [
   { label: 'Features', key: 'features' },
@@ -43,6 +72,25 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 }
 
 function ProductMockup() {
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const [badgeVisible, setBadgeVisible] = useState(false);
+
+  useEffect(() => {
+    const el = badgeRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setBadgeVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.4 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="relative mx-auto w-full max-w-4xl select-none">
       <div className="absolute -inset-12 bg-white/3 blur-3xl rounded-full" />
@@ -114,6 +162,21 @@ function ProductMockup() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Fade-in badge, bottom-left corner of the card */}
+      <div
+        ref={badgeRef}
+        className={`mockup-badge ${badgeVisible ? 'is-visible' : ''} absolute -bottom-5 -left-5 z-10 hidden sm:flex items-center gap-2.5 rounded-xl border border-white/10 bg-[#0d0d14]/95 backdrop-blur px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.6)]`}
+      >
+        <span className="relative flex h-2 w-2 flex-none">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-400" />
+        </span>
+        <div>
+          <p className="text-xs font-bold text-white leading-tight">Reviewing live</p>
+          <p className="text-[10px] text-gray-500 leading-tight">Avg. 18s per PR</p>
         </div>
       </div>
     </div>
@@ -192,10 +255,12 @@ export default function Landing() {
       <div className="bg-orb bg-orb-2" aria-hidden="true" />
       <div className="bg-orb bg-orb-3" aria-hidden="true" />
 
-      {/* Animated background logo watermark */}
-      <div className="bg-logo-wrap" aria-hidden="true">
-        <TRexIcon className="bg-logo-mark" />
-      </div>
+      {/* Animated background logo watermark — scattered dino marks */}
+      {[1, 2, 3, 4, 5, 6].map((n) => (
+        <div key={n} className={`bg-logo-wrap bg-logo-wrap-${n}`} aria-hidden="true">
+          <TRexIcon className="bg-logo-mark" />
+        </div>
+      ))}
 
       {/* Session expired banner */}
       {sessionExpired && (
@@ -317,49 +382,137 @@ export default function Landing() {
 
       {/* ── Product mockup ── */}
       <section className="px-4 md:px-12 pb-32">
-        <ProductMockup />
+        <Reveal>
+          <ProductMockup />
+        </Reveal>
       </section>
 
       {/* ── How it works ── */}
       <section className="px-4 md:px-12 pb-32 max-w-5xl mx-auto">
-        <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">How Raptor works</p>
-        <h2 className="text-3xl md:text-4xl font-bold mb-16">From PR open to reviewed in seconds.</h2>
+        <Reveal>
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">How Raptor works</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-16">From PR open to reviewed in seconds.</h2>
+        </Reveal>
         <div className="grid gap-12 md:grid-cols-3">
           {[
             { n: '01', icon: Github, title: 'Connect GitHub in 60 seconds', desc: 'Install Raptor on any repo. No config files, no YAML, no infra. It works the moment it\'s installed.' },
             { n: '02', icon: Zap, title: 'PR opens → review starts', desc: 'The moment a PR is opened, Raptor analyses the diff for security vulnerabilities, performance regressions, and convention violations.' },
             { n: '03', icon: GitPullRequest, title: 'Fix PR ready to merge', desc: 'Every issue comes with an inline GitHub comment explaining the problem and a fix PR that\'s ready to merge in one click.' },
-          ].map(({ n, icon: Icon, title, desc }) => (
-            <div key={n} className="space-y-4">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-gray-600">{n}</span>
-                <div className="h-px flex-1 bg-white/8" />
+          ].map(({ n, icon: Icon, title, desc }, i) => (
+            <Reveal key={n} delay={i * 100}>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-gray-600">{n}</span>
+                  <div className="h-px flex-1 bg-white/8" />
+                </div>
+                <Icon className="h-6 w-6 text-white" />
+                <h3 className="text-base font-bold text-white">{title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
               </div>
-              <Icon className="h-6 w-6 text-white" />
-              <h3 className="text-base font-bold text-white">{title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── Features ── */}
       <section className="px-4 md:px-12 pb-32 max-w-5xl mx-auto">
-        <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">What Raptor catches</p>
-        <h2 className="text-3xl md:text-4xl font-bold mb-16">Every category of issue. Automatically.</h2>
+        <Reveal>
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">What Raptor catches</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-16">Every category of issue. Automatically.</h2>
+        </Reveal>
         <div className="grid gap-4 sm:grid-cols-2">
           {[
             { icon: Shield, title: 'Security vulnerabilities', desc: 'SQL injections, XSS, secrets in code, broken authentication, missing rate limits — caught before they reach production.' },
             { icon: Zap, title: 'Performance regressions', desc: 'N+1 queries, missing indexes, unoptimised loops, memory leaks — identified with specific line numbers and fixes.' },
             { icon: Users, title: 'Team convention violations', desc: 'Raptor learns your team\'s specific patterns after 10 PRs and enforces them automatically on every new PR.' },
             { icon: GitPullRequest, title: 'Code quality issues', desc: 'Dead code, overly complex functions, missing error handling, inconsistent naming — flagged with one-click fixes.' },
-          ].map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="rounded-2xl border border-white/8 bg-white/2 p-6 space-y-3 hover:border-white/15 transition-colors">
-              <Icon className="h-5 w-5 text-white" />
-              <h3 className="text-sm font-bold text-white">{title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
-            </div>
+          ].map(({ icon: Icon, title, desc }, i) => (
+            <Reveal key={title} delay={i * 80}>
+              <div className="rounded-2xl border border-white/8 bg-white/2 p-6 space-y-3 hover:border-white/15 transition-colors">
+                <Icon className="h-5 w-5 text-white" />
+                <h3 className="text-sm font-bold text-white">{title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+              </div>
+            </Reveal>
           ))}
+        </div>
+      </section>
+
+      {/* ── Bring any model ── */}
+      <section className="px-4 md:px-12 pb-32 max-w-5xl mx-auto">
+        <Reveal>
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">Model flexibility</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-6 max-w-2xl">Bring any model — or provision centrally for your whole org.</h2>
+          <p className="text-sm md:text-base text-gray-500 leading-relaxed max-w-2xl mb-12">
+            Connect your own API key from any major provider, or let admins provision keys centrally so every engineer reviews with the same model — no per-seat setup, no shared secrets in Slack.
+          </p>
+        </Reveal>
+
+        <Reveal className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-16">
+          {providers.map((p) => (
+            <ProviderLogo key={p.name} {...p} />
+          ))}
+        </Reveal>
+
+        <div className="grid gap-6 md:grid-cols-2 items-start">
+          <Reveal className="space-y-5">
+            <div className="flex items-start gap-3">
+              <KeyRound className="h-5 w-5 text-white flex-none mt-0.5" />
+              <div>
+                <h3 className="text-sm font-bold text-white">Bring your own key (BYOK)</h3>
+                <p className="text-sm text-gray-500 leading-relaxed mt-1">Keys are encrypted at rest and never leave your workspace context — swap providers per repo, per team, or per PR.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Building2 className="h-5 w-5 text-white flex-none mt-0.5" />
+              <div>
+                <h3 className="text-sm font-bold text-white">Centralized org provisioning</h3>
+                <p className="text-sm text-gray-500 leading-relaxed mt-1">Admins set the model and billing once; every team inherits it automatically, with usage broken down per repo.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Plug className="h-5 w-5 text-white flex-none mt-0.5" />
+              <div>
+                <h3 className="text-sm font-bold text-white">An MCP gateway, usable from any client</h3>
+                <p className="text-sm text-gray-500 leading-relaxed mt-1">Point Claude Desktop, Cursor, VS Code, or any MCP-compatible client at Raptor's gateway and pull review context straight into your editor.</p>
+              </div>
+            </div>
+          </Reveal>
+
+          <Reveal delay={120}>
+            <div className="relative mx-auto w-full max-w-md select-none">
+              <div className="absolute -inset-8 bg-white/3 blur-3xl rounded-full" />
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14] shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
+                <div className="flex items-center gap-2 border-b border-white/8 bg-[#08080f] px-4 py-3">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+                  <div className="mx-auto flex items-center gap-2 rounded border border-white/8 bg-white/4 px-3 py-1 text-[11px] text-gray-500 font-mono">
+                    <Plug className="h-3 w-3 text-white/30" />
+                    mcp.raptor-ai.dev
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="rounded-lg border border-white/6 bg-[#04040a] p-3 font-mono text-[11px] leading-relaxed">
+                    <div className="text-gray-600 mb-1.5">// mcp.json</div>
+                    <div className="text-white/70">{'{'}</div>
+                    <div className="text-white/70 pl-3">"mcpServers": {'{'}</div>
+                    <div className="text-white/70 pl-6">"raptor": {'{'}</div>
+                    <div className="pl-9"><span className="text-blue-300/80">"url"</span>: <span className="text-green-400/90">"https://mcp.raptor-ai.dev"</span></div>
+                    <div className="text-white/70 pl-6">{'}'}</div>
+                    <div className="text-white/70 pl-3">{'}'}</div>
+                    <div className="text-white/70">{'}'}</div>
+                  </div>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-gray-700 pt-1">Works with</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {mcpClients.map((c) => (
+                      <span key={c} className="rounded-full border border-white/8 bg-white/4 px-2.5 py-1 text-[10px] text-gray-400">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -368,52 +521,61 @@ export default function Landing() {
 
       {/* ── Social proof ── */}
       <section className="px-4 md:px-12 pb-32 max-w-4xl mx-auto">
-        <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">What teams say</p>
-        <h2 className="text-3xl md:text-4xl font-bold mb-12">Teams ship faster and safer.</h2>
+        <Reveal>
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">What teams say</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-12">Teams ship faster and safer.</h2>
+        </Reveal>
         <div className="grid gap-4 md:grid-cols-2">
           {[
             { quote: 'Raptor caught a SQL injection in our auth service that had been in production for 6 months. The fix PR was ready before I finished reading the alert.', name: 'Engineering Lead', company: 'FinTech startup, Cape Town' },
             { quote: 'We went from 45-minute PR reviews to 3 minutes. The team now ships twice as fast and we have fewer bugs in production.', name: 'CTO', company: 'SaaS company, Johannesburg' },
-          ].map(({ quote, name, company }) => (
-            <div key={name} className="rounded-2xl border border-white/8 bg-white/2 p-8 space-y-6">
-              <p className="text-sm text-gray-300 leading-relaxed">"{quote}"</p>
-              <div>
-                <p className="text-xs font-bold text-white">{name}</p>
-                <p className="text-xs text-gray-600 mt-0.5">{company}</p>
+          ].map(({ quote, name, company }, i) => (
+            <Reveal key={name} delay={i * 100}>
+              <div className="rounded-2xl border border-white/8 bg-white/2 p-8 space-y-6">
+                <p className="text-sm text-gray-300 leading-relaxed">"{quote}"</p>
+                <div>
+                  <p className="text-xs font-bold text-white">{name}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">{company}</p>
+                </div>
               </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── FAQ ── */}
       <section className="px-4 md:px-12 pb-32 max-w-2xl mx-auto">
-        <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">FAQ</p>
-        <h2 className="text-3xl md:text-4xl font-bold mb-12">Frequently asked questions.</h2>
-        <div className="border-t border-white/8">
-          {faqs.map(faq => <FAQItem key={faq.q} {...faq} />)}
-        </div>
+        <Reveal>
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-600 mb-4">FAQ</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-12">Frequently asked questions.</h2>
+          <div className="border-t border-white/8">
+            {faqs.map(faq => <FAQItem key={faq.q} {...faq} />)}
+          </div>
+        </Reveal>
       </section>
 
       {/* ── Final CTA ── */}
-      <section className="px-4 md:px-12 pb-32 text-center">
-        <h2 className="text-4xl md:text-6xl font-bold max-w-2xl mx-auto leading-tight">
-          Code review that helps during the PR, not after.
-        </h2>
-        <p className="mt-6 text-gray-400 max-w-md mx-auto">Try Raptor on your next pull request today.</p>
-        <div className="mt-10">
-          <button onClick={() => setShowSignIn(true)}
-            className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition disabled:opacity-60">
-            <Github className="h-4 w-4" />
-            {isLoggingIn ? 'Connecting…' : 'Start reviewing PRs free'}
-          </button>
-        </div>
-        <p className="mt-4 text-xs text-gray-700">Free for open source · No credit card · Cancel anytime</p>
-      </section>
+      <Reveal>
+        <section className="px-4 md:px-12 pb-32 text-center">
+          <h2 className="text-4xl md:text-6xl font-bold max-w-2xl mx-auto leading-tight">
+            Code review that helps during the PR, not after.
+          </h2>
+          <p className="mt-6 text-gray-400 max-w-md mx-auto">Try Raptor on your next pull request today.</p>
+          <div className="mt-10">
+            <button onClick={() => setShowSignIn(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition disabled:opacity-60">
+              <Github className="h-4 w-4" />
+              {isLoggingIn ? 'Connecting…' : 'Start reviewing PRs free'}
+            </button>
+          </div>
+          <p className="mt-4 text-xs text-gray-700">Free for open source · No credit card · Cancel anytime</p>
+        </section>
+      </Reveal>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-white/8 px-6 md:px-12 py-12">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-start justify-between gap-8">
+      <footer className="relative border-t border-white/8 px-6 md:px-12 py-12 overflow-hidden">
+        <div className="footer-watermark" aria-hidden="true"><span>RAPTOR</span></div>
+        <div className="relative z-10 max-w-5xl mx-auto flex flex-col md:flex-row items-start justify-between gap-8">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <TRexIcon className="h-5 w-5 text-white" />
@@ -444,7 +606,7 @@ export default function Landing() {
             ))}
           </div>
         </div>
-        <div className="max-w-5xl mx-auto mt-12 pt-8 border-t border-white/5 text-xs text-gray-700">
+        <div className="relative z-10 max-w-5xl mx-auto mt-12 pt-8 border-t border-white/5 text-xs text-gray-700">
           © 2026 Raptor AI. All rights reserved.
         </div>
       </footer>
