@@ -92,8 +92,9 @@ that's meant to catch issues before they hit either of those.
 
 ## Further reading
 
-- `.agents/skills/`: db-migrations, pr-review-flow, sandbox-safety, ticket-format, decide.
-  Read the matching SKILL.md when a task fits its description.
+- `.agents/skills/`: db-migrations, pr-review-flow, sandbox-safety, ticket-format, decide,
+  redesign. Read the matching SKILL.md when a task fits its description.
+- `plans/`: dated design docs written before non-trivial work starts. See `plans/README.md`.
 - `.agents/skills/decide/SKILL.md`: invoke deliberately before any architecture-shaped change
   (sandbox isolation, migration strategy, provider abstraction) — walks decisions one at a
   time instead of an agent building the whole thing in one unreviewed pass.
