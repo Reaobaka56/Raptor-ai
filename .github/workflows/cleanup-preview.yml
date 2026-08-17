@@ -1,0 +1,20 @@
+name: Cleanup Preview
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  remove-vercel-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove Vercel preview deployment
+        run: |
+          curl -X DELETE "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID_FRONTEND }}/domains/raptor-pr-${{ github.event.pull_request.number }}.vercel.app" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Delete sticky preview-url comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: preview-url
+          delete: true

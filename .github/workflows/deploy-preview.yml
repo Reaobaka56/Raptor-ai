@@ -1,0 +1,69 @@
+name: Deploy Preview
+
+# Spins up an ephemeral preview for every PR so changes are testable before merge to main,
+# instead of finding out on production Render/Vercel deploys.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy frontend preview to Vercel
+        id: vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID_FRONTEND }}
+          working-directory: frontend
+          # not production — this is the whole point
+          alias-domains: raptor-pr-${{ github.event.pull_request.number }}.vercel.app
+
+      - name: Comment preview URL on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: preview-url
+          message: |
+            **Frontend preview:** ${{ steps.vercel.outputs.preview-url }}
+            Backend preview: deployed separately by Render's PR-preview integration (enable per-service in Render dashboard).
+
+  backend-migration-check:
+    runs-on: ubuntu-latest
+    # Render doesn't run arbitrary PR preview envs for backend the way Vercel does for frontend
+    # without its own paid preview-env feature. Minimum viable substitute: actually run the
+    # migration runner against a throwaway Postgres in CI so a broken migration (see the
+    # `relation "sessions" does not exist` incident) is caught here, not in prod.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend deps
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Run migration runner against throwaway DB
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: python -m scripts.run_migrations
