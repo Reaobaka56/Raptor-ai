@@ -1,11 +1,15 @@
 import time
+import logging
 from datetime import datetime, timezone
 from fastapi import Request
 from fastapi.staticfiles import StaticFiles
 import sys, os
 
+logger = logging.getLogger(__name__)
+
 from .state import app, START_TIME
 from .services.db import init_pool
+from .services.migrations import run_pending_migrations
 
 # Register routers
 from .auth_router import router as auth_router
@@ -58,6 +62,16 @@ async def _startup():
     # the first real request doesn't pay pool-creation latency and so pool
     # errors surface in startup logs rather than as a 503 on someone's login.
     await init_pool()
+
+    # Apply any migrations that haven't been run against this DB yet.
+    # Logged, not fatal — a bad migration shouldn't take the whole app down
+    # (it'll keep surfacing in startup logs on every deploy until fixed),
+    # but it does mean the DB-backed routes it would have unblocked stay
+    # broken until the file is fixed and the process restarts.
+    try:
+        await run_pending_migrations()
+    except Exception:
+        logger.exception("[startup] migration run failed")
 
 
 @app.get("/health", tags=["Telemetry"])
