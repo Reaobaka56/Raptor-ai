@@ -39,8 +39,8 @@ By integrating directly with your **GitHub repositories** and utilizing **Google
 - **Audit Logs**: Full execution history for auditing agent activities.
 
 ### BYOK — Bring Your Own Key
-- Connect your own **OpenAI**, **Anthropic**, **Gemini**, **Groq**, or **Mistral** API keys.
-- Keys encrypted at rest with AES-256; never stored in plaintext.
+- Connect your own **OpenAI**, **Anthropic**, **Google**, **Gemini**, **Mistral**, **Groq**, **DeepSeek**, **xAI (Grok)**, **Cohere**, or **OpenRouter** API keys.
+- Keys encrypted at rest with Fernet; never stored in plaintext.
 - Per-agent model selection — route different agents to different providers.
 
 ### Team Collaboration
@@ -59,9 +59,9 @@ React + Vite Frontend ↔ Python FastAPI REST API ↔ GitHub API & Webhooks ↔ 
 
 ### Tech Stack
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, Recharts
-- **Backend**: Python 3.10+, FastAPI, Uvicorn, Pydantic
-- **Database**: PostgreSQL with pgvector · Redis (sessions)
-- **AI**: Google Gemini (default) · OpenAI · Anthropic · Groq · Mistral (BYOK)
+- **Backend**: Python 3.10+, FastAPI, Uvicorn, Pydantic, asyncpg
+- **Database**: PostgreSQL with pgvector — also stores sessions (`sessions` table) · Redis (rate limiting only)
+- **AI**: Google Gemini (default) · OpenAI · Anthropic · Mistral · Groq · DeepSeek · xAI (Grok) · Cohere · OpenRouter (BYOK)
 
 ---
 
@@ -94,23 +94,18 @@ SECRET_KEY=your-random-32-char-secret
 
 ### 2. Run Migrations
 
-```bash
-for f in backend/migrations/*.sql; do psql $DATABASE_URL < "$f"; done
-```
-
-Or apply them individually, in order:
+Migrations run automatically on every backend start/deploy (`app/services/migrations.py`
+applies anything in `backend/migrations/*.sql` not yet recorded in `schema_migrations`). To
+run them manually — e.g. before first boot, or in CI against a throwaway DB:
 
 ```bash
-psql $DATABASE_URL < backend/migrations/001_memory_tables.sql
-psql $DATABASE_URL < backend/migrations/002_reviews_table.sql
-psql $DATABASE_URL < backend/migrations/003_users_teams_blog.sql
-psql $DATABASE_URL < backend/migrations/004_chat_messages.sql
-psql $DATABASE_URL < backend/migrations/005_sandbox.sql
-psql $DATABASE_URL < backend/migrations/006_agents_tasks.sql
-psql $DATABASE_URL < backend/migrations/007_provider_keys_team_tokens.sql
-psql $DATABASE_URL < backend/migrations/008_join_tokens.sql
-psql $DATABASE_URL < backend/migrations/009_agent_templates.sql
+cd backend
+pip install -r requirements.txt
+DATABASE_URL=postgresql://user:password@localhost:5432/raptor python -m scripts.run_migrations
 ```
+
+This is idempotent and safe to re-run; it skips migrations already recorded in
+`schema_migrations`.
 
 ### 3. Start Backend
 
@@ -209,20 +204,23 @@ aws rds create-db-instance \
   --db-subnet-group-name <your-subnet-group>
 ```
 
-Run migrations after RDS is available:
+Run migrations once RDS is available (or let the backend apply them automatically on first
+start — see Quick Start above):
 
 ```bash
-psql postgresql://raptor:<password>@<rds-endpoint>:5432/postgres \
-  < backend/migrations/003_users_teams_blog.sql
-# Repeat for 004, 005, 006, 007
+DATABASE_URL=postgresql://raptor:<password>@<rds-endpoint>:5432/postgres \
+  python -m scripts.run_migrations
 ```
 
 ### 3. Cache — ElastiCache Redis
 
+Used for rate limiting only — sessions live in Postgres, so this is optional in a pinch
+(rate limiting fails open if Redis is unreachable) but recommended for production.
+
 ```bash
 aws elasticache create-replication-group \
   --replication-group-id raptor-redis \
-  --replication-group-description "Raptor AI sessions" \
+  --replication-group-description "Raptor AI rate limiting" \
   --cache-node-type cache.t3.micro \
   --engine redis \
   --num-cache-clusters 1 \
@@ -389,38 +387,153 @@ Add these GitHub secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ECR_REG
 
 ## API Reference
 
+All routes below are prefixed as shown; the GitHub webhook is the one exception living at
+`/webhook`, not under `/api`.
+
+**Auth** (`/api/auth`)
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/auth/github/login` | Starts GitHub OAuth login |
-| `POST` | `/api/auth/github` | Exchanges OAuth code for session |
-| `GET` | `/api/repos` | Lists connected repositories |
-| `POST` | `/api/scan` | Runs AI review on a repository |
-| `GET` | `/api/reviews` | Lists paginated scan reports |
-| `POST` | `/api/reviews/{id}/pull-request` | Creates automated fix PR |
-| `GET` | `/api/stats` | Fetches analytics |
-| `GET` | `/api/sandbox/sessions` | Lists sandbox sessions |
-| `POST` | `/api/sandbox/sessions` | Creates a new sandbox |
-| `POST` | `/api/sandbox/sessions/{id}/execute` | Runs a command in sandbox |
-| `GET` | `/api/sandbox/sessions/{id}/events` | Gets audit log |
-| `GET` | `/api/repos/{owner}/{repo}/tree` | File browser |
-| `GET` | `/api/repos/{owner}/{repo}/commits` | Commit history |
-| `GET` | `/api/teams` | Lists user's teams |
-| `POST` | `/api/teams` | Creates a team |
-| `POST` | `/api/teams/join` | Joins a team by token |
-| `POST` | `/api/teams/{id}/join-token/regenerate` | Regenerates join token |
-| `POST` | `/api/teams/{id}/invitations` | Sends an invite |
-| `GET` | `/api/chat/conversations` | Lists conversations |
-| `POST` | `/api/chat/messages` | Sends a direct message |
-| `GET` | `/api/calendar/meetings` | Gets meetings |
-| `POST` | `/api/calendar/meetings` | Creates a meeting |
-| `GET` | `/api/blog` | Lists blog posts |
-| `GET` | `/api/keys` | Lists BYOK API keys |
-| `POST` | `/api/keys` | Adds a provider API key |
-| `POST` | `/api/keys/{id}/test` | Tests a key validity |
-| `GET` | `/api/users/me` | Gets current user profile |
+| `GET` | `/github/login` | Starts GitHub OAuth login |
+| `POST` | `/github` | Exchanges OAuth code for session |
+
+**Users** (`/api/users`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/me` | Current user profile |
+| `GET` | `/me/is-admin` | Checks admin status |
+| `GET` | `/{username}` | Public profile lookup |
+
+**Repositories** (`/api/repos`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/{owner}/{repo}/tree` | File browser |
+| `GET` | `/{owner}/{repo}/file` | File contents |
+| `GET` | `/{owner}/{repo}/commits` | Commit history |
+| `GET` | `/{owner}/{repo}/commits/{sha}` | Commit diff |
+| `GET` | `/{owner}/{repo}/branches` | Branch list |
+
+**Scanning & Reviews** (`/api`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/scan` | Runs AI review on a repository |
+| `GET` | `/repos` | Lists connected repositories |
+| `GET` | `/reviews` | Lists paginated scan reports |
+| `GET` | `/reviews/{review_id}` | Single review detail |
+| `POST` | `/reviews/{review_id}/pull-request` | Creates automated fix PR |
+| `GET` | `/stats` | Fetches analytics |
+
+**Team Memory** (`/memory`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/similar` | Finds similar past review feedback via pgvector |
+| `POST` | `/feedback` | Records accept/reject on a suggestion |
+| `GET` | `/feedback/{review_id}` | Feedback for a review |
+| `GET` | `/feedback-stats` | Aggregate accept/reject stats |
+| `GET` | `/rules` | Lists learned suppression rules |
+| `POST` | `/rules` | Adds a rule |
+| `DELETE` | `/rules/{rule_id}` | Removes a rule |
+| `GET` | `/onboarding/{repo:path}` | Repo onboarding status |
+
+**Sandbox** (`/api/sandbox`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/sessions` | Lists sandbox sessions |
+| `POST` | `/sessions` | Creates a new sandbox |
+| `GET` | `/sessions/{id}` | Session detail |
+| `DELETE` | `/sessions/{id}` | Tears down a session |
+| `POST` | `/sessions/{id}/execute` | Runs a command in sandbox |
+| `POST` | `/sessions/{id}/pause` / `/resume` | Pauses/resumes a session |
+| `GET` | `/sessions/{id}/events` | Audit log |
+| `GET` | `/sessions/{id}/stats` | Session stats |
+| `GET` | `/sessions/{id}/agents` | Agents attached to a session |
+| `POST` | `/sessions/{id}/agents` | Attaches an agent |
+| `DELETE` | `/sessions/{id}/agents/{agent_id}` | Detaches an agent |
+
+**Agents & Tasks** (`/api/agents`, `/api/tasks`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` / `POST` | `/api/agents` | List / create agents |
+| `GET` / `PATCH` / `DELETE` | `/api/agents/{id}` | Get / update / delete an agent |
+| `POST` | `/api/agents/{id}/status` | Updates agent status |
+| `GET` | `/api/agents/{id}/activity` | Agent activity log |
+| `GET` / `POST` | `/api/agents/templates` | List / create custom agent templates |
+| `DELETE` | `/api/agents/templates/{id}` | Deletes a template |
+| `GET` / `POST` | `/api/tasks` | List / create tasks |
+| `GET` / `PATCH` / `DELETE` | `/api/tasks/{id}` | Get / update / delete a task |
+| `POST` | `/api/tasks/{id}/execute` | Runs a task |
+
+**Provider Keys (BYOK)** (`/api/provider-keys`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Lists your saved keys |
+| `GET` | `/providers` | Lists supported providers |
+| `PUT` | `/` | Adds/updates a key |
+| `DELETE` | `/{provider}` | Removes a key |
+| `POST` | `/{provider}/test` | Validates a key |
+
+**Teams** (`/api/teams`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` / `POST` | `/` | List / create teams |
+| `GET` / `DELETE` | `/{team_id}` | Get / delete a team |
+| `GET` | `/{team_id}/members` | Lists members |
+| `POST` | `/{team_id}/members` | Adds a member |
+| `DELETE` | `/{team_id}/members/{username}` | Removes a member |
+| `DELETE` | `/{team_id}/leave` | Leaves a team |
+| `GET` | `/{team_id}/join-token` | Gets the join token |
+| `POST` | `/{team_id}/join-token/regenerate` | Regenerates join token |
+| `POST` | `/join` | Joins a team by token |
+| `POST` | `/{team_id}/invitations` | Sends an invite |
+| `GET` | `/invitations/{token}` | Invite detail |
+| `POST` | `/invitations/{token}/accept` | Accepts an invite |
+
+**Chat** (`/api/chat`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/conversations` | Lists conversations |
+| `GET` | `/messages/{username}` | Message thread with a user |
+| `POST` | `/messages` | Sends a direct message |
+| `GET` | `/unread-count` | Unread message count |
+| `GET` | `/users/search` | Searches users to message |
+
+**Calendar** (`/api/calendar`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/meetings` | Lists meetings |
+| `POST` | `/meetings` | Creates a meeting |
+| `PUT` | `/meetings` | Updates a meeting |
+| `DELETE` | `/meetings/{id}` | Cancels a meeting |
+
+**Blog** (`/api/blog`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Lists posts |
+| `GET` | `/{slug}` | Single post |
+| `POST` | `/` | Creates a post |
+| `PATCH` | `/{slug}` | Updates a post |
+| `DELETE` | `/{slug}` | Deletes a post |
+
+**GitHub Webhook** (`/webhook`, not under `/api`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/github` | Receives GitHub PR/push events |
+
+---
+
+## Working in This Repo
+
+See [`AGENTS.md`](AGENTS.md) for project conventions (structure, migrations, PR review flow)
+— read the matching file under [`.agents/skills/`](.agents/skills/) when a task fits its
+description. Non-trivial architecture changes get a dated design doc in
+[`plans/`](plans/README.md) before implementation starts.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project references the MIT License below, but no `LICENSE` file currently exists in the
+repo — add one (or update this section) to make the license actually binding.
+
+> MIT License — permissive, allows reuse/modification/distribution with attribution, no
+> warranty. See [choosealicense.com/licenses/mit](https://choosealicense.com/licenses/mit/)
+> for the full text if you want to add it as-is.
