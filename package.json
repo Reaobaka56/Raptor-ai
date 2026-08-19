@@ -2,9 +2,14 @@
   "name": "raptor-ai",
   "private": true,
   "scripts": {
-    "build": "cd frontend && npm install && npm run build"
+    "build": "cd frontend && npm install && npm run build",
+    "migrate": "node scripts/migrate.js"
   },
   "devDependencies": {
     "vite": "^8.0.16"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "pg": "^8.23.0"
   }
 }
