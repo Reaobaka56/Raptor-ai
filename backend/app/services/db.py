@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from typing import Optional
@@ -8,6 +9,32 @@ logger = logging.getLogger(__name__)
 DB_URL = os.getenv("DATABASE_URL") or os.getenv("PGVECTOR_CONN_STRING")
 
 _pool: Optional[asyncpg.Pool] = None
+
+
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    """Per-connection setup, run by asyncpg on every new pooled connection.
+
+    Unlike psycopg2 (which auto-decoded json/jsonb columns into dicts/lists
+    via psycopg2.extras), asyncpg returns json/jsonb columns as raw text by
+    default. Without this, every jsonb column (meetings, provider keys,
+    agent configs, telemetry payloads, etc.) comes back as a JSON *string*
+    instead of a parsed object/array, which breaks consumers that expect a
+    dict/list (e.g. frontend code calling .filter() on what it assumes is
+    an array). Registering these codecs restores the old psycopg2 behavior
+    pool-wide instead of patching every call site individually.
+    """
+    await conn.set_type_codec(
+        "json",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
 
 
 async def init_pool(minconn: int = 2, maxconn: int = 10):
@@ -29,6 +56,7 @@ async def init_pool(minconn: int = 2, maxconn: int = 10):
             min_size=minconn,
             max_size=maxconn,
             statement_cache_size=0,
+            init=_init_connection,
         )
         return _pool
     except Exception:
