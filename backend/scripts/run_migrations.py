@@ -34,7 +34,7 @@ async def main() -> int:
         logger.warning("No .sql files found in %s", MIGRATIONS_DIR)
         return 0
 
-    conn = await asyncpg.connect(dsn=DB_URL)
+    conn = await asyncpg.connect(dsn=DB_URL, statement_cache_size=0)
     try:
         await conn.execute(
             """

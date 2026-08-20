@@ -18,7 +18,18 @@ async def init_pool(minconn: int = 2, maxconn: int = 10):
     if _pool is not None:
         return _pool
     try:
-        _pool = await asyncpg.create_pool(dsn=DB_URL, min_size=minconn, max_size=maxconn)
+        # statement_cache_size=0 disables asyncpg's client-side prepared
+        # statement cache. Required when DB_URL points at Supabase's
+        # pgbouncer connection pooler (transaction mode) since pgbouncer
+        # can route each query to a different backend connection, breaking
+        # server-side prepared statements. Harmless against a direct
+        # Postgres connection too, so this is safe either way.
+        _pool = await asyncpg.create_pool(
+            dsn=DB_URL,
+            min_size=minconn,
+            max_size=maxconn,
+            statement_cache_size=0,
+        )
         return _pool
     except Exception:
         logger.exception("[db] Failed to create connection pool")
