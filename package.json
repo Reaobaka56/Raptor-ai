@@ -3,7 +3,11 @@
   "private": true,
   "scripts": {
     "build": "cd frontend && npm install && npm run build",
-    "migrate": "node scripts/migrate.js"
+    "migrate": "node scripts/migrate.js",
+    "build:frontend": "npm --prefix frontend install && npm --prefix frontend run build && npm --prefix raptor-desktop run copy:frontend",
+    "build:win": "npm --prefix raptor-desktop install && npm --prefix raptor-desktop run dist:win",
+    "build:mac": "npm --prefix raptor-desktop install && npm --prefix raptor-desktop run dist:mac",
+    "build:linux": "npm --prefix raptor-desktop install && npm --prefix raptor-desktop run dist:linux"
   },
   "devDependencies": {
     "vite": "^8.0.16"
