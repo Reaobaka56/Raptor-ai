@@ -116,9 +116,12 @@ async def _log_event(session_id: str, event_type: str, payload: dict,
 
 
 async def _update_session(session_id: str, **fields) -> None:
+    """Raises on failure — callers that need best-effort behavior must
+    catch explicitly. Silently swallowing here is what let sessions get
+    stuck on 'starting' with no visibility when an UPDATE failed."""
     conn = await get_conn()
     if not conn:
-        return
+        raise RuntimeError("Database unavailable")
     try:
         values = list(fields.values())
         set_clauses = ", ".join(f"{k} = ${i+1}" for i, k in enumerate(fields))
@@ -128,7 +131,9 @@ async def _update_session(session_id: str, **fields) -> None:
             *values,
         )
     except Exception:
-        logger.exception("[sandbox_service] _update_session failed")
+        logger.exception("[sandbox_service] _update_session failed (session_id=%s fields=%s)",
+                          session_id, list(fields.keys()))
+        raise
     finally:
         await release_conn(conn)
 
@@ -200,18 +205,39 @@ async def create_session(owner_id: str, name: str, repo_url: Optional[str],
 
         # Create temp workspace directory
         workspace = tempfile.mkdtemp(prefix=f"raptor_sandbox_{session['id'][:8]}_")
-        await _update_session(session["id"], status="running",
-                               workspace_path=workspace,
-                               started_at=datetime.now(timezone.utc).isoformat())
-        session["workspace_path"] = workspace
-        session["status"] = "running"
-
-        await _log_event(session["id"], "system", {
-            "message": f"Sandbox session started. Workspace: {workspace}",
-            "agent_type": agent_type,
-            "repo_url": repo_url,
-            "agent_id": agent_id,
-        })
+        try:
+            await _update_session(session["id"], status="running",
+                                   workspace_path=workspace,
+                                   started_at=datetime.now(timezone.utc))
+            session["workspace_path"] = workspace
+            session["status"] = "running"
+            await _log_event(session["id"], "system", {
+                "message": f"Sandbox session started. Workspace: {workspace}",
+                "agent_type": agent_type,
+                "repo_url": repo_url,
+                "agent_id": agent_id,
+            })
+        except Exception as e:
+            # Don't leave the row stuck on 'starting' — mark it as errored
+            # and surface why, instead of the caller seeing a session that
+            # spins forever with no signal.
+            try:
+                conn2 = await get_conn()
+                if conn2:
+                    try:
+                        await conn2.execute(
+                            "UPDATE sandbox_sessions SET status = 'error' WHERE id = $1::uuid",
+                            session["id"],
+                        )
+                    finally:
+                        await release_conn(conn2)
+            except Exception:
+                logger.exception("[sandbox_service] failed to mark session as error after startup failure")
+            await _log_event(session["id"], "system", {
+                "message": f"Sandbox session failed to start: {e}",
+            }, severity="critical")
+            session["status"] = "error"
+            session["workspace_path"] = None
 
         return session
     except Exception:
@@ -435,9 +461,12 @@ async def stop_session(session_id: str, owner_id: str) -> bool:
     workspace = session.get("workspace_path")
 
     await _log_event(session_id, "system", {"message": "Session stopped by user"})
-    await _update_session(session_id,
-                           status="stopped",
-                           ended_at=datetime.now(timezone.utc).isoformat())
+    try:
+        await _update_session(session_id,
+                               status="stopped",
+                               ended_at=datetime.now(timezone.utc))
+    except Exception:
+        logger.exception("[sandbox_service] stop_session update failed")
 
     # Clean up workspace
     if workspace and os.path.exists(workspace):
@@ -456,9 +485,13 @@ async def pause_session(session_id: str, owner_id: str) -> bool:
         return False
 
     await _log_event(session_id, "system", {"message": "Session paused by user"})
-    await _update_session(session_id,
-                           status="paused",
-                           paused_at=datetime.now(timezone.utc).isoformat())
+    try:
+        await _update_session(session_id,
+                               status="paused",
+                               paused_at=datetime.now(timezone.utc))
+    except Exception:
+        logger.exception("[sandbox_service] pause_session update failed")
+        return False
     return True
 
 
@@ -468,9 +501,13 @@ async def resume_session(session_id: str, owner_id: str) -> bool:
         return False
 
     await _log_event(session_id, "system", {"message": "Session resumed by user"})
-    await _update_session(session_id,
-                           status="running",
-                           paused_at=None)
+    try:
+        await _update_session(session_id,
+                               status="running",
+                               paused_at=None)
+    except Exception:
+        logger.exception("[sandbox_service] resume_session update failed")
+        return False
     return True
 
 
