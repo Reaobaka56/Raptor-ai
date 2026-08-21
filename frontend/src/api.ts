@@ -88,11 +88,15 @@ export interface AuthResponse {
 
 // ── Blog types ─────────────────────────────────────────────────────────────────
 
+export interface BlogMedia {
+  url: string; type: 'image' | 'video'; filename: string
+}
+
 export interface BlogPost {
   id: string; slug: string; title: string; summary: string | null
   content: string; category: string; featured_image: string | null
   published: boolean; published_at: string | null; created_at: string
-  author_username?: string; author_avatar?: string
+  author_username?: string; author_avatar?: string; media?: BlogMedia[]
 }
 
 // ── Team types ─────────────────────────────────────────────────────────────────
@@ -105,6 +109,17 @@ export interface Team {
 export interface TeamMember {
   id: string; username: string; name: string | null
   avatar_url: string | null; role: string; joined_at: string
+}
+
+export interface TeamTaskAssignee {
+  user_id: string; username: string; avatar_url: string | null; completed_at: string | null
+}
+
+export interface TeamTask {
+  id: string; team_id: string; created_by: string; created_by_username?: string
+  title: string; description: string | null; priority: number
+  assign_mode: 'individual' | 'everyone'; status: 'open' | 'done'
+  created_at: string; updated_at: string; assignees: TeamTaskAssignee[]
 }
 
 export interface Invitation {
@@ -151,6 +166,11 @@ export const blogApi = {
   create: (data: Partial<BlogPost>) => api.post<BlogPost>('/blog', data),
   update: (slug: string, data: Partial<BlogPost>) => api.patch<BlogPost>(`/blog/${slug}`, data),
   delete: (slug: string) => api.delete(`/blog/${slug}`),
+  uploadMedia: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<BlogMedia>('/blog/media', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
 }
 
 // ── Teams ──────────────────────────────────────────────────────────────────────
@@ -173,6 +193,19 @@ export const teamsApi = {
   acceptInvitation: (token: string) => api.post(`/teams/invitations/${token}/accept`),
   joinByToken: (token: string) => api.post<Team>('/teams/join', { token }),
   regenerateToken: (teamId: string) => api.post<{ join_token: string }>(`/teams/${teamId}/join-token/regenerate`),
+}
+
+// ── Team Tasks ─────────────────────────────────────────────────────────────────
+
+export const teamTaskApi = {
+  listForTeam: (teamId: string) => api.get<TeamTask[]>(`/team-tasks/team/${teamId}`),
+  listMine: () => api.get<TeamTask[]>('/team-tasks/mine'),
+  create: (data: {
+    team_id: string; title: string; description?: string; priority?: number
+    assign_mode: 'individual' | 'everyone'; assignee_username?: string
+  }) => api.post<TeamTask>('/team-tasks', data),
+  complete: (taskId: string) => api.post(`/team-tasks/${taskId}/complete`),
+  delete: (taskId: string) => api.delete(`/team-tasks/${taskId}`),
 }
 
 export interface ProviderKey { id: string; provider: string; key_mask: string; created_at: string; updated_at: string }
@@ -208,12 +241,12 @@ export const telemetryApi = {
 
 export interface ConventionRule {
   id: number; repo: string; org: string; rule_text: string
-  enabled: boolean; created_at: string
+  enabled: boolean; created_at: string; category: 'coding' | 'workflow' | 'agent'
 }
 
 export const memoryApi = {
-  addRule: (rule_text: string, repo = '*', org = '*') =>
-    api.post<ConventionRule>('/memory/rules', { rule_text, repo, org }),
+  addRule: (rule_text: string, repo = '*', org = '*', category: 'coding' | 'workflow' | 'agent' = 'coding') =>
+    api.post<ConventionRule>('/memory/rules', { rule_text, repo, org, category }),
   getRules: (repo = '*') => api.get<ConventionRule[]>('/memory/rules', { params: { repo } }),
   deleteRule: (ruleId: number) => api.delete(`/memory/rules/${ruleId}`),
   submitFeedback: (review_id: number, issue_index: number, thumbs_up: boolean, comment?: string) =>

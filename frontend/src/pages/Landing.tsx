@@ -575,7 +575,7 @@ export default function Landing() {
           <div className="grid grid-cols-2 gap-x-16 gap-y-2 text-sm">
             <p className="text-xs font-bold text-white mb-2 col-span-1">Product</p>
             <p className="text-xs font-bold text-white mb-2 col-span-1">Company</p>
-            {[['Docs', '/docs'], ['Blog', '/blog'], ['Privacy', '/privacy'], ['Terms', '/terms'], ['Changelog', '/changelog']].map(([label, to], i) => (
+            {[['Docs', '/docs'], ['Privacy', '/privacy'], ['Terms', '/terms'], ['Changelog', '/changelog']].map(([label, to], i) => (
               <Link key={label} to={to} className={`text-xs text-gray-600 hover:text-white transition ${i >= 3 ? '' : ''}`}>
                 {label}
               </Link>

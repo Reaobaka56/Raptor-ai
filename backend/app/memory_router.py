@@ -26,6 +26,12 @@ class AddRuleRequest(BaseModel):
     rule_text: str = Field(..., min_length=3, description="Convention rule in plain English")
     repo: str = Field(default="*", description="Repository scope (owner/repo or * for global)")
     org: str = Field(default="*", description="Organisation scope")
+    category: str = Field(
+        default="coding",
+        description="'coding' (patterns/conventions Raptor should enforce), "
+                     "'workflow' (how the team works — recurring processes/preferences), "
+                     "or 'agent' (persistent instructions that improve future agent execution)",
+    )
 
 
 class RuleResponse(BaseModel):
@@ -35,6 +41,7 @@ class RuleResponse(BaseModel):
     rule_text: str
     enabled: bool
     created_at: str
+    category: str = "coding"
 
 
 class FeedbackRequest(BaseModel):
@@ -113,6 +120,7 @@ async def add_rule(req: AddRuleRequest, session: Optional[dict] = Depends(requir
         embedding=embedding,
         repo=req.repo,
         org=req.org,
+        category=req.category,
     )
     return result
 

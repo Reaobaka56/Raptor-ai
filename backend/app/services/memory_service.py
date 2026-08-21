@@ -278,16 +278,17 @@ async def add_convention_rule(
     embedding: List[float],
     repo: str = "*",
     org: str = "*",
+    category: str = "coding",
 ) -> Dict[str, Any]:
     """Add a plain-English convention rule."""
     conn = await _get_conn()
     if conn:
         try:
             row = await conn.fetchrow(
-                """INSERT INTO convention_rules (repo, org, rule_text, embedding)
-                   VALUES ($1, $2, $3, $4::vector)
-                   RETURNING id, repo, org, rule_text, enabled, created_at""",
-                repo, org, rule_text, str(embedding),
+                """INSERT INTO convention_rules (repo, org, rule_text, embedding, category)
+                   VALUES ($1, $2, $3, $4::vector, $5)
+                   RETURNING id, repo, org, rule_text, enabled, created_at, category""",
+                repo, org, rule_text, str(embedding), category,
             )
             result = dict(row)
             _iso(result)
@@ -301,6 +302,7 @@ async def add_convention_rule(
             "org": org,
             "rule_text": rule_text,
             "enabled": True,
+            "category": category,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         _MOCK_CONVENTION_RULES.append(row)
@@ -314,14 +316,14 @@ async def list_convention_rules(repo: str = "*") -> List[Dict[str, Any]]:
         try:
             if repo == "*":
                 rows = await conn.fetch(
-                    """SELECT id, repo, org, rule_text, enabled, created_at
+                    """SELECT id, repo, org, rule_text, enabled, created_at, category
                        FROM convention_rules
                        WHERE enabled = TRUE
                        ORDER BY created_at DESC"""
                 )
             else:
                 rows = await conn.fetch(
-                    """SELECT id, repo, org, rule_text, enabled, created_at
+                    """SELECT id, repo, org, rule_text, enabled, created_at, category
                        FROM convention_rules
                        WHERE enabled = TRUE AND (repo = $1 OR repo = '*')
                        ORDER BY created_at DESC""",

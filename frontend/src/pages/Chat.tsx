@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Send, Search, Loader2, AlertCircle, MessageSquare, X, ArrowLeft } from 'lucide-react'
 import { chatApi, type ChatMessage, type ChatConversation } from '../api'
 import { formatDistanceToNow } from 'date-fns'
@@ -91,6 +91,7 @@ function NewConvoSearch({ onSelect, onClose }: { onSelect: (username: string) =>
 
 export default function Chat() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const token = localStorage.getItem('token')
   const currentUsername = (() => {
     try { return JSON.parse(localStorage.getItem('user') || '{}').username || '' } catch { return '' }
@@ -113,6 +114,12 @@ export default function Chat() {
     if (!token) { navigate('/'); return }
     loadConversations()
   }, [token])
+
+  // Deep-link support: /chat?with=username (used by the Teams page's Chat button)
+  useEffect(() => {
+    const withUser = searchParams.get('with')
+    if (withUser) openConversation(withUser)
+  }, [searchParams])
 
   useEffect(() => {
     if (!activeUsername) return

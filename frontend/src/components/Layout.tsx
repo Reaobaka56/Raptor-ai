@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, List, BarChart3, Menu, X, Github,
-  LogOut, Users, Calendar, MessageSquare, ChevronDown, Terminal, KeyRound, Bot, Brain
+  LogOut, Users, Calendar, MessageSquare, ChevronDown, Terminal, KeyRound, Bot, Brain, Newspaper
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { TRexIcon } from './TRexIcon'
@@ -9,7 +9,7 @@ import { startGithubLogin, chatApi, type UserProfile } from '../api'
 
 interface LayoutProps { children: React.ReactNode }
 
-const navItems = [
+const baseNavItems = [
   { path: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
   { path: '/reviews',    label: 'Reviews',    icon: List },
   { path: '/agents',     label: 'Agents',     icon: Bot },
@@ -21,6 +21,8 @@ const navItems = [
   { path: '/rules',      label: 'AI Memory',  icon: Brain },
   { path: '/settings',   label: 'Settings',   icon: KeyRound },
 ]
+
+const adminNavItem = { path: '/blog', label: 'Blog', icon: Newspaper, badge: false }
 
 export default function Layout({ children }: LayoutProps) {
   const location  = useLocation()
@@ -83,6 +85,12 @@ export default function Layout({ children }: LayoutProps) {
     navigate('/')
   }
 
+  // Layout only ever mounts inside ProtectedRoute, so `user` is normally
+  // set — this list is what a logged-in desktop nav shows. Blog management
+  // is admin-only; regular users never see the nav item (the backend also
+  // independently enforces admin-only access to blog write endpoints).
+  const navItems = user?.role === 'admin' ? [...baseNavItems, adminNavItem] : baseNavItems
+
   const NavLink = ({ path, label, icon: Icon, badge }: typeof navItems[0]) => {
     const active = location.pathname === path || location.pathname.startsWith(path + '/')
     const showBadge = badge && unreadCount > 0
@@ -109,7 +117,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* ── Top nav ── */}
       <header className="sticky top-0 z-50 border-b border-white/8 bg-black/95 backdrop-blur-xl">
-        <div className="flex h-14 items-center gap-3 px-4">
+        <div className="flex h-14 items-center gap-4 px-4">
 
           {/* Mobile hamburger */}
           <button
@@ -119,14 +127,23 @@ export default function Layout({ children }: LayoutProps) {
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
 
-          {/* Logo */}
-          <Link to="/dashboard" className="flex items-center gap-2 text-white flex-none">
-            <TRexIcon className="h-6 w-6" />
-            <span className="text-sm font-bold tracking-tight hidden sm:block">Raptor AI</span>
-          </Link>
+          {/* Logo — brand mark is dropped once logged in; the nav should read
+              as navigation/actions, not branding (kept on mobile where the
+              hamburger already replaces the desktop nav pills). */}
+          {!user && (
+            <Link to="/dashboard" className="flex items-center gap-2 text-white flex-none">
+              <TRexIcon className="h-6 w-6" />
+              <span className="text-sm font-bold tracking-tight hidden sm:block">Raptor AI</span>
+            </Link>
+          )}
+          {user && (
+            <Link to="/dashboard" className="flex items-center text-white flex-none md:hidden">
+              <TRexIcon className="h-6 w-6" />
+            </Link>
+          )}
 
           {/* Desktop nav pills */}
-          <nav className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto scrollbar-none">
+          <nav className="hidden md:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-none">
             {navItems.map(item => {
               const active = location.pathname === item.path
               const showBadge = item.badge && unreadCount > 0
@@ -149,7 +166,9 @@ export default function Layout({ children }: LayoutProps) {
             })}
           </nav>
 
-          <div className="flex-1 md:flex-none" />
+          {/* Mobile spacer — pushes the user menu to the right when the
+              desktop nav (which normally does this via flex-1) is hidden. */}
+          <div className="flex-1 md:hidden" />
 
           {/* User menu */}
           {user ? (
@@ -263,7 +282,6 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           <div className="flex items-center gap-4 text-xs text-gray-600">
             <Link to="/docs" className="hover:text-white transition">Docs</Link>
-            <Link to="/blog" className="hover:text-white transition">Blog</Link>
             <Link to="/privacy" className="hover:text-white transition">Privacy</Link>
             <Link to="/terms" className="hover:text-white transition">Terms</Link>
           </div>

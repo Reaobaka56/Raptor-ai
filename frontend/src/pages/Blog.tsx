@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Calendar, User, ArrowRight, Plus, Edit2, Trash2, Eye, EyeOff, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Calendar, User, ArrowRight, Plus, Edit2, Trash2, Eye, EyeOff, Loader2, X, Image as ImageIcon, Video, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
-import { blogApi, userApi, type BlogPost } from '../api';
+import { blogApi, userApi, type BlogPost, type BlogMedia } from '../api';
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
@@ -21,13 +21,32 @@ function PostForm({ post, onSave, onCancel, error }: {
   const [content, setContent] = useState(post?.content ?? '');
   const [category, setCategory] = useState(post?.category ?? 'Engineering');
   const [published, setPublished] = useState(post?.published ?? false);
+  const [media, setMedia] = useState<BlogMedia[]>(post?.media ?? []);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const res = await blogApi.uploadMedia(file);
+      setMedia(prev => [...prev, res.data]);
+    } catch (err: any) {
+      setUploadError(err.response?.data?.detail || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
     setSaving(true);
     try {
-      await onSave({ title, summary, content, category, published });
+      await onSave({ title, summary, content, category, published, media });
     } finally {
       setSaving(false);
     }
@@ -58,6 +77,36 @@ function PostForm({ post, onSave, onCancel, error }: {
           placeholder="Post content (markdown supported)"
           rows={8}
           className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 font-mono resize-y" />
+
+        {/* Media attachments */}
+        <div className="space-y-2">
+          <label className="text-xs font-mono uppercase tracking-widest text-gray-500">Add Media</label>
+          <div className="flex gap-2">
+            <label className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-xs font-semibold text-gray-300 hover:bg-white/5 hover:text-white cursor-pointer transition">
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {uploading ? 'Uploading…' : 'Upload Image or Video'}
+              <input type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime"
+                onChange={handleUpload} disabled={uploading} className="hidden" />
+            </label>
+          </div>
+          {uploadError && <p className="text-xs text-red-400">{uploadError}</p>}
+          {media.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-gray-600">Attached Media:</p>
+              {media.map((m, i) => (
+                <div key={m.url} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300">
+                  {m.type === 'image' ? <ImageIcon className="h-3.5 w-3.5 text-gray-500 flex-none" /> : <Video className="h-3.5 w-3.5 text-gray-500 flex-none" />}
+                  <span className="truncate flex-1">{m.filename}</span>
+                  <button onClick={() => setMedia(prev => prev.filter((_, idx) => idx !== i))}
+                    className="text-gray-600 hover:text-red-400 transition flex-none">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
           <input type="checkbox" checked={published} onChange={e => setPublished(e.target.checked)}
             className="rounded border-white/20 bg-white/5" />

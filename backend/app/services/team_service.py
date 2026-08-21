@@ -132,6 +132,50 @@ async def list_members(team_id: str) -> List[Dict[str, Any]]:
         await release_conn(conn)
 
 
+async def is_team_member(team_id: str, user_id: str) -> bool:
+    return await get_member_role(team_id, user_id) is not None
+
+
+async def list_team_ids_for_user(user_id: str) -> List[str]:
+    conn = await get_conn()
+    if not conn:
+        return []
+    try:
+        rows = await conn.fetch(
+            "SELECT team_id FROM team_members WHERE user_id::text = $1", user_id,
+        )
+        return [str(r["team_id"]) for r in rows]
+    except Exception:
+        logger.exception("[team_service] list_team_ids_for_user failed")
+        return []
+    finally:
+        await release_conn(conn)
+
+
+async def users_share_team(user_a: str, user_b: str) -> bool:
+    """True if the two users are members of at least one common team."""
+    conn = await get_conn()
+    if not conn:
+        return False
+    try:
+        row = await conn.fetchrow(
+            """
+            SELECT 1
+            FROM team_members a
+            JOIN team_members b ON a.team_id = b.team_id
+            WHERE a.user_id::text = $1 AND b.user_id::text = $2
+            LIMIT 1
+            """,
+            user_a, user_b,
+        )
+        return row is not None
+    except Exception:
+        logger.exception("[team_service] users_share_team failed")
+        return False
+    finally:
+        await release_conn(conn)
+
+
 async def get_member_role(team_id: str, user_id: str) -> Optional[str]:
     conn = await get_conn()
     if not conn:

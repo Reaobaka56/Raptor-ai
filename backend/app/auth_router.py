@@ -78,13 +78,20 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
     email        = user_data.get("email")
 
     # Persist / update the user record in PostgreSQL (non-fatal if DB is down)
-    db_user = await upsert_user(
+    db_user, is_new_user = await upsert_user(
         github_id=github_id,
         username=github_login,
         name=name,
         email=email,
         avatar_url=avatar_url,
+        return_is_new=True,
     )
+    if db_user and is_new_user:
+        try:
+            from .services.bot_service import send_welcome
+            await send_welcome(db_user["id"])
+        except Exception:
+            logger.exception("[auth] failed to send Raptor Bot welcome message to %s", github_login)
     if not db_user:
         # Login still proceeds (see get_current_user's self-healing retry),
         # but this is worth surfacing loudly since it means every DB-backed

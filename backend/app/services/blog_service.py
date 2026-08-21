@@ -1,4 +1,5 @@
 """Blog service — CRUD for blog_posts table."""
+import json
 import logging
 import re
 from typing import Optional, List, Dict, Any
@@ -72,7 +73,7 @@ async def get_post(slug: str, published_only: bool = True) -> Optional[Dict[str,
 
 async def create_post(author_id: str, title: str, summary: Optional[str],
                        content: str, category: str, featured_image: Optional[str],
-                       published: bool) -> Optional[Dict[str, Any]]:
+                       published: bool, media: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
     slug = _slugify(title)
     conn = await get_conn()
     if not conn:
@@ -82,13 +83,13 @@ async def create_post(author_id: str, title: str, summary: Optional[str],
             """
             INSERT INTO blog_posts
                 (author_id, slug, title, summary, content, category, featured_image,
-                 published, published_at)
+                 published, published_at, media)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-                    CASE WHEN $8 THEN now() ELSE NULL END)
+                    CASE WHEN $8 THEN now() ELSE NULL END, $9::jsonb)
             RETURNING *
             """,
             author_id, slug, title, summary, content, category,
-            featured_image, published,
+            featured_image, published, json.dumps(media or []),
         )
         return _row_to_dict(row) if row else None
     except Exception:
@@ -99,7 +100,7 @@ async def create_post(author_id: str, title: str, summary: Optional[str],
 
 
 async def update_post(slug: str, **fields) -> Optional[Dict[str, Any]]:
-    allowed = {"title", "summary", "content", "category", "featured_image", "published"}
+    allowed = {"title", "summary", "content", "category", "featured_image", "published", "media"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return await get_post(slug, published_only=False)
@@ -108,8 +109,16 @@ async def update_post(slug: str, **fields) -> Optional[Dict[str, Any]]:
     if not conn:
         return None
     try:
-        values = list(updates.values())
-        set_clauses = ", ".join(f"{k} = ${i+1}" for i, k in enumerate(updates))
+        values = []
+        set_parts = []
+        for k, v in updates.items():
+            if k == "media":
+                values.append(json.dumps(v))
+                set_parts.append(f"media = ${len(values)}::jsonb")
+            else:
+                values.append(v)
+                set_parts.append(f"{k} = ${len(values)}")
+        set_clauses = ", ".join(set_parts)
         set_clauses += ", updated_at = now()"
         # Auto-set published_at when publishing for the first time
         if updates.get("published"):

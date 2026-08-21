@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Plus, Users, UserPlus, Trash2, Copy, Check,
   Loader2, Crown, Shield, User, LogOut,
-  X, ChevronRight
+  X, ChevronRight, MessageCircle, CheckSquare, Square, ListTodo
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
-import { teamsApi, type Team, type TeamMember } from '../api';
+import { teamsApi, teamTaskApi, type Team, type TeamMember, type TeamTask } from '../api';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +40,209 @@ function CopyButton({ text }: { text: string }) {
 }
 
 // ── Team Detail ───────────────────────────────────────────────────────────────
+const PRIORITY_LABELS: Record<number, string> = { 0: 'Critical', 1: 'High', 2: 'Medium', 3: 'Low' };
+const PRIORITY_COLORS: Record<number, string> = {
+  0: 'text-red-400 bg-red-400/10 border-red-400/20',
+  1: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+  2: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
+  3: 'text-gray-400 bg-gray-400/10 border-gray-400/20',
+};
+
+// ── Team task creation form ─────────────────────────────────────────────────────
+function TaskForm({ members, onSave, onClose }: {
+  members: TeamMember[]
+  onSave: (data: { title: string; description?: string; priority: number; assign_mode: 'individual' | 'everyone'; assignee_username?: string }) => Promise<void>
+  onClose: () => void
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState(2);
+  const [assignMode, setAssignMode] = useState<'individual' | 'everyone'>('individual');
+  const [assignee, setAssignee] = useState(members[0]?.username || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      await onSave({
+        title: title.trim(), description: description.trim() || undefined, priority,
+        assign_mode: assignMode, assignee_username: assignMode === 'individual' ? assignee : undefined,
+      });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0d14] p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-white">New Team Task</h2>
+          <button onClick={onClose} className="rounded border border-white/10 p-1.5 text-gray-500 hover:text-white transition"><X className="h-4 w-4" /></button>
+        </div>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Task title"
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30" />
+        <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="Description (optional)"
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 resize-y" />
+
+        <div>
+          <label className="text-xs text-gray-600 mb-1 block">Priority</label>
+          <select value={priority} onChange={e => setPriority(Number(e.target.value))}
+            className="w-full rounded-lg border border-white/10 bg-[#0d0d14] px-3 py-2 text-sm text-white focus:outline-none">
+            {[0,1,2,3].map(p => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-600 mb-1 block">Assign to</label>
+          <div className="flex gap-1.5 mb-2">
+            <button type="button" onClick={() => setAssignMode('individual')}
+              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${assignMode === 'individual' ? 'border-white bg-white text-black' : 'border-white/10 text-gray-400 hover:border-white/30'}`}>
+              One person
+            </button>
+            <button type="button" onClick={() => setAssignMode('everyone')}
+              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${assignMode === 'everyone' ? 'border-white bg-white text-black' : 'border-white/10 text-gray-400 hover:border-white/30'}`}>
+              Everyone on team
+            </button>
+          </div>
+          {assignMode === 'individual' && (
+            members.length === 0 ? (
+              <p className="text-xs text-gray-600">No other members on this team yet.</p>
+            ) : (
+              <select value={assignee} onChange={e => setAssignee(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-[#0d0d14] px-3 py-2 text-sm text-white focus:outline-none">
+                {members.map(m => <option key={m.id} value={m.username}>@{m.username}</option>)}
+              </select>
+            )
+          )}
+          {assignMode === 'everyone' && (
+            <p className="text-xs text-gray-600">Creates one copy of this task for each of the {members.length} team member{members.length === 1 ? '' : 's'} — everyone can complete their own.</p>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={handleSave} disabled={saving || !title.trim() || (assignMode === 'individual' && !assignee)}
+            className="flex items-center gap-2 rounded border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {saving ? 'Creating…' : 'Create Task'}
+          </button>
+          <button onClick={onClose} className="rounded border border-white/10 px-5 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:border-white/30 transition">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Team tasks panel ─────────────────────────────────────────────────────────────
+function TeamTasksPanel({ teamId, members, currentUsername }: {
+  teamId: string; members: TeamMember[]; currentUsername: string
+}) {
+  const [tasks, setTasks] = useState<TeamTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+
+  const load = async () => {
+    try {
+      const res = await teamTaskApi.listForTeam(teamId);
+      setTasks(res.data);
+    } catch { /* non-fatal */ } finally { setLoading(false); }
+  };
+
+  useEffect(() => { void load(); }, [teamId]);
+
+  const handleCreate = async (data: { title: string; description?: string; priority: number; assign_mode: 'individual' | 'everyone'; assignee_username?: string }) => {
+    try {
+      await teamTaskApi.create({ team_id: teamId, ...data });
+      setShowForm(false);
+      await load();
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Failed to create task');
+    }
+  };
+
+  const handleComplete = async (taskId: string) => {
+    try {
+      await teamTaskApi.complete(taskId);
+      await load();
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Failed to complete task');
+    }
+  };
+
+  const handleDelete = async (taskId: string) => {
+    if (!confirm('Delete this task?')) return;
+    try { await teamTaskApi.delete(taskId); await load(); } catch { /* ignore */ }
+  };
+
+  const otherMembers = members.filter(m => m.username !== currentUsername);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0d0d14] overflow-hidden">
+      {showForm && (
+        <TaskForm members={otherMembers.length > 0 ? otherMembers : members} onSave={handleCreate} onClose={() => setShowForm(false)} />
+      )}
+      <div className="px-5 py-3 border-b border-white/8 flex items-center justify-between">
+        <p className="text-xs font-mono uppercase tracking-widest text-gray-600">Team Tasks</p>
+        <button onClick={() => setShowForm(true)}
+          className="flex items-center gap-1.5 rounded border border-white/10 px-2.5 py-1 text-xs font-semibold text-gray-400 hover:text-white hover:border-white/30 transition">
+          <Plus className="h-3.5 w-3.5" /> New Task
+        </button>
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-gray-600"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading tasks…</div>
+      ) : tasks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-gray-600 gap-2">
+          <ListTodo className="h-6 w-6 text-gray-700" />
+          <p className="text-sm">No tasks yet for this team.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-white/5">
+          {tasks.map(task => {
+            const mine = task.assignees.find(a => a.username === currentUsername);
+            return (
+              <div key={task.id} className="px-5 py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                    {mine && (
+                      <button onClick={() => !mine.completed_at && handleComplete(task.id)}
+                        title={mine.completed_at ? 'Completed' : 'Mark complete'}
+                        className="mt-0.5 flex-none">
+                        {mine.completed_at
+                          ? <CheckSquare className="h-4 w-4 text-green-400" />
+                          : <Square className="h-4 w-4 text-gray-500 hover:text-white transition" />}
+                      </button>
+                    )}
+                    <div className="min-w-0">
+                      <p className={`text-sm font-semibold ${task.status === 'done' ? 'text-gray-500 line-through' : 'text-white'}`}>{task.title}</p>
+                      {task.description && <p className="text-xs text-gray-600 mt-0.5">{task.description}</p>}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[task.priority]}`}>
+                          {PRIORITY_LABELS[task.priority]}
+                        </span>
+                        <span className="text-[10px] text-gray-600">
+                          {task.assign_mode === 'everyone' ? 'Everyone' : `@${task.assignees[0]?.username || '—'}`}
+                        </span>
+                        {task.assign_mode === 'everyone' && (
+                          <span className="text-[10px] text-gray-600">
+                            · {task.assignees.filter(a => a.completed_at).length}/{task.assignees.length} done
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => handleDelete(task.id)}
+                    className="flex-none opacity-40 hover:opacity-100 text-red-400/70 hover:text-red-400 transition">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TeamDetail({ team, currentUsername, onBack, onLeft }: {
   team: Team; currentUsername: string; onBack: () => void; onLeft: () => void
 }) {
@@ -174,6 +377,12 @@ function TeamDetail({ team, currentUsername, onBack, onLeft }: {
               <div className="flex items-center gap-1.5 text-xs text-gray-500 capitalize">
                 {ROLE_ICONS[m.role]} {m.role}
               </div>
+              {m.username !== currentUsername && (
+                <Link to={`/chat?with=${m.username}`}
+                  className="flex items-center gap-1 rounded border border-white/10 px-2.5 py-1.5 text-xs font-semibold text-gray-400 hover:text-white hover:border-white/30 transition">
+                  <MessageCircle className="h-3 w-3" /> Chat
+                </Link>
+              )}
               {canManage && m.role !== 'owner' && m.username !== currentUsername && (
                 <button onClick={() => handleRemove(m.username)}
                   className="opacity-0 group-hover:opacity-100 rounded border border-red-500/20 p-1.5 text-red-400/60 hover:text-red-400 hover:border-red-400/50 transition">
@@ -184,6 +393,11 @@ function TeamDetail({ team, currentUsername, onBack, onLeft }: {
           ))}
         </div>
       </div>
+
+      {/* Team Tasks */}
+      {detail && (
+        <TeamTasksPanel teamId={team.id} members={detail.members} currentUsername={currentUsername} />
+      )}
 
     </div>
   );

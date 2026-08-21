@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Calendar, Clock, Plus, X, Check, ChevronLeft, ChevronRight, Video, Users, Loader2, Trash2 } from 'lucide-react'
 import api from '../api'
+import { teamsApi, type Team, type TeamMember } from '../api'
+
+interface Attendee { username: string; status: string }
 
 interface Meeting {
-  id: string; title: string; date: string; time: string
-  duration: number; attendees: string[]; type: 'review' | 'planning' | 'retro' | 'sync'
-  link?: string
+  id: string; team_id: string; team_name?: string; title: string; date: string; time: string
+  duration: number; attendees: Attendee[]; type: 'review' | 'planning' | 'retro' | 'sync'
+  link?: string; created_by_username?: string
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -29,9 +32,11 @@ async function fetchMeetings(): Promise<Meeting[]> {
   try { const r = await api.get('/calendar/meetings'); return r.data || [] }
   catch { return [] }
 }
-async function addMeetingApi(m: Omit<Meeting,'id'>): Promise<Meeting> {
-  const id = crypto.randomUUID()
-  const r = await api.post('/calendar/meetings', { ...m, id })
+async function addMeetingApi(m: {
+  team_id: string; title: string; date: string; time: string; duration: number
+  type: string; link?: string; attendee_usernames: string[]
+}): Promise<Meeting> {
+  const r = await api.post('/calendar/meetings', m)
   return r.data
 }
 async function deleteMeetingApi(id: string): Promise<void> {
@@ -39,28 +44,44 @@ async function deleteMeetingApi(id: string): Promise<void> {
 }
 
 // ── Meeting form ─────────────────────────────────────────────────────────────
-function MeetingForm({ onSave, onClose }: { onSave: (m: Omit<Meeting,'id'>) => Promise<void>; onClose: () => void }) {
+function MeetingForm({ teams, onSave, onClose }: {
+  teams: Team[]
+  onSave: (m: { team_id: string; title: string; date: string; time: string; duration: number; type: string; link?: string; attendee_usernames: string[] }) => Promise<void>
+  onClose: () => void
+}) {
   const today = new Date().toISOString().split('T')[0]
+  const [teamId, setTeamId] = useState(teams[0]?.id || '')
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [loadingMembers, setLoadingMembers] = useState(false)
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(today)
   const [time, setTime] = useState('10:00')
   const [duration, setDuration] = useState(30)
   const [type, setType] = useState<Meeting['type']>('sync')
-  const [attendee, setAttendee] = useState('')
   const [attendees, setAttendees] = useState<string[]>([])
   const [link, setLink] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const addAttendee = () => {
-    if (attendee.trim() && !attendees.includes(attendee.trim())) {
-      setAttendees(prev => [...prev, attendee.trim()]); setAttendee('')
-    }
+  // Attendees can only ever be members of the selected team — the picker
+  // itself is scoped, and the backend re-verifies this independently.
+  useEffect(() => {
+    setAttendees([])
+    if (!teamId) { setTeamMembers([]); return }
+    setLoadingMembers(true)
+    teamsApi.get(teamId)
+      .then(r => setTeamMembers(r.data.members || []))
+      .catch(() => setTeamMembers([]))
+      .finally(() => setLoadingMembers(false))
+  }, [teamId])
+
+  const toggleAttendee = (username: string) => {
+    setAttendees(prev => prev.includes(username) ? prev.filter(a => a !== username) : [...prev, username])
   }
 
   const handleSave = async () => {
-    if (!title.trim()) return
+    if (!title.trim() || !teamId) return
     setSaving(true)
-    await onSave({ title, date, time, duration, attendees, type, link: link || undefined })
+    await onSave({ team_id: teamId, title, date, time, duration, type, link: link || undefined, attendee_usernames: attendees })
     setSaving(false)
   }
 
@@ -71,6 +92,16 @@ function MeetingForm({ onSave, onClose }: { onSave: (m: Omit<Meeting,'id'>) => P
           <h2 className="text-base font-bold text-white">Schedule Meeting</h2>
           <button onClick={onClose} className="rounded border border-white/10 p-1.5 text-gray-500 hover:text-white transition"><X className="h-4 w-4" /></button>
         </div>
+
+        <div>
+          <label className="text-xs text-gray-600 mb-1 block">Team</label>
+          <select value={teamId} onChange={e => setTeamId(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-[#0d0d14] px-3 py-2 text-sm text-white focus:outline-none">
+            {teams.length === 0 && <option value="">No teams — join or create one first</option>}
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Meeting title"
           className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30" />
         <div className="grid grid-cols-2 gap-3">
@@ -99,26 +130,31 @@ function MeetingForm({ onSave, onClose }: { onSave: (m: Omit<Meeting,'id'>) => P
         <div><label className="text-xs text-gray-600 mb-1 block">Meeting link (optional)</label>
           <input value={link} onChange={e => setLink(e.target.value)} placeholder="https://meet.google.com/..."
             className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30" /></div>
+
         <div>
-          <label className="text-xs text-gray-600 mb-1 block">Attendees</label>
-          <div className="flex gap-2">
-            <input value={attendee} onChange={e => setAttendee(e.target.value)} placeholder="GitHub username"
-              className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
-              onKeyDown={e => e.key === 'Enter' && addAttendee()} />
-            <button onClick={addAttendee} className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white hover:text-black transition">Add</button>
-          </div>
-          {attendees.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {attendees.map(a => (
-                <span key={a} className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-gray-300">
-                  @{a}<button onClick={() => setAttendees(p => p.filter(x => x !== a))} className="text-gray-600 hover:text-white"><X className="h-3 w-3" /></button>
-                </span>
+          <label className="text-xs text-gray-600 mb-1 block">Attendees — only members of this team</label>
+          {loadingMembers ? (
+            <div className="flex items-center gap-2 text-xs text-gray-600 py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading team members…</div>
+          ) : teamMembers.length === 0 ? (
+            <p className="text-xs text-gray-600 py-2">This team has no other members yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {teamMembers.map(m => (
+                <button key={m.id} type="button" onClick={() => toggleAttendee(m.username)}
+                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition ${
+                    attendees.includes(m.username)
+                      ? 'border-white bg-white text-black font-semibold'
+                      : 'border-white/10 bg-white/5 text-gray-300 hover:border-white/30'
+                  }`}>
+                  @{m.username}
+                </button>
               ))}
             </div>
           )}
         </div>
+
         <div className="flex gap-3 pt-2">
-          <button onClick={handleSave} disabled={saving || !title.trim()}
+          <button onClick={handleSave} disabled={saving || !title.trim() || !teamId}
             className="flex items-center gap-2 rounded border border-white bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-50 transition">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             {saving ? 'Saving…' : 'Schedule'}
@@ -135,6 +171,7 @@ export default function CalendarPage() {
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
@@ -148,7 +185,8 @@ export default function CalendarPage() {
   const nextMonth = () => { if (month === 11) { setYear(y=>y+1); setMonth(0) } else setMonth(m=>m+1) }
 
   useEffect(() => {
-    fetchMeetings().then(m => { setMeetings(m); setLoading(false) })
+    Promise.all([fetchMeetings(), teamsApi.list().then(r => r.data).catch(() => [])])
+      .then(([m, t]) => { setMeetings(m); setTeams(t); setLoading(false) })
   }, [])
 
   const meetingsForDay = (day: number) => {
@@ -156,7 +194,7 @@ export default function CalendarPage() {
     return meetings.filter(m => m.date === dateStr)
   }
 
-  const handleSave = async (data: Omit<Meeting,'id'>) => {
+  const handleSave = async (data: { team_id: string; title: string; date: string; time: string; duration: number; type: string; link?: string; attendee_usernames: string[] }) => {
     try {
       const saved = await addMeetingApi(data)
       setMeetings(prev => [...prev, saved])
@@ -180,18 +218,24 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
-      {showForm && <MeetingForm onSave={handleSave} onClose={() => setShowForm(false)} />}
+      {showForm && <MeetingForm teams={teams} onSave={handleSave} onClose={() => setShowForm(false)} />}
 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Calendar</h1>
           <p className="text-sm text-gray-500 mt-0.5">Schedule code reviews, planning sessions, and team syncs</p>
         </div>
-        <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 rounded border border-white bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-100 transition">
+        <button onClick={() => setShowForm(true)} disabled={teams.length === 0}
+          className="flex items-center gap-2 rounded border border-white bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-100 disabled:opacity-40 transition">
           <Plus className="h-4 w-4" /> New Meeting
         </button>
       </div>
+
+      {teams.length === 0 && !loading && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
+          Join or create a team first — meetings and attendees are always scoped to a team.
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-24 text-gray-600"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
@@ -240,7 +284,7 @@ export default function CalendarPage() {
                     <Clock className="h-3.5 w-3.5 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{m.title}</p>
-                      <p className="text-xs opacity-70">{m.time} · {m.duration}min</p>
+                      <p className="text-xs opacity-70">{m.time} · {m.duration}min · {m.team_name}</p>
                     </div>
                     {m.link && (
                       <a href={m.link} target="_blank" rel="noreferrer"
@@ -274,7 +318,7 @@ export default function CalendarPage() {
                     <p className="text-xs opacity-70">{m.time} · {m.duration}min</p>
                     {m.attendees.length > 0 && (
                       <p className="text-xs opacity-60 flex items-center gap-1 mt-0.5">
-                        <Users className="h-3 w-3" /> {m.attendees.join(', ')}
+                        <Users className="h-3 w-3" /> {m.attendees.map(a => a.username).join(', ')}
                       </p>
                     )}
                   </div>
@@ -310,8 +354,8 @@ export default function CalendarPage() {
                   ))}
                 </div>
               )}
-              <button onClick={() => setShowForm(true)}
-                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded border border-white/10 py-2 text-xs font-semibold text-gray-400 hover:border-white/30 hover:text-white transition">
+              <button onClick={() => setShowForm(true)} disabled={teams.length === 0}
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded border border-white/10 py-2 text-xs font-semibold text-gray-400 hover:border-white/30 hover:text-white transition disabled:opacity-40">
                 <Plus className="h-3.5 w-3.5" /> Add Meeting
               </button>
             </div>
