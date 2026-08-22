@@ -163,6 +163,34 @@ async def ensure_sandbox_schema() -> None:
 
 # ── Session management ────────────────────────────────────────────────────────
 
+async def count_sessions_today(owner_id: str) -> int:
+    """Count sessions this owner has created since midnight UTC. Used to
+    enforce max_sessions_per_day. Excludes nothing — even errored/stopped
+    sessions count against the daily quota, since the resource cost (workspace,
+    DB row, event log) was already incurred."""
+    conn = await get_conn()
+    if not conn:
+        # Fail open: if the DB is unreachable we've got bigger problems than
+        # rate limiting, and create_session below will raise anyway.
+        return 0
+    try:
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(*) AS n
+            FROM sandbox_sessions
+            WHERE owner_id = $1::uuid
+              AND created_at >= (now() AT TIME ZONE 'utc')::date
+            """,
+            owner_id,
+        )
+        return int(row["n"]) if row else 0
+    except Exception:
+        logger.exception("[sandbox_service] count_sessions_today failed (owner_id=%s)", owner_id)
+        return 0
+    finally:
+        await release_conn(conn)
+
+
 async def create_session(owner_id: str, name: str, repo_url: Optional[str],
                           agent_type: str, policy: dict, resource_limits: dict,
                           agent_id: Optional[str] = None,

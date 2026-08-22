@@ -84,6 +84,13 @@ async def create_session(
     user = await _get_user(session)
     limits = _tier_limits(user["username"])
 
+    sessions_today = await sandbox_service.count_sessions_today(user["id"])
+    if sessions_today >= limits["max_sessions_per_day"]:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily sandbox session limit reached ({limits['max_sessions_per_day']}/day). Try again tomorrow or upgrade your plan.",
+        )
+
     provider = body.provider.lower() if body.provider else None
     provider_key_source = body.provider_key_source if body.provider_key_source in ("platform", "user") else "platform"
     if provider and provider not in SUPPORTED_PROVIDERS:
