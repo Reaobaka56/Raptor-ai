@@ -126,7 +126,7 @@ async def create_meeting(body: MeetingCreate, session: Dict[str, Any] = Depends(
         if member["id"] == user["id"]:
             continue
         try:
-            await send_meeting_invite(member["id"], body.title, inviter_name, body.date, body.time)
+            await send_meeting_invite(member["id"], body.title, inviter_name, body.date, body.time, meeting["id"])
         except Exception:
             logger.exception("failed to send meeting-invite bot notification to %s", member["username"])
 

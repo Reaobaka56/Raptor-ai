@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Key, Plus, Trash2, Eye, EyeOff, Loader2, AlertCircle, CheckCircle, Shield, X } from 'lucide-react'
-import { providerKeysApi, type ProviderKey } from '../api'
+import { Key, Plus, Trash2, Eye, EyeOff, Loader2, AlertCircle, CheckCircle, Shield, X, Bell } from 'lucide-react'
+import { providerKeysApi, notificationSettingsApi, type ProviderKey, type NotificationType } from '../api'
 import { useNavigate } from 'react-router-dom'
 
 const PROVIDER_ICONS: Record<string, string> = {
@@ -67,6 +67,88 @@ function AddKeyForm({ providers, onSaved, onClose }: {
           <button onClick={onClose} className="rounded border border-white/10 px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ToggleSwitch({ on, onChange, disabled }: { on: boolean; onChange: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      disabled={disabled}
+      aria-pressed={on}
+      className={`relative h-6 w-11 flex-none rounded-full border transition disabled:opacity-40 ${
+        on ? 'border-white bg-white' : 'border-white/15 bg-white/5'
+      }`}
+    >
+      <span
+        className={`absolute top-1 h-4 w-4 rounded-full transition-transform ${
+          on ? 'translate-x-5 bg-black' : 'translate-x-1 bg-gray-400'
+        }`}
+      />
+    </button>
+  )
+}
+
+function BotNotificationsSection() {
+  const [types, setTypes] = useState<NotificationType[]>([])
+  const [loading, setLoading] = useState(true)
+  const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    notificationSettingsApi.get()
+      .then(r => setTypes(r.data.types))
+      .catch(() => setError('Failed to load notification settings'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const toggle = async (key: string) => {
+    const current = types.find(t => t.key === key)
+    if (!current) return
+    const nextEnabled = !current.enabled
+    setTypes(prev => prev.map(t => t.key === key ? { ...t, enabled: nextEnabled } : t))
+    setSavingKey(key)
+    setError('')
+    try {
+      const res = await notificationSettingsApi.update({ [key]: nextEnabled })
+      setTypes(res.data.types)
+    } catch {
+      setTypes(prev => prev.map(t => t.key === key ? { ...t, enabled: !nextEnabled } : t)) // revert
+      setError('Failed to update — try again')
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+          <Bell className="h-4 w-4" /> Bot Notifications
+        </h2>
+        <p className="text-sm text-gray-500 mt-0.5">Choose which alerts Raptor Bot sends you in Chat.</p>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-gray-600"><Loader2 className="h-5 w-5 animate-spin mr-2" />Loading…</div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-[#0a0a10] divide-y divide-white/5">
+          {types.map(t => (
+            <div key={t.key} className="flex items-center justify-between px-5 py-4">
+              <div>
+                <p className="text-sm font-semibold text-white">{t.label}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {savingKey === t.key && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-600" />}
+                <ToggleSwitch on={t.enabled} onChange={() => toggle(t.key)} disabled={savingKey === t.key} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400"><AlertCircle className="h-3.5 w-3.5 flex-none" />{error}</div>}
     </div>
   )
 }
@@ -168,6 +250,12 @@ export default function SettingsPage() {
           })}
         </div>
       )}
+
+      <div className="pt-2 border-t border-white/8">
+        <div className="pt-6">
+          <BotNotificationsSection />
+        </div>
+      </div>
     </div>
   )
 }

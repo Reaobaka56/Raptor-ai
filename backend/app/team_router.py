@@ -6,6 +6,7 @@ Role hierarchy enforced server-side:
   admin  → manage members, send invites
   member → read-only team access
 """
+import logging
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -19,6 +20,7 @@ from .services.team_service import (
     create_invitation, get_invitation, accept_invitation,
     ensure_join_token, join_team_by_token, AlreadyTeamMemberError,
 )
+from .services.bot_service import send_added_to_team
 
 router = APIRouter(prefix="/api/teams", tags=["Teams"])
 
@@ -134,6 +136,18 @@ async def add_by_username(team_id: str, body: AddMemberRequest,
 
     if not await add_member(team_id, target["id"], body.role):
         raise HTTPException(status_code=500, detail="Failed to add member")
+
+    team = await get_team(team_id)
+    if team:
+        try:
+            await send_added_to_team(
+                target["id"], team["name"], actor.get("name") or actor["username"], team_id
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "failed to send added-to-team bot notification to %s", body.username
+            )
+
     return {"added": body.username, "role": body.role}
 
 
@@ -253,7 +267,19 @@ async def get_join_token_status(
 async def accept(token: str,
                   session: Dict[str, Any] = Depends(get_required_github_session)):
     user = await _get_db_user(session)
+    inv = await get_invitation(token)
     ok = await accept_invitation(token, user["id"])
     if not ok:
         raise HTTPException(status_code=400, detail="Invitation invalid, expired, or already used")
+
+    if inv:
+        try:
+            await send_added_to_team(
+                user["id"], inv["team_name"], inv.get("invited_by_username") or "Someone", inv["team_id"]
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "failed to send added-to-team bot notification to %s", user.get("username")
+            )
+
     return {"accepted": True}

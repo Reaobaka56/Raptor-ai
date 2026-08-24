@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Send, Search, Loader2, AlertCircle, MessageSquare, X, ArrowLeft } from 'lucide-react'
+import { Send, Search, Loader2, AlertCircle, MessageSquare, X, ArrowLeft, Calendar, GitPullRequest, Users } from 'lucide-react'
 import { chatApi, type ChatMessage, type ChatConversation } from '../api'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -14,6 +14,38 @@ function Avatar({ url, username, size = 8 }: { url?: string | null; username: st
   )
 }
 
+function MessageAction({ msg }: { msg: ChatMessage }) {
+  const navigate = useNavigate()
+  const meta = msg.metadata
+  if (!meta?.type) return null
+
+  if (meta.type === 'meeting_invite' && meta.meeting_id) {
+    return (
+      <button onClick={() => navigate(`/calendar?meeting=${meta.meeting_id}`)}
+        className="mt-2 flex items-center gap-1.5 rounded-full border border-current/30 px-3 py-1 text-[11px] font-semibold hover:bg-white/10 transition">
+        <Calendar className="h-3 w-3" /> View Meeting
+      </button>
+    )
+  }
+  if (meta.type === 'pr_review_completed' && meta.pr_url) {
+    return (
+      <a href={meta.pr_url} target="_blank" rel="noreferrer"
+        className="mt-2 flex items-center gap-1.5 rounded-full border border-current/30 px-3 py-1 text-[11px] font-semibold hover:bg-white/10 transition w-fit">
+        <GitPullRequest className="h-3 w-3" /> View PR
+      </a>
+    )
+  }
+  if (meta.type === 'added_to_team' && meta.team_id) {
+    return (
+      <button onClick={() => navigate('/teams')}
+        className="mt-2 flex items-center gap-1.5 rounded-full border border-current/30 px-3 py-1 text-[11px] font-semibold hover:bg-white/10 transition">
+        <Users className="h-3 w-3" /> View Team
+      </button>
+    )
+  }
+  return null
+}
+
 function MessageBubble({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) {
   return (
     <div className={`flex items-end gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}>
@@ -22,6 +54,7 @@ function MessageBubble({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) {
         isOwn ? 'rounded-br-sm bg-white text-black' : 'rounded-bl-sm bg-white/8 text-gray-200'
       }`}>
         {msg.content}
+        <MessageAction msg={msg} />
         <p className={`text-[10px] mt-1 ${isOwn ? 'text-gray-500' : 'text-gray-600'} text-right`}>
           {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
         </p>

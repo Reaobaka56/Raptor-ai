@@ -302,10 +302,18 @@ export const repoExplorerApi = {
 
 // ── Chat types ────────────────────────────────────────────────────────────────
 
+export interface ChatMessageMetadata {
+  type?: 'meeting_invite' | 'pr_review_completed' | 'added_to_team' | string
+  meeting_id?: string; title?: string; date?: string; time?: string
+  repo?: string; pr_number?: number; pr_url?: string
+  team_id?: string; team_name?: string
+}
+
 export interface ChatMessage {
   id: string; sender_id: string; receiver_id: string
   content: string; read: boolean; created_at: string
   sender_username?: string; sender_avatar?: string
+  metadata?: ChatMessageMetadata | null
 }
 
 export interface ChatConversation {
@@ -321,6 +329,16 @@ export const chatApi = {
     api.post<ChatMessage>('/chat/messages', { receiver_username, content }),
   getUnreadCount: () => api.get<{ count: number }>('/chat/unread-count'),
   searchUsers: (q: string) => api.get<any[]>('/chat/users/search', { params: { q } }),
+}
+
+// ── Bot notification preferences ────────────────────────────────────────────
+
+export interface NotificationType { key: string; label: string; enabled: boolean }
+
+export const notificationSettingsApi = {
+  get: () => api.get<{ types: NotificationType[] }>('/users/me/notification-settings'),
+  update: (prefs: Record<string, boolean>) =>
+    api.put<{ types: NotificationType[] }>('/users/me/notification-settings', { prefs }),
 }
 
 

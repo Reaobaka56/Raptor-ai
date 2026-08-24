@@ -235,6 +235,28 @@ async def run_scan(
         except Exception:
             pass
 
+        # Best-effort Raptor Bot notification. There's no repo->user
+        # ownership table in this schema yet, so this uses the repo's
+        # GitHub org/user segment as a heuristic match against Raptor
+        # usernames (works for the common case of a personal/small-team
+        # install where the repo owner's GitHub login is their Raptor
+        # username). Silently no-ops if nobody matches.
+        try:
+            from .user_service import get_user_by_username
+            from .bot_service import send_pr_review_completed
+
+            repo_owner_login = repo_name.split("/")[0].lower() if "/" in repo_name else None
+            if repo_owner_login:
+                owner = await get_user_by_username(repo_owner_login)
+                if owner:
+                    await send_pr_review_completed(
+                        owner["id"], pr_title, repo_name, pr_number, pr_url,
+                        issue_count=len(new_review.issues),
+                    )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Failed to send PR-review-completed bot notification")
+
         return new_review
 
     except Exception as exc:

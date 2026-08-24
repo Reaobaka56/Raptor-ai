@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Calendar, Clock, Plus, X, Check, ChevronLeft, ChevronRight, Video, Users, Loader2, Trash2 } from 'lucide-react'
 import api from '../api'
 import { teamsApi, type Team, type TeamMember } from '../api'
@@ -190,6 +191,7 @@ function MeetingForm({ teams, onSave, onClose }: {
 
 export default function CalendarPage() {
   const now = new Date()
+  const [searchParams] = useSearchParams()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [meetings, setMeetings] = useState<Meeting[]>([])
@@ -210,6 +212,20 @@ export default function CalendarPage() {
     Promise.all([fetchMeetings(), teamsApi.list().then(r => r.data).catch(() => [])])
       .then(([m, t]) => { setMeetings(m); setTeams(t); setLoading(false) })
   }, [])
+
+  // Deep-link support: /calendar?meeting=<id> (used by the "View Meeting"
+  // button on Raptor Bot chat notifications) — jump to that meeting's
+  // month/day and open it once meetings have loaded.
+  useEffect(() => {
+    const meetingId = searchParams.get('meeting')
+    if (!meetingId || meetings.length === 0) return
+    const target = meetings.find(m => m.id === meetingId)
+    if (!target) return
+    const [y, m, d] = target.date.split('-').map(Number)
+    setYear(y)
+    setMonth(m - 1)
+    setSelectedDay(d)
+  }, [searchParams, meetings])
 
   const meetingsForDay = (day: number) => {
     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
