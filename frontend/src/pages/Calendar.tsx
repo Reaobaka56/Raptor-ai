@@ -27,6 +27,28 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 function getDaysInMonth(y: number, m: number) { return new Date(y, m+1, 0).getDate() }
 function getFirstDayOfMonth(y: number, m: number) { return new Date(y, m, 1).getDay() }
 
+// ── Error formatting ─────────────────────────────────────────────────────────
+// FastAPI returns `detail` as a plain string for most HTTPExceptions (403,
+// 404, 500, 503) but as an ARRAY of {loc, msg, type} objects for 422
+// pydantic validation errors. Rendering that array directly (or via bare
+// String coercion) produces "[object Object]" — this normalizes both shapes
+// into a readable string.
+function formatApiError(e: any, fallback: string): string {
+  const detail = e?.response?.data?.detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d: any) => {
+        const field = Array.isArray(d?.loc) ? d.loc[d.loc.length - 1] : undefined
+        return field ? `${field}: ${d.msg}` : d?.msg
+      })
+      .filter(Boolean)
+      .join('; ') || fallback
+  }
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (typeof e?.message === 'string' && e.message.trim()) return e.message
+  return fallback
+}
+
 // ── API helpers ──────────────────────────────────────────────────────────────
 async function fetchMeetings(): Promise<Meeting[]> {
   try { const r = await api.get('/calendar/meetings'); return r.data || [] }
@@ -200,7 +222,7 @@ export default function CalendarPage() {
       setMeetings(prev => [...prev, saved])
       setShowForm(false)
     } catch (e: any) {
-      alert(e.response?.data?.detail || 'Failed to schedule meeting')
+      alert(formatApiError(e, 'Failed to schedule meeting'))
     }
   }
 
