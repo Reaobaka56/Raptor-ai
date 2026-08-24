@@ -78,13 +78,13 @@ function ToggleSwitch({ on, onChange, disabled }: { on: boolean; onChange: () =>
       onClick={onChange}
       disabled={disabled}
       aria-pressed={on}
-      className={`relative h-6 w-11 flex-none rounded-full border transition disabled:opacity-40 ${
-        on ? 'border-white bg-white' : 'border-white/15 bg-white/5'
+      className={`inline-flex h-6 w-11 flex-none items-center rounded-full border transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed ${
+        on ? 'border-white bg-white' : 'border-white/15 bg-white/10'
       }`}
     >
       <span
-        className={`absolute top-1 h-4 w-4 rounded-full transition-transform ${
-          on ? 'translate-x-5 bg-black' : 'translate-x-1 bg-gray-400'
+        className={`inline-block h-4 w-4 transform rounded-full shadow-sm transition-transform duration-200 ease-in-out ${
+          on ? 'translate-x-6 bg-black' : 'translate-x-1 bg-gray-400'
         }`}
       />
     </button>
