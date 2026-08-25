@@ -2,7 +2,7 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 from dotenv import load_dotenv
@@ -42,9 +42,41 @@ class AIService:
         res.raise_for_status()
         return res.text
 
-    def analyze_pr(self, repo: str, pr_number: int, pr_title: str, diff_text: str) -> Dict[str, Any]:
-        """Run Gemini analysis over the actual PR or commit diff text."""
+    def analyze_pr(
+        self,
+        repo: str,
+        pr_number: int,
+        pr_title: str,
+        diff_text: str,
+        repo_context: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Run Gemini analysis over the actual PR or commit diff text.
+
+        repo_context, when provided, is a list of {file_path, content,
+        similarity} chunks retrieved from elsewhere in the repo (via
+        codebase_index_service) that are semantically related to the diff —
+        e.g. the function being modified is called from these files. This
+        lets the model catch issues a diff-only view can't: broken call
+        sites, duplicated logic, or violated implicit contracts.
+        """
         start_time = time.time()
+
+        context_block = ""
+        if repo_context:
+            sections = []
+            for chunk in repo_context:
+                sections.append(
+                    f"--- {chunk['file_path']} (similarity {chunk['similarity']:.2f}) ---\n"
+                    f"{chunk['content'][:3000]}"
+                )
+            context_block = (
+                "\n\nAdditional Repository Context (related code elsewhere in this repo, "
+                "NOT part of the diff — use it to catch broken call sites, duplicated logic, "
+                "or contract violations the diff alone wouldn't reveal; do not flag anything "
+                "purely within this context block itself since it wasn't changed):\n```\n"
+                + "\n\n".join(sections) + "\n```\n"
+            )
+
         prompt = f"""
 You are Raptor, an expert security and performance AST code review agent.
 Analyze the following pull request or commit diff for:
@@ -60,7 +92,7 @@ Git Diff Text:
 ```diff
 {diff_text[:180000]}
 ```
-
+{context_block}
 Return your findings strictly in valid JSON format matching this schema:
 {{
   "summary": "High-level summary of the review findings.",

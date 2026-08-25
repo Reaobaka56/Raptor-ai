@@ -210,6 +210,58 @@ async def get_commit_detail(
 
 # ── Branches ─────────────────────────────────────────────────────────────────
 
+# ── Codebase index (repo-wide review context) ───────────────────────────────
+
+@router.get("/{owner}/{repo}/index-status")
+async def get_index_status(
+    owner: str, repo: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    """Return whether repo-wide context indexing has run for this repo, and
+    basic stats, so the UI can show 'indexing…' vs 'N files indexed'."""
+    from .services.db import get_conn, release_conn
+
+    full_name = f"{owner}/{repo}"
+    conn = await get_conn()
+    if not conn:
+        return {"repo": full_name, "indexed": False, "fileCount": 0, "chunkCount": 0}
+    try:
+        row = await conn.fetchrow(
+            "SELECT last_indexed_sha, file_count, chunk_count, updated_at FROM code_index_state WHERE repo = $1",
+            full_name,
+        )
+        if not row:
+            return {"repo": full_name, "indexed": False, "fileCount": 0, "chunkCount": 0}
+        return {
+            "repo": full_name,
+            "indexed": True,
+            "lastIndexedSha": row["last_indexed_sha"],
+            "fileCount": row["file_count"],
+            "chunkCount": row["chunk_count"],
+            "updatedAt": row["updated_at"].isoformat() if row["updated_at"] else None,
+        }
+    finally:
+        await release_conn(conn)
+
+
+@router.post("/{owner}/{repo}/reindex")
+async def trigger_reindex(
+    owner: str, repo: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    """Manually (re)index a repo for cross-file review context, rather than
+    waiting for the next PR scan to trigger it lazily."""
+    from .services.codebase_index_service import index_repository
+
+    token = session.get("access_token", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="No GitHub access token in session")
+
+    full_name = f"{owner}/{repo}"
+    asyncio.create_task(index_repository(full_name, token))
+    return {"status": "started", "repo": full_name}
+
+
 @router.get("/{owner}/{repo}/branches")
 async def get_branches(
     owner: str, repo: str,

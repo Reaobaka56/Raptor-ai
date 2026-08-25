@@ -190,11 +190,40 @@ async def run_scan(
             diff_res.raise_for_status()
             diff_text = diff_res.text
 
+        # Repo-wide context: retrieve semantically related code from
+        # elsewhere in the repo (not just the diff) so the model can catch
+        # broken call sites / duplicated logic a diff-only view would miss.
+        # Best-effort — a missing index or DB just means no extra context,
+        # never a failed review.
+        repo_context = []
+        try:
+            from .codebase_index_service import (
+                is_repo_indexed, retrieve_relevant_context, index_repository,
+            )
+
+            changed_files = sorted({
+                line.removeprefix("+++ b/") for line in diff_text.splitlines()
+                if line.startswith("+++ b/")
+            })
+
+            if await is_repo_indexed(repo_name):
+                repo_context = await retrieve_relevant_context(
+                    repo_name, diff_text, changed_files=changed_files,
+                )
+            elif github_token:
+                # First time seeing this repo — index it in the background
+                # for future scans rather than blocking this one on a
+                # potentially slow full-repo index.
+                asyncio.create_task(index_repository(repo_name, github_token, commit_sha))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Failed to gather repo context for %s", repo_name)
+
         # Analyze via ai_service in a thread
         from ..services.ai_service import ai_service as real_ai_service
 
         ai_result = await asyncio.to_thread(
-            real_ai_service.analyze_pr, repo_name, pr_number, pr_title, diff_text
+            real_ai_service.analyze_pr, repo_name, pr_number, pr_title, diff_text, repo_context
         )
 
         new_review = Review(
