@@ -10,6 +10,7 @@ class ReviewIssue(BaseModel):
     title: str
     description: str
     suggestion: str
+    confidence: int = Field(default=80, ge=0, le=100, description="Model confidence this finding is a true positive (0-100)")
 
 class Review(BaseModel):
     id: str
