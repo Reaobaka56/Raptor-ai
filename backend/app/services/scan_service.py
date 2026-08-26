@@ -40,12 +40,22 @@ async def post_pr_review(
                 "quality": "Code Quality", "design": "Design"
             }.get(issue.get("category", "quality"), "Issue")
 
+            confidence = issue.get("confidence")
+            confidence_label = f" · {confidence}% confidence" if isinstance(confidence, int) else ""
+
             body = (
-                f"{severity_emoji} **{category_label}: {issue['title']}**\n\n"
+                f"{severity_emoji} **{category_label}: {issue['title']}**{confidence_label}\n\n"
                 f"{issue['description']}\n\n"
             )
             if issue.get("suggestion"):
-                body += f"**Suggested fix:**\n```\n{issue['suggestion']}\n```\n"
+                # GitHub renders ```suggestion fences as a one-click "Commit suggestion"
+                # button that replaces the exact commented line. Only use it above a
+                # confidence floor — low-confidence findings get a plain code block so
+                # they don't invite a one-click merge of a possible false positive.
+                if not isinstance(confidence, int) or confidence >= 60:
+                    body += f"**Suggested fix:**\n```suggestion\n{issue['suggestion']}\n```\n"
+                else:
+                    body += f"**Suggested fix (review before applying — low confidence):**\n```\n{issue['suggestion']}\n```\n"
 
             comments.append({
                 "path": issue["file"],

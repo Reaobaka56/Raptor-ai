@@ -83,6 +83,20 @@ function IssueCard({ issue, reviewId, issueIndex }: { issue: Review['issues'][0]
             <CategoryIcon className="w-3.5 h-3.5" />
             {category.label}
           </span>
+          {typeof issue.confidence === 'number' && (
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold font-mono border ${
+                issue.confidence >= 80
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                  : issue.confidence >= 60
+                  ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20'
+                  : 'bg-white/5 text-gray-400 border-white/10'
+              }`}
+              title="Model confidence this finding is a true positive"
+            >
+              {issue.confidence}% confidence
+            </span>
+          )}
         </div>
       </div>
 

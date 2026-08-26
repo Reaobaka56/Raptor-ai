@@ -54,6 +54,7 @@ export interface ReviewIssue {
   severity: 'critical' | 'high' | 'medium' | 'low'
   category: 'security' | 'performance' | 'quality' | 'design'
   title: string; description: string; suggestion: string
+  confidence?: number
 }
 
 export interface Review {

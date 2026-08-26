@@ -72,10 +72,13 @@ Return your findings strictly in valid JSON format matching this schema:
       "category": "security" | "performance" | "quality" | "design",
       "title": "Short title",
       "description": "Detailed explanation of the vulnerability or flaw.",
-      "suggestion": "Corrected code snippet replacement."
+      "suggestion": "Corrected code snippet replacement — must be a drop-in replacement for the exact flagged line(s), since it is posted as a one-click GitHub suggestion.",
+      "confidence": "Integer 0-100: how confident you are this is a genuine, actionable issue and not a false positive. Use lower scores (below 60) for speculative or context-dependent findings."
     }}
   ]
 }}
+
+Calibrate confidence honestly — it is shown to the reviewer to help them triage. Don't default every finding to a high score.
 """
         if self.client:
             response = self.client.models.generate_content(
@@ -99,6 +102,12 @@ Return your findings strictly in valid JSON format matching this schema:
         allowed_severities = {"critical", "high", "medium", "low"}
         allowed_categories = {"security", "performance", "quality", "design"}
         for issue in issues:
+            try:
+                confidence = int(issue.get("confidence", 80))
+            except (TypeError, ValueError):
+                confidence = 80
+            confidence = max(0, min(100, confidence))
+
             normalized.append({
                 "file": str(issue.get("file") or "unknown"),
                 "line": max(1, int(issue.get("line") or 1)),
@@ -109,6 +118,7 @@ Return your findings strictly in valid JSON format matching this schema:
                 "title": str(issue.get("title") or "Review finding"),
                 "description": str(issue.get("description") or "Gemini identified a code review finding."),
                 "suggestion": str(issue.get("suggestion") or "Review the changed code and apply the safest remediation."),
+                "confidence": confidence,
             })
         return normalized
 
@@ -138,6 +148,7 @@ Return your findings strictly in valid JSON format matching this schema:
                         "title": "Potential SQL injection in added query",
                         "description": "The added diff appears to interpolate or concatenate values into a SQL statement. Use parameterized query placeholders instead.",
                         "suggestion": "Replace string interpolation/concatenation with a parameterized query and pass user values separately.",
+                        "confidence": 60,
                     })
                 if re.search(r"(api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"]{8,}", lowered):
                     issues.append({
@@ -148,6 +159,7 @@ Return your findings strictly in valid JSON format matching this schema:
                         "title": "Potential hardcoded secret",
                         "description": "The added line looks like a credential or token literal. Store secrets in environment-backed secret management instead.",
                         "suggestion": "Move the value to a secret manager or environment variable and rotate the exposed credential.",
+                        "confidence": 55,
                     })
             elif raw_line and not raw_line.startswith("-"):
                 new_line += 1
