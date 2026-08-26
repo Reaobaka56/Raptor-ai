@@ -226,6 +226,33 @@ async def run_scan(
             real_ai_service.analyze_pr, repo_name, pr_number, pr_title, diff_text, repo_context
         )
 
+        # Suppress repeat false positives: drop (or down-weight) findings
+        # that are near-duplicates of issues a human already thumbs-downed
+        # in this repo. Best-effort — a missing DB/embedding just means no
+        # suppression, never a failed review.
+        try:
+            from .memory_service import find_similar_rejected_feedback
+            from .embedding_service import generate_embedding
+
+            kept_issues = []
+            for issue in ai_result.get("issues", []):
+                issue_text = f"{issue.get('title', '')}\n{issue.get('description', '')}".strip()
+                rejected = await find_similar_rejected_feedback(
+                    generate_embedding(issue_text), repo=repo_name,
+                )
+                if rejected:
+                    import logging
+                    logging.getLogger(__name__).info(
+                        "[scan_service] suppressed repeat false positive in %s: %r (matched prior rejection %r)",
+                        repo_name, issue.get("title"), rejected[0].get("issue_title"),
+                    )
+                    continue
+                kept_issues.append(issue)
+            ai_result["issues"] = kept_issues
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Failed to apply feedback-based suppression for %s", repo_name)
+
         new_review = Review(
             id=str(uuid.uuid4()),
             githubRepo=repo_name,

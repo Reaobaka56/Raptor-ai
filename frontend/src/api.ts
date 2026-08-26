@@ -250,8 +250,11 @@ export const memoryApi = {
     api.post<ConventionRule>('/memory/rules', { rule_text, repo, org, category }),
   getRules: (repo = '*') => api.get<ConventionRule[]>('/memory/rules', { params: { repo } }),
   deleteRule: (ruleId: number) => api.delete(`/memory/rules/${ruleId}`),
-  submitFeedback: (review_id: number, issue_index: number, thumbs_up: boolean, comment?: string) =>
-    api.post('/memory/feedback', { review_id, issue_index, thumbs_up, comment }),
+  submitFeedback: (
+    review_id: number, issue_index: number, thumbs_up: boolean,
+    opts?: { comment?: string; repo?: string; issue_title?: string; issue_description?: string }
+  ) =>
+    api.post('/memory/feedback', { review_id, issue_index, thumbs_up, ...opts }),
   getReviewFeedback: (reviewId: number) => api.get(`/memory/feedback/${reviewId}`),
   getFeedbackStats: (repo?: string) =>
     api.get('/memory/feedback-stats', { params: { repo } }),

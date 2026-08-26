@@ -39,7 +39,7 @@ const categoryConfig = {
   design: { icon: Layout, label: 'Design' },
 }
 
-function IssueCard({ issue, reviewId, issueIndex }: { issue: Review['issues'][0]; reviewId: number; issueIndex: number }) {
+function IssueCard({ issue, reviewId, issueIndex, repo }: { issue: Review['issues'][0]; reviewId: number; issueIndex: number; repo: string }) {
   const severity = severityConfig[issue.severity]
   const category = categoryConfig[issue.category]
   const CategoryIcon = category.icon
@@ -51,7 +51,11 @@ function IssueCard({ issue, reviewId, issueIndex }: { issue: Review['issues'][0]
     if (feedback === value) return
     setFeedbackSending(true)
     try {
-      await memoryApi.submitFeedback(reviewId, issueIndex, thumbsUp)
+      await memoryApi.submitFeedback(reviewId, issueIndex, thumbsUp, {
+        repo,
+        issue_title: issue.title,
+        issue_description: issue.description,
+      })
       setFeedback(value)
     } catch (e) {
       console.error('Feedback submission failed:', e)
@@ -357,7 +361,7 @@ export default function ReviewDetail() {
           </div>
         ) : (
           review.issues.map((issue, index) => (
-            <IssueCard key={index} issue={issue} reviewId={review.id} issueIndex={index} />
+            <IssueCard key={index} issue={issue} reviewId={review.id} issueIndex={index} repo={review.githubRepo} />
           ))
         )}
       </div>

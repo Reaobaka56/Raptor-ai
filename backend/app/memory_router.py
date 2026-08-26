@@ -49,6 +49,9 @@ class FeedbackRequest(BaseModel):
     issue_index: int = Field(default=0, ge=0)
     thumbs_up: bool
     comment: Optional[str] = None
+    repo: Optional[str] = None
+    issue_title: Optional[str] = None
+    issue_description: Optional[str] = None
 
 
 class FeedbackResponse(BaseModel):
@@ -151,6 +154,9 @@ async def submit_feedback(req: FeedbackRequest, session: Optional[dict] = Depend
         issue_index=req.issue_index,
         thumbs_up=req.thumbs_up,
         comment=req.comment,
+        repo=req.repo,
+        issue_title=req.issue_title,
+        issue_description=req.issue_description,
     )
     return result
 

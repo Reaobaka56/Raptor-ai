@@ -407,16 +407,32 @@ async def store_feedback(
     issue_index: int,
     thumbs_up: bool,
     comment: Optional[str] = None,
+    repo: Optional[str] = None,
+    issue_title: Optional[str] = None,
+    issue_description: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Record thumbs-up/down feedback for a specific issue in a review."""
+    """Record thumbs-up/down feedback for a specific issue in a review.
+
+    When repo/issue_title/issue_description are provided, also stores an
+    embedding of the issue text so future scans can check new findings
+    against past thumbs-down feedback (see find_similar_rejected_feedback)
+    and suppress repeat false positives.
+    """
+    embedding = None
+    if issue_title or issue_description:
+        from .embedding_service import generate_embedding
+        embedding = generate_embedding(f"{issue_title or ''}\n{issue_description or ''}".strip())
+
     conn = await _get_conn()
     if conn:
         try:
             row = await conn.fetchrow(
-                """INSERT INTO review_feedback (review_id, issue_index, thumbs_up, comment)
-                   VALUES ($1, $2, $3, $4)
+                """INSERT INTO review_feedback
+                       (review_id, issue_index, thumbs_up, comment, repo, issue_title, issue_description, embedding)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector)
                    RETURNING id, review_id, issue_index, thumbs_up, comment, created_at""",
-                review_id, issue_index, thumbs_up, comment,
+                review_id, issue_index, thumbs_up, comment, repo, issue_title, issue_description,
+                str(embedding) if embedding is not None else None,
             )
             result = dict(row)
             _iso(result)
@@ -430,10 +446,49 @@ async def store_feedback(
             "issue_index": issue_index,
             "thumbs_up": thumbs_up,
             "comment": comment,
+            "repo": repo,
+            "issue_title": issue_title,
+            "issue_description": issue_description,
+            "embedding": embedding,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         _MOCK_FEEDBACK.append(row)
         return row
+
+
+async def find_similar_rejected_feedback(
+    embedding: List[float],
+    repo: str,
+    threshold: float = 0.90,
+    limit: int = 3,
+) -> List[Dict[str, Any]]:
+    """Return past thumbs-down feedback in this repo whose issue text is
+    near-duplicate (cosine similarity >= threshold) to the given embedding.
+    Used to suppress/down-weight repeat false positives across scans."""
+    conn = await _get_conn()
+    if conn:
+        try:
+            emb = str(embedding)
+            rows = await conn.fetch(
+                """SELECT id, issue_title, comment,
+                          1 - (embedding <=> $1::vector) AS similarity
+                   FROM review_feedback
+                   WHERE repo = $2
+                     AND thumbs_up = FALSE
+                     AND embedding IS NOT NULL
+                     AND 1 - (embedding <=> $1::vector) >= $3
+                   ORDER BY embedding <=> $1::vector
+                   LIMIT $4""",
+                emb, repo, threshold, limit,
+            )
+            return [dict(r) for r in rows]
+        except Exception:
+            logger.exception("[memory_service] find_similar_rejected_feedback failed")
+            return []
+        finally:
+            await release_conn(conn)
+    else:
+        return []
 
 
 async def get_feedback_for_review(review_id: int) -> List[Dict[str, Any]]:
