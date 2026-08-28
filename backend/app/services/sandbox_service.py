@@ -1,16 +1,19 @@
 """
 Sandbox service — isolated agent execution environment.
 
-MVP implementation uses subprocess + resource monitoring.
-Designed to swap to Docker/gVisor/Firecracker when deployed on
-infrastructure with container support (Fly.io, DigitalOcean, Hetzner).
+Uses E2B (Firecracker-isolated cloud sandboxes) when E2B_API_KEY is
+configured — real process/filesystem/network isolation per session, no
+host access. Falls back to hardened local subprocess execution when it
+isn't configured, which is resource-exhaustion mitigation only, NOT a real
+isolation boundary — see e2b_sandbox.py and _safe_sandbox_env below.
 
 Key security layers:
 1. Blocked path patterns (secrets, keys, credentials)
 2. Blocked domain list (cloud metadata endpoints)
-3. Resource limits via psutil monitoring
+3. Resource limits (E2B sandbox limits, or local rlimits as fallback)
 4. Command allowlist / denylist
 5. Full audit trail persisted to sandbox_events table
+6. Sandboxed commands never inherit the backend process's environment/secrets
 """
 import json
 import logging
@@ -24,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from .db import get_conn, release_conn
+from . import e2b_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +158,7 @@ async def ensure_sandbox_schema() -> None:
         await conn.execute("""
             ALTER TABLE sandbox_sessions ADD COLUMN IF NOT EXISTS provider TEXT;
             ALTER TABLE sandbox_sessions ADD COLUMN IF NOT EXISTS provider_key_source TEXT NOT NULL DEFAULT 'platform';
+            ALTER TABLE sandbox_sessions ADD COLUMN IF NOT EXISTS e2b_sandbox_id TEXT;
         """)
         _schema_ready = True
     except Exception:
@@ -231,16 +236,37 @@ async def create_session(owner_id: str, name: str, repo_url: Optional[str],
         session["id"] = str(session["id"])
         session["created_at"] = session["created_at"].isoformat()
 
-        # Create temp workspace directory
+        # Provision the execution environment. Prefer E2B (real container
+        # isolation) whenever configured; otherwise fall back to a local
+        # tempdir + hardened subprocess, which is NOT a real security
+        # boundary — see _safe_sandbox_env and the module docstring above.
         workspace = tempfile.mkdtemp(prefix=f"raptor_sandbox_{session['id'][:8]}_")
+        e2b_id = None
         try:
+            if e2b_sandbox.is_enabled():
+                max_minutes = (resource_limits or {}).get("max_session_minutes", 30)
+                e2b_id = await e2b_sandbox.create_sandbox(
+                    session_id=session["id"],
+                    timeout_seconds=int(max_minutes) * 60,
+                    allow_internet_access=(network_policy or {}).get("allow", True),
+                )
+            else:
+                logger.warning(
+                    "[sandbox_service] E2B_API_KEY not set — session %s will run via "
+                    "local subprocess, which is NOT a real isolation boundary. "
+                    "Set E2B_API_KEY in production.",
+                    session["id"],
+                )
+
             await _update_session(session["id"], status="running",
                                    workspace_path=workspace,
+                                   e2b_sandbox_id=e2b_id,
                                    started_at=datetime.now(timezone.utc))
             session["workspace_path"] = workspace
+            session["e2b_sandbox_id"] = e2b_id
             session["status"] = "running"
             await _log_event(session["id"], "system", {
-                "message": f"Sandbox session started. Workspace: {workspace}",
+                "message": f"Sandbox session started. Provider: {'e2b' if e2b_id else 'local-subprocess'}",
                 "agent_type": agent_type,
                 "repo_url": repo_url,
                 "agent_id": agent_id,
@@ -287,7 +313,8 @@ async def get_session(session_id: str, owner_id: str) -> Optional[Dict[str, Any]
                    workspace_path, policy, resource_limits,
                    agent_id, environment_vars, api_key_refs, network_policy,
                    filesystem_permissions, tool_permissions,
-                   process_pid, started_at, ended_at, paused_at, created_at
+                   process_pid, started_at, ended_at, paused_at, created_at,
+                   e2b_sandbox_id
             FROM sandbox_sessions
             WHERE id = $1::uuid AND owner_id = $2::uuid
             """,
@@ -374,50 +401,51 @@ async def get_events(session_id: str, owner_id: str,
         await release_conn(conn)
 
 
-# ── Command execution ─────────────────────────────────────────────────────────
-# NOTE: subprocess.run() below is still a blocking call inside an async
-# function, same as before this migration (it was blocking a sync worker
-# thread previously). It's still on the "Contain the sandbox" list
-# (scaling-plan item 4 / fix-it item 1) — moving to per-session containers is
-# separate, larger work. Not addressed by this pass.
-
-async def execute_command(session_id: str, owner_id: str,
-                           command: str, timeout: int = 30) -> Dict[str, Any]:
+def _safe_sandbox_env(workspace: str, session_id: str) -> Dict[str, str]:
     """
-    Execute a command in the sandbox workspace.
-    Applies policy checks, resource monitoring, full audit logging.
+    Build the environment for a sandboxed command from scratch — never by
+    inheriting the backend process's environment. os.environ holds every
+    secret this service needs (DATABASE_URL, JWT_SECRET,
+    PROVIDER_KEYS_FERNET_KEY, GITHUB_CLIENT_SECRET, GITHUB_PRIVATE_KEY, AI
+    provider keys, ...), and sandboxed code is untrusted by definition —
+    `env` or `cat /proc/self/environ` inside the sandbox would otherwise
+    hand all of that to whoever/whatever is running there.
     """
-    session = await get_session(session_id, owner_id)
-    if not session:
-        raise ValueError("Session not found or access denied")
-    if session["status"] != "running":
-        raise ValueError(f"Session is {session['status']}, not running")
+    return {
+        "HOME": workspace,
+        "TMPDIR": workspace,
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG": "C.UTF-8",
+        "SANDBOX": "1",
+        "RAPTOR_SANDBOX_ID": session_id,
+    }
 
-    workspace = session.get("workspace_path") or "/tmp"
-    policy = session.get("policy") or {}
+def _limit_local_resources(max_memory_mb: int):
+    """preexec_fn for the local-subprocess fallback: caps CPU time, address
+    space, process count, and file size for the child before exec. This is
+    resource-exhaustion mitigation, NOT process/filesystem isolation — it
+    doesn't stop a command from reading arbitrary host paths the OS user can
+    reach. Only meaningful defense-in-depth when E2B isn't configured."""
+    import resource
 
-    # Policy check
-    allowed, reason = _check_command_policy(command)
-    if not allowed:
-        await _log_event(session_id, "policy_violation", {
-            "command": command, "reason": reason
-        }, severity="critical")
-        return {
-            "stdout": "",
-            "stderr": f"[RAPTOR SANDBOX] Blocked: {reason}",
-            "exit_code": 1,
-            "blocked": True,
-            "duration_ms": 0,
-        }
+    def _apply():
+        try:
+            resource.setrlimit(resource.RLIMIT_CPU, (60, 60))
+            mem_bytes = max(64, int(max_memory_mb)) * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+            resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1024 * 1024, 50 * 1024 * 1024))
+        except Exception:
+            # Never let a resource-limit failure block execution — this is
+            # best-effort hardening on top of the policy checks above, not
+            # the primary control.
+            logger.exception("[sandbox_service] failed to apply local resource limits")
 
-    # Secret detection heuristic — scan command for suspicious file access
-    if any(re.search(p, command, re.IGNORECASE) for p in BLOCKED_PATH_PATTERNS):
-        await _log_event(session_id, "secret_access", {
-            "command": command,
-            "blocked": True
-        }, severity="critical")
+    return _apply
 
-    # Execute
+
+async def _execute_local(session_id: str, command: str, workspace: str,
+                          timeout: int, max_memory_mb: int) -> Dict[str, Any]:
     start = time.time()
     try:
         result = subprocess.run(
@@ -427,16 +455,11 @@ async def execute_command(session_id: str, owner_id: str,
             text=True,
             timeout=timeout,
             cwd=workspace,
-            env={
-                **os.environ,
-                "HOME": workspace,
-                "TMPDIR": workspace,
-                "SANDBOX": "1",
-                "RAPTOR_SANDBOX_ID": session_id,
-            },
+            env=_safe_sandbox_env(workspace, session_id),
+            preexec_fn=_limit_local_resources(max_memory_mb),
         )
         duration_ms = int((time.time() - start) * 1000)
-        stdout = result.stdout[:4096]   # cap output
+        stdout = result.stdout[:4096]
         stderr = result.stderr[:2048]
 
         await _log_event(session_id, "command", {
@@ -453,7 +476,6 @@ async def execute_command(session_id: str, owner_id: str,
             "blocked": False,
             "duration_ms": duration_ms,
         }
-
     except subprocess.TimeoutExpired:
         await _log_event(session_id, "command", {
             "command": command,
@@ -481,12 +503,79 @@ async def execute_command(session_id: str, owner_id: str,
         }
 
 
+async def execute_command(session_id: str, owner_id: str,
+                           command: str, timeout: int = 30) -> Dict[str, Any]:
+    """
+    Execute a command in the sandbox.
+    Applies policy checks, then dispatches to E2B (real isolation) if the
+    session was provisioned there, otherwise the hardened local-subprocess
+    fallback. Full audit logging either way.
+    """
+    session = await get_session(session_id, owner_id)
+    if not session:
+        raise ValueError("Session not found or access denied")
+    if session["status"] != "running":
+        raise ValueError(f"Session is {session['status']}, not running")
+
+    workspace = session.get("workspace_path") or "/tmp"
+    policy = session.get("policy") or {}
+    resource_limits = session.get("resource_limits") or {}
+    e2b_id = session.get("e2b_sandbox_id")
+
+    # Policy check — applies to both providers as defense-in-depth, even
+    # though E2B's isolation makes most of these moot for host safety.
+    allowed, reason = _check_command_policy(command)
+    if not allowed:
+        await _log_event(session_id, "policy_violation", {
+            "command": command, "reason": reason
+        }, severity="critical")
+        return {
+            "stdout": "",
+            "stderr": f"[RAPTOR SANDBOX] Blocked: {reason}",
+            "exit_code": 1,
+            "blocked": True,
+            "duration_ms": 0,
+        }
+
+    # Secret detection heuristic — scan command for suspicious file access
+    if any(re.search(p, command, re.IGNORECASE) for p in BLOCKED_PATH_PATTERNS):
+        await _log_event(session_id, "secret_access", {
+            "command": command,
+            "blocked": True
+        }, severity="critical")
+
+    if e2b_id:
+        start = time.time()
+        result = await e2b_sandbox.run_command(
+            e2b_id, command, cwd="/home/user", timeout=timeout,
+        )
+        if result.pop("sandbox_gone", False):
+            try:
+                await _update_session(session_id, status="error")
+            except Exception:
+                logger.exception("[sandbox_service] failed to mark session error after sandbox_gone")
+        await _log_event(session_id, "command", {
+            "command": command,
+            "exit_code": result["exit_code"],
+            "duration_ms": result["duration_ms"],
+            "stdout_preview": result["stdout"][:200],
+            "provider": "e2b",
+        }, severity="info" if result["exit_code"] == 0 else "warning")
+        return result
+
+    return await _execute_local(
+        session_id, command, workspace, timeout,
+        max_memory_mb=resource_limits.get("max_memory_mb", 256),
+    )
+
+
 async def stop_session(session_id: str, owner_id: str) -> bool:
     session = await get_session(session_id, owner_id)
     if not session:
         return False
 
     workspace = session.get("workspace_path")
+    e2b_id = session.get("e2b_sandbox_id")
 
     await _log_event(session_id, "system", {"message": "Session stopped by user"})
     try:
@@ -496,7 +585,11 @@ async def stop_session(session_id: str, owner_id: str) -> bool:
     except Exception:
         logger.exception("[sandbox_service] stop_session update failed")
 
-    # Clean up workspace
+    if e2b_id:
+        await e2b_sandbox.kill_sandbox(e2b_id)
+
+    # Clean up local workspace (harmless no-op for E2B-backed sessions,
+    # which never wrote anything to it)
     if workspace and os.path.exists(workspace):
         try:
             import shutil
