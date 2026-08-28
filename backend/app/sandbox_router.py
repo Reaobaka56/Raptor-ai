@@ -15,8 +15,6 @@ from .services.provider_key_service import SUPPORTED_PROVIDERS, key_configured
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sandbox", tags=["Sandbox"])
 
-ADMIN_USERNAME = "reaobaka56"
-
 FREE_TIER_LIMITS = {
     "max_sessions_per_day": 3,
     "max_session_minutes": 30,
@@ -29,8 +27,8 @@ PREMIUM_TIER_LIMITS = {
 }
 
 
-def _tier_limits(username: str) -> dict:
-    if username.lower() == ADMIN_USERNAME.lower():
+def _tier_limits(user: Dict[str, Any]) -> dict:
+    if user.get("role") == "admin":
         return PREMIUM_TIER_LIMITS
     return FREE_TIER_LIMITS
 
@@ -82,7 +80,7 @@ async def create_session(
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
     user = await _get_user(session)
-    limits = _tier_limits(user["username"])
+    limits = _tier_limits(user)
 
     sessions_today = await sandbox_service.count_sessions_today(user["id"])
     if sessions_today >= limits["max_sessions_per_day"]:
@@ -187,7 +185,7 @@ async def execute(
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
     user = await _get_user(session)
-    limits = _tier_limits(user["username"])
+    limits = _tier_limits(user)
     timeout = min(body.timeout, 60)  # cap at 60s for free, more for premium
 
     try:

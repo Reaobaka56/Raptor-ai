@@ -1,8 +1,8 @@
 """
 Blog router — public read + admin-only CRUD.
 
-Admin guard: only the session whose username == 'reaobaka56' (or role == 'admin'
-in the users table) may create / update / delete posts.
+Admin guard: only sessions whose users-table `role` is 'admin' may
+create / update / delete posts (see services.user_service.is_admin).
 """
 import logging
 import os

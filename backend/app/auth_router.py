@@ -12,9 +12,16 @@ from fastapi import APIRouter, Request, HTTPException
 from .models import GitHubLoginUrlResponse, AuthCallbackRequest, UserProfile, RepositoryInfo
 from .services.session_store import save_session, SessionStoreUnavailable
 from .services.user_service import upsert_user
+from .services.redis_client import get_redis
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 logger = logging.getLogger(__name__)
+
+# Server-side OAuth state, so /github/login and /github (callback) agree on
+# a value neither the browser nor an attacker can forge. Short TTL — the
+# whole GitHub redirect round-trip normally takes seconds, not minutes.
+_OAUTH_STATE_PREFIX = "oauth_state:"
+_OAUTH_STATE_TTL_SECONDS = 600
 
 
 def _get_github_auth_headers(access_token: Optional[str]) -> Dict[str, str]:
@@ -34,6 +41,18 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
 
     if not client_id or not client_secret:
         raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
+
+    # Verify the state we generated and stored in /github/login. Delete on
+    # read so a state value can't be replayed for a second exchange.
+    state_key = f"{_OAUTH_STATE_PREFIX}{req.state}"
+    try:
+        redis_client = get_redis()
+        valid = redis_client.getdel(state_key) is not None
+    except Exception:
+        logger.exception("[auth] Failed to verify OAuth state")
+        raise HTTPException(status_code=503, detail="Auth service temporarily unavailable, please try again")
+    if not valid:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
 
     token_payload = {
         "client_id": client_id,
@@ -135,12 +154,20 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
 
 
 @router.get("/github/login", response_model=GitHubLoginUrlResponse)
-def github_login(request: Request, redirectUri: Optional[str] = None, state: Optional[str] = None):
+def github_login(request: Request, redirectUri: Optional[str] = None):
     client_id = os.getenv("GITHUB_CLIENT_ID")
     if not client_id:
         raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
-    if not state:
-        state = secrets.token_urlsafe(16)
+
+    # Always generate state ourselves — never trust a client-supplied value,
+    # since anything the browser can set is something an attacker can set.
+    state = secrets.token_urlsafe(32)
+    try:
+        get_redis().set(f"{_OAUTH_STATE_PREFIX}{state}", "1", ex=_OAUTH_STATE_TTL_SECONDS)
+    except Exception:
+        logger.exception("[auth] Failed to persist OAuth state")
+        raise HTTPException(status_code=503, detail="Auth service temporarily unavailable, please try again")
+
     params = {"client_id": client_id, "scope": "repo read:user", "state": state}
     if redirectUri:
         params["redirect_uri"] = redirectUri

@@ -9,8 +9,6 @@ from .db import get_conn, release_conn
 
 logger = logging.getLogger(__name__)
 
-ADMIN_USERNAME = "reaobaka56"
-
 _USER_COLUMNS = """id, github_id, username, name, email, avatar_url,
                    role, account_status, created_at, last_login_at"""
 
@@ -40,24 +38,20 @@ async def upsert_user(github_id: int, username: str, name: Optional[str],
         logger.warning("[user_service] DB unavailable — skipping user upsert for %s", username)
         return (None, False) if return_is_new else None
 
-    # Force admin role for the owner account regardless of what's in the DB
-    role = "admin" if username.lower() == ADMIN_USERNAME.lower() else "user"
-
     try:
         row = await conn.fetchrow(
             f"""
-            INSERT INTO users (github_id, username, name, email, avatar_url, role, last_login_at)
-            VALUES ($1, $2, $3, $4, $5, $6, now())
+            INSERT INTO users (github_id, username, name, email, avatar_url, last_login_at)
+            VALUES ($1, $2, $3, $4, $5, now())
             ON CONFLICT (github_id) DO UPDATE SET
                 username      = EXCLUDED.username,
                 name          = EXCLUDED.name,
                 email         = COALESCE(EXCLUDED.email, users.email),
                 avatar_url    = EXCLUDED.avatar_url,
-                role          = CASE WHEN users.username = $7 THEN 'admin' ELSE users.role END,
                 last_login_at = now()
             RETURNING {_USER_COLUMNS}, (xmax = 0) AS is_new
             """,
-            github_id, username, name, email, avatar_url, role, ADMIN_USERNAME,
+            github_id, username, name, email, avatar_url,
         )
         is_new = bool(row["is_new"]) if row else False
         user = _shape_user({k: v for k, v in dict(row).items() if k != "is_new"}) if row else None
@@ -104,8 +98,6 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
 
 
 async def is_admin(username: str) -> bool:
-    """Fast check — always true for the owner, otherwise check DB role."""
-    if username.lower() == ADMIN_USERNAME.lower():
-        return True
+    """Admin status is determined solely by the DB `role` column."""
     user = await get_user_by_username(username)
     return bool(user and user.get("role") == "admin")
