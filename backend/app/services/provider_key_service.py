@@ -23,7 +23,15 @@ PROVIDER_LABELS = {
 }
 
 def _fernet() -> Fernet:
-    secret = os.getenv("PROVIDER_KEYS_FERNET_KEY") or os.getenv("SECRET_KEY") or os.getenv("JWT_SECRET") or "raptor-local-dev-key"
+    secret = os.getenv("PROVIDER_KEYS_FERNET_KEY")
+    if not secret:
+        raise RuntimeError(
+            "PROVIDER_KEYS_FERNET_KEY is required to encrypt/decrypt provider API "
+            "keys. Set it to a long random value (e.g. `openssl rand -base64 32`) "
+            "in the environment before starting the app. It must NOT fall back to "
+            "SECRET_KEY, JWT_SECRET, or any hardcoded default — those are used "
+            "elsewhere and reusing them here weakens both."
+        )
     key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
     return Fernet(key)
 

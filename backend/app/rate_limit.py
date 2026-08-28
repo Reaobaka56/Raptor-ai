@@ -14,7 +14,6 @@ from .services.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
-ADMIN_USERNAMES = {"reaobaka56"}
 PREMIUM_MULTIPLIER = 10   # premium users get 10x limits
 
 
@@ -87,10 +86,12 @@ def build_rate_limit_rules() -> Tuple[RateLimitRule, ...]:
     )
 
 
-async def _extract_username_from_request(request: Request) -> Optional[str]:
+async def _extract_user_from_request(request: Request) -> Optional[dict]:
     """
-    Extract the authenticated username from the Bearer token in the request.
-    Used to grant admin/premium bypass before hitting the rate limiter.
+    Extract the authenticated user's cached session profile (including role)
+    from the Bearer token in the request. Used to grant the admin/premium
+    bypass before hitting the rate limiter — based on the DB `role` cached
+    at login, never on a hardcoded username.
 
     Sessions live in Postgres (see session_store.py), not Redis, so this can
     fail independently of the Redis-backed rate limiter below — any error
@@ -107,7 +108,7 @@ async def _extract_username_from_request(request: Request) -> Optional[str]:
         from .services.session_store import get_session
         session = await get_session(token)
         if session:
-            return session.get("user", {}).get("username")
+            return session.get("user", {})
     except Exception:
         pass
     return None
@@ -120,7 +121,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
     per-process.
 
     Tiers:
-    - Admin/premium accounts (reaobaka56): unlimited — all limits bypassed
+    - Admin accounts (role == 'admin' in the DB): unlimited — all limits bypassed
     - Regular users: standard limits from env vars
 
     Fail-open by design: if Redis is unreachable, the request is allowed
@@ -136,10 +137,10 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         self.redis = get_redis()
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # Check for admin/premium bypass FIRST
-        username = await _extract_username_from_request(request)
-        if username and username.lower() in ADMIN_USERNAMES:
-            # Premium/admin — no rate limiting at all
+        # Check for admin bypass FIRST
+        user = await _extract_user_from_request(request)
+        if user and user.get("role") == "admin":
+            # Admin — no rate limiting at all
             return await call_next(request)
 
         rule = self._rule_for_path(request.url.path)
