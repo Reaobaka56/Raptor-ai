@@ -1,4 +1,9 @@
 services:
+  - type: redis
+    name: raptor-redis
+    ipAllowList: []
+    plan: free
+
   - type: web
     name: raptor-backend
     env: python
@@ -8,6 +13,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: raptor-redis
+          property: connectionString
       - key: GEMINI_API_KEY
         sync: false
       - key: GITHUB_CLIENT_ID
