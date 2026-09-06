@@ -1,5 +1,13 @@
 import axios from 'axios'
 
+// Lets individual calls opt out of the global 401 handler below — see its
+// comment for why (background polls shouldn't be able to log out the app).
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    skipAuthRedirect?: boolean
+  }
+}
+
 const DEFAULT_PRODUCTION_API_URL = 'https://raptor-ai.onrender.com/api'
 
 const normalizeApiBaseUrl = (url: string) => {
@@ -23,23 +31,39 @@ const api = axios.create({
   withCredentials: true,
 })
 
+export const POST_LOGIN_REDIRECT_KEY = 'postLoginRedirect'
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-// On 401, clear stale session and redirect to home
+// On 401, clear stale session and send the user back to sign in — but not
+// for background/non-critical requests (unread-count polling, an opportunistic
+// admin check, etc). Those set `skipAuthRedirect` in their request config so a
+// single flaky call can't nuke an otherwise-valid session and bounce someone
+// off whatever page they're actively using. Requests that DO still trigger
+// this (session/user-scoped reads the page can't function without) preserve
+// the page the user was on so they land back on it after re-authenticating,
+// instead of always dropping them on the landing page.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !error.config?.skipAuthRedirect) {
       const hadToken = !!localStorage.getItem('token')
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.dispatchEvent(new Event('auth-change'))
       if (hadToken) {
         // Only redirect if user was logged in — avoids redirect loops on public pages
+        const current = window.location.pathname + window.location.search
+        if (current.startsWith('/dashboard') || current.startsWith('/reviews') || current.startsWith('/analytics')
+          || current.startsWith('/rules') || current.startsWith('/onboarding') || current.startsWith('/teams')
+          || current.startsWith('/calendar') || current.startsWith('/chat') || current.startsWith('/repos')
+          || current.startsWith('/sandbox') || current.startsWith('/agents') || current.startsWith('/settings')) {
+          sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, current)
+        }
         window.location.href = '/?session_expired=1'
       }
     }
@@ -156,7 +180,9 @@ export const authApi = { startGithubLogin, completeGithubLogin }
 
 export const userApi = {
   getMe: () => api.get<UserProfile>('/users/me'),
-  isAdmin: () => api.get<{ isAdmin: boolean }>('/users/me/is-admin'),
+  // Opportunistic check (drives whether admin-only controls render) — a
+  // stale/expired token here shouldn't log the user out of the app.
+  isAdmin: () => api.get<{ isAdmin: boolean }>('/users/me/is-admin', { skipAuthRedirect: true }),
 }
 
 // ── Blog ───────────────────────────────────────────────────────────────────────
@@ -328,7 +354,9 @@ export const chatApi = {
     api.get<{ messages: ChatMessage[]; other_user: any }>(`/chat/messages/${username}`, { params: before ? { before } : {} }),
   sendMessage: (receiver_username: string, content: string) =>
     api.post<ChatMessage>('/chat/messages', { receiver_username, content }),
-  getUnreadCount: () => api.get<{ count: number }>('/chat/unread-count'),
+  // Polled every 30s in the background (see Layout) — a single stale-token
+  // failure here shouldn't log the user out mid-session.
+  getUnreadCount: () => api.get<{ count: number }>('/chat/unread-count', { skipAuthRedirect: true }),
   searchUsers: (q: string) => api.get<any[]>('/chat/users/search', { params: { q } }),
 }
 
@@ -429,6 +457,14 @@ export const sandboxApi = {
   listAgents: (sessionId: string) => api.get<Agent[]>(`/sandbox/sessions/${sessionId}/agents`),
   attachAgent: (sessionId: string, agentId: string) => api.post<Agent>(`/sandbox/sessions/${sessionId}/agents`, { agent_id: agentId }),
   dropAgent: (sessionId: string, agentId: string) => api.delete<Agent>(`/sandbox/sessions/${sessionId}/agents/${agentId}`),
+  // Editor — reads/writes the session's actual workspace files on disk.
+  listFiles: (sessionId: string) => api.get<{ path: string; size: number }[]>(`/sandbox/sessions/${sessionId}/files`),
+  readFile: (sessionId: string, path: string) => api.get<{ path: string; content: string; size: number }>(`/sandbox/sessions/${sessionId}/file`, { params: { path } }),
+  writeFile: (sessionId: string, path: string, content: string) => api.put<{ path: string; size: number }>(`/sandbox/sessions/${sessionId}/file`, { path, content }),
+  runTests: (sessionId: string, command?: string, timeout = 120) => api.post<{
+    command: string | null; stdout: string; stderr: string; exit_code: number
+    blocked: boolean; duration_ms: number; passed: boolean | null
+  }>(`/sandbox/sessions/${sessionId}/test`, { command, timeout }),
 }
 
 export default api

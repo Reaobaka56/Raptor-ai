@@ -5,10 +5,15 @@ import {
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { TRexIcon } from './TRexIcon'
-import { startGithubLogin, chatApi, type UserProfile } from '../api'
+import { startGithubLogin, chatApi } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 interface LayoutProps { children: React.ReactNode }
 
+// Blog is included for every authenticated user (not just admins) — the
+// Blog page itself already gates create/edit/delete controls behind its
+// own isAdmin check, so this is read access to a nav item, not a
+// permissions change.
 const baseNavItems = [
   { path: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
   { path: '/reviews',    label: 'Reviews',    icon: List },
@@ -18,18 +23,17 @@ const baseNavItems = [
   { path: '/teams',      label: 'Teams',      icon: Users },
   { path: '/chat',       label: 'Chat',       icon: MessageSquare, badge: true },
   { path: '/calendar',   label: 'Calendar',   icon: Calendar },
+  { path: '/blog',       label: 'Blog',       icon: Newspaper },
   { path: '/rules',      label: 'AI Memory',  icon: Brain },
   { path: '/settings',   label: 'Settings',   icon: KeyRound },
 ]
 
-const adminNavItem = { path: '/blog', label: 'Blog', icon: Newspaper, badge: false }
-
 export default function Layout({ children }: LayoutProps) {
   const location  = useLocation()
   const navigate  = useNavigate()
+  const { user, isAuthenticated, logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen]     = useState(false)
-  const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -48,27 +52,14 @@ export default function Layout({ children }: LayoutProps) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  useEffect(() => {
-    const checkAuth = () => {
-      const storedUser = localStorage.getItem('user')
-      if (storedUser) {
-        try { setUser(JSON.parse(storedUser)) }
-        catch { localStorage.removeItem('user') }
-      } else { setUser(null) }
-    }
-    checkAuth()
-    window.addEventListener('auth-change', checkAuth)
-    return () => window.removeEventListener('auth-change', checkAuth)
-  }, [])
-
   // Poll unread count every 30s
   useEffect(() => {
-    if (!localStorage.getItem('token')) return
+    if (!isAuthenticated) return
     const fetch = () => chatApi.getUnreadCount().then(r => setUnreadCount(r.data.count)).catch(() => {})
     fetch()
     const iv = setInterval(fetch, 30000)
     return () => clearInterval(iv)
-  }, [])
+  }, [isAuthenticated])
 
   const handleGithubLogin = async () => {
     if (isLoggingIn) return
@@ -78,18 +69,16 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setUser(null)
-    window.dispatchEvent(new Event('auth-change'))
+    logout()
     navigate('/')
   }
 
   // Layout only ever mounts inside ProtectedRoute, so `user` is normally
-  // set — this list is what a logged-in desktop nav shows. Blog management
-  // is admin-only; regular users never see the nav item (the backend also
-  // independently enforces admin-only access to blog write endpoints).
-  const navItems = user?.role === 'admin' ? [...baseNavItems, adminNavItem] : baseNavItems
+  // set by the time this renders. Blog *management* (create/edit/delete)
+  // is admin-only, but the backend already enforces that independently on
+  // the write endpoints — reading the nav item is fine for every logged-in
+  // user.
+  const navItems = baseNavItems
 
   const NavLink = ({ path, label, icon: Icon, badge }: typeof navItems[0]) => {
     const active = location.pathname === path || location.pathname.startsWith(path + '/')

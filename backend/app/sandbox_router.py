@@ -66,6 +66,16 @@ class ExecuteRequest(BaseModel):
     timeout: int = 30
 
 
+class WriteFileRequest(BaseModel):
+    path: str
+    content: str
+
+
+class RunTestsRequest(BaseModel):
+    command: Optional[str] = None
+    timeout: int = 120
+
+
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("/sessions")
@@ -194,6 +204,71 @@ async def execute(
             owner_id=user["id"],
             command=body.command,
             timeout=timeout,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions/{session_id}/files")
+async def list_files(
+    session_id: str,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    """List files in the session's workspace, for the editor's file tree."""
+    user = await _get_user(session)
+    try:
+        return await sandbox_service.list_workspace_files(session_id, user["id"])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/sessions/{session_id}/file")
+async def read_file(
+    session_id: str,
+    path: str = Query(..., description="File path relative to workspace root"),
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = await _get_user(session)
+    try:
+        return await sandbox_service.read_workspace_file(session_id, user["id"], path)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/sessions/{session_id}/file")
+async def write_file(
+    session_id: str,
+    body: WriteFileRequest,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = await _get_user(session)
+    try:
+        return await sandbox_service.write_workspace_file(session_id, user["id"], body.path, body.content)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/sessions/{session_id}/test")
+async def run_tests(
+    session_id: str,
+    body: RunTestsRequest,
+    session: Dict[str, Any] = Depends(get_required_github_session),
+):
+    user = await _get_user(session)
+    limits = _tier_limits(user)
+    timeout = min(body.timeout, 240 if user.get("role") == "admin" else 90)
+    try:
+        return await sandbox_service.run_tests(
+            session_id=session_id, owner_id=user["id"],
+            command=body.command, timeout=timeout,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -481,6 +481,166 @@ async def execute_command(session_id: str, owner_id: str,
         }
 
 
+# ── Workspace file access (editor) ────────────────────────────────────────────
+# All paths are resolved against the session's own workspace_path and checked
+# with os.path.realpath so a caller can't escape it with `..` or an absolute
+# path. This is separate from the read-only GitHub-backed file browser in
+# repo_router.py — these read/write the agent's actual working copy on disk.
+
+MAX_EDITABLE_FILE_BYTES = 2 * 1024 * 1024  # 2MB — editor guardrail, not a hard sandbox limit
+
+# Directories we never want to walk into when listing (noise, not secrets —
+# secret *files* are still caught by _check_path_policy below).
+SKIP_DIR_NAMES = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"}
+
+
+def _resolve_in_workspace(workspace: str, rel_path: str) -> str:
+    """Resolve rel_path against workspace, raising ValueError on any attempt
+    to escape the workspace root (path traversal, symlink, or absolute path)."""
+    workspace_real = os.path.realpath(workspace)
+    candidate = os.path.realpath(os.path.join(workspace, rel_path.lstrip("/")))
+    if candidate != workspace_real and not candidate.startswith(workspace_real + os.sep):
+        raise ValueError("Path escapes sandbox workspace")
+    return candidate
+
+
+async def list_workspace_files(session_id: str, owner_id: str) -> List[Dict[str, Any]]:
+    """Return a flat list of files under the session workspace, for the
+    editor's file tree. Skips noise directories and blocked-path files."""
+    session = await get_session(session_id, owner_id)
+    if not session:
+        raise ValueError("Session not found or access denied")
+    workspace = session.get("workspace_path")
+    if not workspace or not os.path.isdir(workspace):
+        return []
+
+    results = []
+    for root, dirs, files in os.walk(workspace):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIR_NAMES and not d.startswith(".")]
+        for fname in files:
+            full = os.path.join(root, fname)
+            rel = os.path.relpath(full, workspace)
+            allowed, _ = _check_path_policy(rel)
+            if not allowed:
+                continue
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                continue
+            results.append({"path": rel.replace(os.sep, "/"), "size": size})
+    results.sort(key=lambda f: f["path"].lower())
+    return results
+
+
+async def read_workspace_file(session_id: str, owner_id: str, path: str) -> Dict[str, Any]:
+    session = await get_session(session_id, owner_id)
+    if not session:
+        raise ValueError("Session not found or access denied")
+    workspace = session.get("workspace_path")
+    if not workspace:
+        raise ValueError("Session has no workspace")
+
+    allowed, reason = _check_path_policy(path)
+    if not allowed:
+        await _log_event(session_id, "secret_access", {"path": path, "action": "read", "blocked": True}, severity="critical")
+        raise PermissionError(reason)
+
+    full = _resolve_in_workspace(workspace, path)
+    if not os.path.isfile(full):
+        raise FileNotFoundError(f"No such file: {path}")
+    size = os.path.getsize(full)
+    if size > MAX_EDITABLE_FILE_BYTES:
+        raise ValueError(f"File too large to edit ({size} bytes, limit {MAX_EDITABLE_FILE_BYTES})")
+
+    with open(full, "r", encoding="utf-8", errors="replace") as f:
+        content = f.read()
+    return {"path": path, "content": content, "size": size}
+
+
+async def write_workspace_file(session_id: str, owner_id: str, path: str, content: str) -> Dict[str, Any]:
+    session = await get_session(session_id, owner_id)
+    if not session:
+        raise ValueError("Session not found or access denied")
+    if session["status"] != "running":
+        raise ValueError(f"Session is {session['status']}, not running")
+    workspace = session.get("workspace_path")
+    if not workspace:
+        raise ValueError("Session has no workspace")
+
+    allowed, reason = _check_path_policy(path)
+    if not allowed:
+        await _log_event(session_id, "secret_access", {"path": path, "action": "write", "blocked": True}, severity="critical")
+        raise PermissionError(reason)
+
+    if len(content.encode("utf-8")) > MAX_EDITABLE_FILE_BYTES:
+        raise ValueError("File too large to save")
+
+    full = _resolve_in_workspace(workspace, path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    await _log_event(session_id, "file_write", {"path": path, "bytes": len(content)})
+    return {"path": path, "size": len(content.encode("utf-8"))}
+
+
+# ── Test runner ────────────────────────────────────────────────────────────────
+# Detect which test command applies by looking for the marker files each
+# ecosystem uses, then run it through the existing execute_command path so it
+# gets the same policy checks, audit logging, and timeout handling as any
+# other sandbox command.
+
+TEST_RUNNERS: List[Tuple[str, str]] = [
+    ("pytest.ini", "python -m pytest"),
+    ("pyproject.toml", "python -m pytest"),
+    ("setup.py", "python -m pytest"),
+    ("package.json", "npm test"),
+    ("go.mod", "go test ./..."),
+    ("Cargo.toml", "cargo test"),
+    ("pom.xml", "mvn test"),
+    ("build.gradle", "gradle test"),
+    ("Gemfile", "bundle exec rspec"),
+]
+
+
+def detect_test_command(workspace: str) -> Optional[str]:
+    for marker, command in TEST_RUNNERS:
+        if os.path.exists(os.path.join(workspace, marker)):
+            return command
+    return None
+
+
+async def run_tests(session_id: str, owner_id: str, command: Optional[str] = None,
+                     timeout: int = 120) -> Dict[str, Any]:
+    """Run the project's test suite in the sandbox. Uses `command` if given,
+    otherwise auto-detects from repo marker files. Returns the same shape as
+    execute_command plus the resolved command and a best-effort pass/fail
+    summary parsed from output."""
+    session = await get_session(session_id, owner_id)
+    if not session:
+        raise ValueError("Session not found or access denied")
+    workspace = session.get("workspace_path")
+    if not workspace:
+        raise ValueError("Session has no workspace")
+
+    resolved = command or detect_test_command(workspace)
+    if not resolved:
+        return {
+            "command": None,
+            "stdout": "",
+            "stderr": "Could not detect a test runner. Specify a command explicitly.",
+            "exit_code": 1,
+            "blocked": False,
+            "duration_ms": 0,
+            "passed": None,
+        }
+
+    result = await execute_command(session_id, owner_id, resolved, timeout=timeout)
+    result["command"] = resolved
+    result["passed"] = (result["exit_code"] == 0) if not result.get("blocked") else None
+    return result
+
+
 async def stop_session(session_id: str, owner_id: str) -> bool:
     session = await get_session(session_id, owner_id)
     if not session:

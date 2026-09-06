@@ -10,6 +10,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
     "@tanstack/react-query": "^5.24.0",
     "axios": "^1.18.1",
     "clsx": "^2.1.0",
