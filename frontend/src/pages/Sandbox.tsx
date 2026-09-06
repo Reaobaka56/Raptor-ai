@@ -6,6 +6,7 @@ import {
   Eye, X, KeyRound, Bot, UserMinus, UserPlus
 } from 'lucide-react'
 import api, { reposApi, providerKeysApi, agentApi, sandboxApi, type RepositoryInfo, type ProviderKey, type Agent } from '../api'
+import SandboxEditor from '../components/SandboxEditor'
 
 interface SandboxSession {
   id: string; name: string; status: string; agent_type: string
@@ -374,7 +375,7 @@ function SessionDetail({ session, onBack, onStop }: {
   session: SandboxSession; onBack: () => void; onStop: () => void
 }) {
   const [stats, setStats] = useState<Record<string, number>>({})
-  const [activeTab, setActiveTab] = useState<'terminal' | 'audit'>('terminal')
+  const [activeTab, setActiveTab] = useState<'terminal' | 'editor' | 'audit'>('terminal')
   const [stopping, setStopping] = useState(false)
 
   useEffect(() => {
@@ -437,12 +438,12 @@ function SessionDetail({ session, onBack, onStop }: {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-white/8 pb-0">
-        {(['terminal', 'audit'] as const).map(tab => (
+        {(['terminal', 'editor', 'audit'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold transition border-b-2 -mb-px ${
               activeTab === tab ? 'border-white text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}>
-            {tab === 'terminal' ? 'Terminal' : 'Audit Log'}
+            {tab === 'terminal' ? 'Terminal' : tab === 'editor' ? 'Editor' : 'Audit Log'}
           </button>
         ))}
       </div>
@@ -451,6 +452,8 @@ function SessionDetail({ session, onBack, onStop }: {
         session.status === 'running'
           ? <SandboxTerminal sessionId={session.id} />
           : <div className="flex items-center justify-center py-16 text-gray-600 text-sm">Session is {session.status}</div>
+      ) : activeTab === 'editor' ? (
+        <SandboxEditor sessionId={session.id} running={session.status === 'running'} />
       ) : (
         <AuditLog sessionId={session.id} />
       )}
