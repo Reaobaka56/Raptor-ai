@@ -3,6 +3,7 @@ import { ArrowLeft, Calendar, User, ArrowRight, Plus, Edit2, Trash2, Eye, EyeOff
 import { Link } from 'react-router-dom';
 import { TRexIcon } from '../components/TRexIcon';
 import { blogApi, userApi, type BlogPost, type BlogMedia } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
@@ -149,11 +150,13 @@ export default function Blog() {
   const [formError, setFormError] = useState<string | null>(null);
   const [adminCheckFailed, setAdminCheckFailed] = useState(false);
   const [actionBanner, setActionBanner] = useState<string | null>(null);
-  const token = localStorage.getItem('token');
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     void loadPosts();
-    if (token) {
+    if (isAuthenticated) {
+      // Marked skipAuthRedirect in api.ts — a failed/stale check here just
+      // means "not an admin" for this page, it never logs the user out.
       userApi.isAdmin()
         .then(r => setIsAdmin(r.data.isAdmin))
         .catch(err => {
@@ -164,7 +167,7 @@ export default function Blog() {
           setAdminCheckFailed(true);
         });
     }
-  }, [token]);
+  }, [isAuthenticated]);
 
   const loadPosts = async () => {
     setLoading(true);

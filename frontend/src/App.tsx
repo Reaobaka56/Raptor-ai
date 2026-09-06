@@ -22,6 +22,7 @@ import AgentsPage from './pages/Agents'
 import './index.css'
 
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { AuthProvider } from './context/AuthContext'
 
 import AuthError from './pages/AuthError'
 import AuthCallback from './pages/AuthCallback'
@@ -31,7 +32,7 @@ import OnboardingGuide from './pages/OnboardingGuide'
 
 function App() {
   return (
-    <>
+    <AuthProvider>
       <Routes>
         <Route path="/auth/error" element={<AuthError />} />
         <Route path="/auth/github/callback" element={<AuthCallback />} />
@@ -59,7 +60,7 @@ function App() {
        
         <Route path="/debug" element={<DebugTool />} />
       </Routes>
-    </>
+    </AuthProvider>
   )
 }
 

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { AlertTriangle } from "lucide-react"
-import { completeGithubLogin } from "../api"
+import { completeGithubLogin, POST_LOGIN_REDIRECT_KEY } from "../api"
+import { useAuth } from "../context/AuthContext"
 
 export default function AuthCallback() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
+  const { login } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,10 +25,13 @@ export default function AuthCallback() {
 
       try {
         const { data } = await completeGithubLogin(code, state ?? undefined)
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-        window.dispatchEvent(new Event('auth-change'))
-        navigate('/dashboard', { replace: true })
+        login(data.token, data.user)
+        // Return to whatever protected page the user was originally trying
+        // to reach (set by ProtectedRoute when it bounced them here), not
+        // always the dashboard.
+        const dest = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY)
+        sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY)
+        navigate(dest || '/dashboard', { replace: true })
       } catch (err: any) {
         setError(err.response?.data?.detail || err.message || 'Authentication failed')
         setLoading(false)

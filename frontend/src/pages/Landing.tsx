@@ -5,6 +5,7 @@ import { TRexIcon } from '../components/TRexIcon';
 import { getGithubRedirectUri } from '../api';
 import SignInModal from '../components/SignInModal';
 import NavCard from '../components/NavCard';
+import { useAuth } from '../context/AuthContext';
 import { ProviderLogo, mcpClients, providers } from '../components/ProviderLogos';
 
 /** Fades + slides children in the first time they scroll into view. */
@@ -219,6 +220,12 @@ export default function Landing() {
   const [sessionExpired, setSessionExpired] = useState(false);
 
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  // Landing never auto-redirects an authenticated user away — they can
+  // still browse it if they navigate here on purpose. CTAs just point at
+  // the dashboard instead of opening the sign-in flow, and login/signup
+  // actions get out of the way.
+  const goToDashboard = () => navigate('/dashboard');
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -316,14 +323,23 @@ export default function Landing() {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
-          <button onClick={() => setShowSignIn(true)}
-            className="text-sm text-gray-400 hover:text-white transition-colors">
-            Sign in
-          </button>
-          <button onClick={() => setShowSignIn(true)}
-            className="flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 transition">
-            <Github className="h-4 w-4" /> Get started
-          </button>
+          {isAuthenticated ? (
+            <button onClick={goToDashboard}
+              className="flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 transition">
+              Dashboard
+            </button>
+          ) : (
+            <>
+              <button onClick={() => setShowSignIn(true)}
+                className="text-sm text-gray-400 hover:text-white transition-colors">
+                Sign in
+              </button>
+              <button onClick={() => setShowSignIn(true)}
+                className="flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black hover:bg-gray-100 transition">
+                <Github className="h-4 w-4" /> Get started
+              </button>
+            </>
+          )}
         </div>
 
         {/* Mobile */}
@@ -351,10 +367,17 @@ export default function Landing() {
                 )
               ))}
             </nav>
-            <button onClick={() => { setMobileMenuOpen(false); setShowSignIn(true); }}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 text-sm font-bold text-black">
-              <Github className="h-4 w-4" /> Get started free
-            </button>
+            {isAuthenticated ? (
+              <button onClick={() => { setMobileMenuOpen(false); goToDashboard(); }}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 text-sm font-bold text-black">
+                Go to Dashboard
+              </button>
+            ) : (
+              <button onClick={() => { setMobileMenuOpen(false); setShowSignIn(true); }}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 text-sm font-bold text-black">
+                <Github className="h-4 w-4" /> Get started free
+              </button>
+            )}
           </div>
         )}
       </header>
@@ -368,11 +391,18 @@ export default function Landing() {
           Raptor reviews every pull request in under 30 seconds — finding security flaws, performance issues, and bad patterns before they ship.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center gap-4">
-          <button onClick={() => setShowSignIn(true)}
-            className="flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition disabled:opacity-60">
-            <Github className="h-4 w-4" />
-            {isLoggingIn ? 'Connecting…' : 'Review your first PR free'}
-          </button>
+          {isAuthenticated ? (
+            <button onClick={goToDashboard}
+              className="flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition">
+              Go to your dashboard
+            </button>
+          ) : (
+            <button onClick={() => setShowSignIn(true)}
+              className="flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition disabled:opacity-60">
+              <Github className="h-4 w-4" />
+              {isLoggingIn ? 'Connecting…' : 'Review your first PR free'}
+            </button>
+          )}
           <Link to="/docs" className="text-sm text-gray-500 hover:text-white transition-colors underline underline-offset-4">
             See how it works
           </Link>
@@ -538,11 +568,18 @@ export default function Landing() {
           </h2>
           <p className="mt-6 text-gray-400 max-w-md mx-auto">Try Raptor on your next pull request today.</p>
           <div className="mt-10">
-            <button onClick={() => setShowSignIn(true)}
-              className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition disabled:opacity-60">
-              <Github className="h-4 w-4" />
-              {isLoggingIn ? 'Connecting…' : 'Start reviewing PRs free'}
-            </button>
+            {isAuthenticated ? (
+              <button onClick={goToDashboard}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition">
+                Go to your dashboard
+              </button>
+            ) : (
+              <button onClick={() => setShowSignIn(true)}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black hover:bg-gray-100 transition disabled:opacity-60">
+                <Github className="h-4 w-4" />
+                {isLoggingIn ? 'Connecting…' : 'Start reviewing PRs free'}
+              </button>
+            )}
           </div>
           <p className="mt-4 text-xs text-gray-700">Free for open source · No credit card · Cancel anytime</p>
         </section>
