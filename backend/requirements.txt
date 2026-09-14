@@ -13,3 +13,9 @@ pgvector
 asyncpg
 psycopg2-binary
 redis
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+pytest-cov

@@ -1,6 +1,9 @@
 # Frontend Tests
 
-Place test files here (e.g. `*.test.ts` / `*.test.tsx`).
+Vitest + Testing Library. `tests/setup.ts` loads jest-dom matchers and is wired
+in via `vite.config.ts`'s `test` block.
 
-No test runner is configured yet — add one (e.g. Vitest) when ready:
-    npm install -D vitest @testing-library/react
+Run:
+    npm install
+    npm test        # single run
+    npm run test:watch
