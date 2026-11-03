@@ -106,13 +106,13 @@ MOCK_REVIEWS = []
 # Bounded LPUSH/LTRIM list in Redis instead, so it's consistent regardless
 # of which instance served the webhook or which instance later reads it.
 import json as _json
-from .services.redis_client import get_redis as _get_redis
+from .services.redis_client import get_async_redis as _get_redis
 
 WEBHOOK_LOG_KEY = "webhook_logs"
 WEBHOOK_LOG_MAX = 200
 
 
-def append_webhook_log(event_log) -> None:
+async def append_webhook_log(event_log) -> None:
     """Push a WebhookLogItem onto the shared, bounded Redis log.
 
     Best-effort: Redis is optional infra (see auth/session storage, which
@@ -124,20 +124,20 @@ def append_webhook_log(event_log) -> None:
     payload = event_log.model_dump() if hasattr(event_log, "model_dump") else dict(event_log)
     try:
         r = _get_redis()
-        r.lpush(WEBHOOK_LOG_KEY, _json.dumps(payload, default=str))
-        r.ltrim(WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 1)
+        await r.lpush(WEBHOOK_LOG_KEY, _json.dumps(payload, default=str))
+        await r.ltrim(WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 1)
     except Exception:
         logging.getLogger(__name__).warning(
             "[webhook_log] Redis unavailable, dropping webhook log entry", exc_info=True
         )
 
 
-def get_webhook_logs(limit: int = WEBHOOK_LOG_MAX) -> list:
+async def get_webhook_logs(limit: int = WEBHOOK_LOG_MAX) -> list:
     """Most-recent-first list of webhook event dicts. Returns [] rather than
     raising if Redis is unavailable — same best-effort reasoning as above."""
     try:
         r = _get_redis()
-        raw = r.lrange(WEBHOOK_LOG_KEY, 0, limit - 1)
+        raw = await r.lrange(WEBHOOK_LOG_KEY, 0, limit - 1)
         return [_json.loads(item) for item in raw]
     except Exception:
         logging.getLogger(__name__).warning(

@@ -251,14 +251,14 @@ async def trigger_reindex(
 ):
     """Manually (re)index a repo for cross-file review context, rather than
     waiting for the next PR scan to trigger it lazily."""
-    from .services.codebase_index_service import index_repository
+    from .services.codebase_index_service import schedule_index
 
     token = session.get("access_token", "")
     if not token:
         raise HTTPException(status_code=401, detail="No GitHub access token in session")
 
     full_name = f"{owner}/{repo}"
-    asyncio.create_task(index_repository(full_name, token))
+    schedule_index(full_name, token)
     return {"status": "started", "repo": full_name}
 
 

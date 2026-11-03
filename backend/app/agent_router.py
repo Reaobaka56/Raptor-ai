@@ -2,11 +2,12 @@
 Agent router — REST API for AI agents.
 """
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .auth_dependencies import get_required_github_session, get_current_user as _get_user
 from .services.user_service import get_user_by_username
 from .services import agent_service
+from .services.agent_service import AgentValidationError
 from .services.provider_key_service import upsert_key, SUPPORTED_PROVIDERS
 
 router = APIRouter(prefix="/api/agents", tags=["Agents"])
@@ -55,7 +56,10 @@ async def create_agent(
             raise HTTPException(status_code=400, detail="Unsupported provider for API key")
         if not await upsert_key(user["id"], provider, api_key):
             raise HTTPException(status_code=400, detail="Failed to save API key")
-    return await agent_service.create_agent(user["id"], data)
+    try:
+        return await agent_service.create_agent(user["id"], data)
+    except AgentValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("")
@@ -83,7 +87,10 @@ async def update_agent(
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
     user = await _get_user(session)
-    agent = await agent_service.update_agent(agent_id, user["id"], data)
+    try:
+        agent = await agent_service.update_agent(agent_id, user["id"], data)
+    except AgentValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent
@@ -102,7 +109,7 @@ async def delete_agent(
 @router.get("/{agent_id}/activity")
 async def get_activity(
     agent_id: str,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=500),
     session: Dict[str, Any] = Depends(get_required_github_session),
 ):
     user = await _get_user(session)

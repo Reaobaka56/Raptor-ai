@@ -11,33 +11,55 @@ DB_URL = os.getenv("DATABASE_URL") or os.getenv("PGVECTOR_CONN_STRING")
 _pool: Optional[asyncpg.Pool] = None
 
 
+def _jsonb_encode(value) -> str:
+    """Encoder for json/jsonb params. Call sites pass EITHER a Python object
+    (correct) OR a pre-serialized JSON string via json.dumps(...) (very common
+    in this codebase). Blindly json.dumps-ing the second form stores a JSON
+    *string* containing JSON text instead of an object/array, which breaks
+    jsonb_array_elements(), `col || $1::jsonb`, and every reader. So: a str
+    that already parses to an object/array is passed through untouched; any
+    other value is serialized normally."""
+    if isinstance(value, str):
+        try:
+            if isinstance(json.loads(value), (dict, list)):
+                return value
+        except ValueError:
+            pass
+    return json.dumps(value, default=str)
+
+
+def _jsonb_decode(text: str):
+    """Decoder that also repairs legacy double-encoded rows (a JSON string
+    holding serialized JSON) written before _jsonb_encode existed."""
+    value = json.loads(text)
+    if isinstance(value, str) and value.lstrip()[:1] in ("{", "["):
+        try:
+            inner = json.loads(value)
+            if isinstance(inner, (dict, list)):
+                return inner
+        except ValueError:
+            pass
+    return value
+
+
 async def _init_connection(conn: asyncpg.Connection) -> None:
     """Per-connection setup, run by asyncpg on every new pooled connection.
 
-    Unlike psycopg2 (which auto-decoded json/jsonb columns into dicts/lists
-    via psycopg2.extras), asyncpg returns json/jsonb columns as raw text by
-    default. Without this, every jsonb column (meetings, provider keys,
-    agent configs, telemetry payloads, etc.) comes back as a JSON *string*
-    instead of a parsed object/array, which breaks consumers that expect a
-    dict/list (e.g. frontend code calling .filter() on what it assumes is
-    an array). Registering these codecs restores the old psycopg2 behavior
-    pool-wide instead of patching every call site individually.
+    asyncpg returns json/jsonb columns as raw text by default (unlike
+    psycopg2), so we register codecs that decode to Python objects pool-wide
+    instead of patching every call site. See _jsonb_encode/_jsonb_decode for
+    the double-encoding pitfalls this guards against.
     """
-    await conn.set_type_codec(
-        "json",
-        encoder=json.dumps,
-        decoder=json.loads,
-        schema="pg_catalog",
-    )
-    await conn.set_type_codec(
-        "jsonb",
-        encoder=json.dumps,
-        decoder=json.loads,
-        schema="pg_catalog",
-    )
+    for typename in ("json", "jsonb"):
+        await conn.set_type_codec(
+            typename,
+            encoder=_jsonb_encode,
+            decoder=_jsonb_decode,
+            schema="pg_catalog",
+        )
 
 
-async def init_pool(minconn: int = 2, maxconn: int = 10):
+async def init_pool(minconn: int = 2, maxconn: int = int(os.getenv("DB_POOL_MAX", "20"))):
     global _pool
     if not DB_URL:
         logger.warning("[db] DATABASE_URL/PGVECTOR_CONN_STRING not configured; skipping connection pool initialization")
@@ -56,6 +78,7 @@ async def init_pool(minconn: int = 2, maxconn: int = 10):
             min_size=minconn,
             max_size=maxconn,
             statement_cache_size=0,
+            command_timeout=float(os.getenv("DB_COMMAND_TIMEOUT", "30")),
             init=_init_connection,
         )
         return _pool
@@ -73,7 +96,8 @@ async def get_conn() -> Optional[asyncpg.pool.PoolConnectionProxy]:
         await init_pool()
     if _pool is None:
         return None
-    return await _pool.acquire()
+    # Fail fast instead of queueing forever when the pool is exhausted.
+    return await _pool.acquire(timeout=float(os.getenv("DB_ACQUIRE_TIMEOUT", "10")))
 
 
 async def release_conn(conn) -> None:

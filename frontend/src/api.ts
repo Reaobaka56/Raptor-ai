@@ -255,7 +255,7 @@ export const reposApi = {
 export const reviewsApi = {
   getAll: (params?: { repo?: string; limit?: number; offset?: number }) =>
     api.get('/reviews', { params }),
-  getById: (id: number) => api.get(`/reviews/${id}`),
+  getById: (id: string | number) => api.get(`/reviews/${id}`),
 }
 
 export const statsApi = {
@@ -390,8 +390,8 @@ export interface OnboardingStats {
 }
 
 export const prApi = {
-  createPullRequest: (reviewId: number) =>
-    api.post<{ pr_url: string; pr_number: number }>(`/reviews/${reviewId}/create-fix-pr`),
+  createPullRequest: (reviewId: string | number) =>
+    api.post<{ prUrl: string; prNumber: number }>(`/reviews/${reviewId}/pull-request`),
 }
 
 // ── Multi-Agent API ────────────────────────────────────────────────────────────

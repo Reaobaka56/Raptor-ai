@@ -9,6 +9,14 @@ import httpx
 
 from ..models import Review, ReviewIssue
 
+# Cap concurrent webhook-triggered scans per process so a burst of pushes
+# queues instead of stampeding Gemini / the DB pool.
+_scan_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_SCANS", "4")))
+
+
+def scan_slot():
+    return _scan_semaphore
+
 
 async def post_pr_review(
     repo_name: str,
@@ -107,11 +115,38 @@ async def post_pr_review(
             )
 
 
+async def save_review(review: Review, owner_user_id: Optional[str] = None) -> None:
+    """Persist a completed review. Best-effort: a DB failure must never fail
+    the scan itself (the GitHub comments have already been posted)."""
+    import logging
+    from .db import get_conn, release_conn
+
+    conn = await get_conn()
+    if not conn:
+        return
+    try:
+        repo_owner = review.githubRepo.split("/")[0].lower() if "/" in review.githubRepo else None
+        await conn.execute(
+            """INSERT INTO reviews
+                   (id, github_repo, pr_number, pr_title, pr_url, issues, summary,
+                    status, review_time_ms, owner_user_id, repo_owner)
+               VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10::uuid, $11)""",
+            review.id, review.githubRepo, review.prNumber, review.prTitle, review.prUrl,
+            json.dumps([i.dict() for i in review.issues]), review.summary, review.status,
+            review.reviewTimeMs, owner_user_id, repo_owner,
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to persist review %s", review.id)
+    finally:
+        await release_conn(conn)
+
+
 async def run_scan(
     target: str,
     github_token: Optional[str] = None,
     pr_number_override: Optional[int] = None,
     post_comments: bool = True,
+    owner_user_id: Optional[str] = None,
 ) -> Review:
     """
     Run a full repository/PR scan and return a Review model.
@@ -198,7 +233,7 @@ async def run_scan(
         repo_context = []
         try:
             from .codebase_index_service import (
-                is_repo_indexed, retrieve_relevant_context, index_repository,
+                is_repo_indexed, retrieve_relevant_context, schedule_index,
             )
 
             changed_files = sorted({
@@ -214,7 +249,7 @@ async def run_scan(
                 # First time seeing this repo — index it in the background
                 # for future scans rather than blocking this one on a
                 # potentially slow full-repo index.
-                asyncio.create_task(index_repository(repo_name, github_token, commit_sha))
+                schedule_index(repo_name, github_token, commit_sha)
         except Exception:
             import logging
             logging.getLogger(__name__).exception("Failed to gather repo context for %s", repo_name)
@@ -239,6 +274,8 @@ async def run_scan(
             createdAt=datetime.now(timezone.utc).isoformat(),
         )
 
+        await save_review(new_review, owner_user_id)
+
         # Post inline comments back to GitHub PR
         if post_comments and github_token and commit_sha and requested_pr_number:
             try:
@@ -261,7 +298,7 @@ async def run_scan(
 
             issue_titles = " | ".join(i.title for i in new_review.issues) or "No issues"
             review_text = f"{new_review.summary or ''} {issue_titles}"
-            embedding = generate_embedding(review_text)
+            embedding = await asyncio.to_thread(generate_embedding, review_text)
 
             await memory_service.store_review_embedding(
                 new_review.id,

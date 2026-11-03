@@ -36,6 +36,9 @@ async def run_pending_migrations() -> None:
         logger.warning("[migrations] DB pool unavailable; skipping migration run")
         return
 
+    # Serialize across replicas/workers: only one process migrates at a time
+    # (others block here, then see everything applied and no-op).
+    await conn.execute("SELECT pg_advisory_lock(727274)")
     try:
         await conn.execute(_CREATE_TRACKING_TABLE)
 
@@ -69,4 +72,8 @@ async def run_pending_migrations() -> None:
                 # this one (e.g. foreign keys onto a table it creates).
                 raise
     finally:
+        try:
+            await conn.execute("SELECT pg_advisory_unlock(727274)")
+        except Exception:
+            pass
         await release_conn(conn)

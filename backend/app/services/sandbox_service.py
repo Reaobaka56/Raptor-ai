@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import shlex
+import asyncio
 import subprocess
 import tempfile
 import time
@@ -375,11 +376,61 @@ async def get_events(session_id: str, owner_id: str,
 
 
 # ── Command execution ─────────────────────────────────────────────────────────
-# NOTE: subprocess.run() below is still a blocking call inside an async
-# function, same as before this migration (it was blocking a sync worker
-# thread previously). It's still on the "Contain the sandbox" list
-# (scaling-plan item 4 / fix-it item 1) — moving to per-session containers is
-# separate, larger work. Not addressed by this pass.
+# Commands run in a worker thread (never on the event loop), under a global
+# concurrency cap, with a scrubbed environment and POSIX resource limits.
+# NOTE: this is hardening, not isolation. Untrusted multi-tenant use still
+# needs per-session containers / a managed sandbox (E2B, Modal, Firecracker).
+MAX_CONCURRENT_EXECS = int(os.getenv("SANDBOX_MAX_CONCURRENT_EXECS", "8"))
+_exec_semaphore = asyncio.Semaphore(MAX_CONCURRENT_EXECS)
+
+# Only these host variables are ever visible to sandboxed commands. Everything
+# else (DATABASE_URL, GEMINI_API_KEY, GITHUB_CLIENT_SECRET, encryption keys...)
+# is dropped.
+_SAFE_ENV_KEYS = ("PATH", "LANG", "LC_ALL", "TERM")
+
+
+def _sandbox_env(workspace: str, session_id: str) -> Dict[str, str]:
+    env = {k: os.environ[k] for k in _SAFE_ENV_KEYS if k in os.environ}
+    env.update({
+        "HOME": workspace,
+        "TMPDIR": workspace,
+        "SANDBOX": "1",
+        "RAPTOR_SANDBOX_ID": session_id,
+    })
+    return env
+
+
+def _apply_rlimits() -> None:  # runs in the child between fork and exec
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
+        resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1024 * 1024,) * 2)
+        resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+        resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024,) * 2)
+    except Exception:
+        pass
+
+
+def _run_blocking(command: str, workspace: str, env: Dict[str, str], timeout: int):
+    """Blocking subprocess run. Executes in a worker thread. On timeout the
+    whole process group is killed, not just the shell."""
+    import signal
+    proc = subprocess.Popen(
+        command, shell=True, cwd=workspace, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        start_new_session=True, preexec_fn=_apply_rlimits,
+    )
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except Exception:
+            proc.kill()
+        proc.communicate()
+        raise
+    return subprocess.CompletedProcess(command, proc.returncode, out, err)
+
 
 async def execute_command(session_id: str, owner_id: str,
                            command: str, timeout: int = 30) -> Dict[str, Any]:
@@ -420,21 +471,11 @@ async def execute_command(session_id: str, owner_id: str,
     # Execute
     start = time.time()
     try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=workspace,
-            env={
-                **os.environ,
-                "HOME": workspace,
-                "TMPDIR": workspace,
-                "SANDBOX": "1",
-                "RAPTOR_SANDBOX_ID": session_id,
-            },
-        )
+        async with _exec_semaphore:
+            result = await asyncio.to_thread(
+                _run_blocking, command, workspace,
+                _sandbox_env(workspace, session_id), timeout,
+            )
         duration_ms = int((time.time() - start) * 1000)
         stdout = result.stdout[:4096]   # cap output
         stderr = result.stderr[:2048]

@@ -9,8 +9,12 @@ services:
     env: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt && python -m scripts.run_migrations
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers ${WEB_CONCURRENCY:-2}
     envVars:
+      - key: DB_POOL_MAX
+        value: "15"   # per worker; keep (workers x instances x this) under your Postgres/pgbouncer limit
+      - key: MAX_CONCURRENT_SCANS
+        value: "4"
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: REDIS_URL

@@ -1,3 +1,4 @@
+import asyncio
 """
 Memory Router — FastAPI endpoints for the team memory layer.
 
@@ -114,7 +115,7 @@ class OnboardingGuide(BaseModel):
 @router.post("/rules", response_model=RuleResponse)
 async def add_rule(req: AddRuleRequest, session: Optional[dict] = Depends(require_authenticated_session)):
     """Add a plain-English convention rule. It gets embedded for semantic matching."""
-    embedding = generate_embedding(req.rule_text)
+    embedding = await asyncio.to_thread(generate_embedding, req.rule_text)
     result = await memory_service.add_convention_rule(
         rule_text=req.rule_text,
         embedding=embedding,
@@ -177,7 +178,7 @@ async def find_similar_reviews(
     top_k: int = Query(default=5, ge=1, le=20),
 ):
     """Find past reviews similar to the given query text."""
-    embedding = generate_embedding(query)
+    embedding = await asyncio.to_thread(generate_embedding, query)
     results = await memory_service.retrieve_similar_reviews(
         embedding=embedding, repo=repo, top_k=top_k
     )

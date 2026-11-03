@@ -7,7 +7,8 @@ from fastapi import Depends, Header, HTTPException, Request
 import logging
 
 from .services.session_store import (
-    save_session, get_session, delete_session, refresh_session, SessionStoreUnavailable,
+    save_session, get_session, get_session_with_expiry, delete_session, refresh_session,
+    SessionStoreUnavailable,
 )
 from .services.user_service import get_user_by_username, upsert_user
 
@@ -32,7 +33,7 @@ async def get_optional_github_session(
         return None
 
     try:
-        session = await get_session(token)
+        found = await get_session_with_expiry(token)
     except SessionStoreUnavailable:
         # Previously fell back to a per-process in-memory session dict here.
         # That meant a Redis blip silently downgraded auth to per-instance
@@ -44,12 +45,17 @@ async def get_optional_github_session(
         logger.error("[auth] Session store unavailable while resolving session token")
         raise HTTPException(status_code=503, detail="Auth service temporarily unavailable")
 
-    if not session:
+    if not found:
         return None
+    session, expires_at = found
 
-    # Sliding TTL refresh
+    # Sliding TTL refresh - only once less than half the TTL remains, so a
+    # busy user costs one write per ~30 min instead of one per request.
     try:
-        await refresh_session(token)
+        from datetime import datetime, timezone
+        remaining = (expires_at - datetime.now(timezone.utc)).total_seconds()
+        if remaining < SESSION_TTL_SECONDS / 2:
+            await refresh_session(token)
     except Exception:
         pass
 
