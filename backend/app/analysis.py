@@ -1,6 +1,8 @@
+import asyncio
 import os
 import json
-from fastapi import APIRouter, HTTPException
+from .auth_dependencies import get_required_github_session
+from fastapi import Depends, APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 from .stack_trace_parser import parse_stack_trace
@@ -106,7 +108,7 @@ def _call_llm(prompt: str) -> Dict[str, Any]:
 
 
 @router.post("/solve", response_model=DebugResponse)
-async def solve_debug(req: DebugRequest):
+async def solve_debug(req: DebugRequest, session=Depends(get_required_github_session)):
     # 1️⃣ Parse the stack trace
     parsed = parse_stack_trace(req.stack_trace)
     if parsed["language"] == "unknown":
@@ -128,6 +130,6 @@ async def solve_debug(req: DebugRequest):
     )
 
     # 4️⃣ Call the (mock) LLM
-    llm_result = _call_llm(prompt)
+    llm_result = await asyncio.to_thread(_call_llm, prompt)
     return DebugResponse(**llm_result)
 

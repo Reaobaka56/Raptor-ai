@@ -61,7 +61,7 @@ async def github_webhook(
         time="just now",
     )
     try:
-        append_webhook_log(event_log)
+        await append_webhook_log(event_log)
     except Exception:
         # Best-effort logging only — never fail webhook processing (which
         # GitHub retries on non-2xx) just because the log write failed.
@@ -76,10 +76,23 @@ async def github_webhook(
         pr_number = int(pr_data["number"])
         commit_sha = pr_data.get("head", {}).get("sha", "")
 
-        from ..services.scan_service import run_scan
+        from ..services.scan_service import run_scan, scan_slot
+
+        # Dedupe redeliveries / duplicate events for the same head commit.
+        # Fail-open: if Redis is down we'd rather scan twice than not at all.
+        try:
+            from ..services.redis_client import get_async_redis
+            first = await get_async_redis().set(
+                f"scan_dedupe:{repo_full_name}:{pr_number}:{commit_sha}", "1", nx=True, ex=900
+            )
+            if not first:
+                return {"status": "duplicate", "event": x_github_event}
+        except Exception:
+            pass
 
         async def _scan_and_comment():
             try:
+              async with scan_slot():
                 await run_scan(
                     target=repo_full_name,
                     pr_number_override=pr_number,

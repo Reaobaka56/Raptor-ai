@@ -210,6 +210,66 @@ ALL_TOOLS = [
 ]
 
 
+def _valid_uuid(v: Any) -> bool:
+    try:
+        uuid.UUID(str(v))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
+# ── Validation ────────────────────────────────────────────────────────────────
+
+VALID_PROVIDERS = {
+    "openai", "anthropic", "google", "gemini", "mistral", "groq",
+    "deepseek", "xai", "cohere", "openrouter", "local", "custom",
+}
+STALE_AGENT_MINUTES = 15
+
+
+class AgentValidationError(ValueError):
+    """Bad client input -> HTTP 400 in the router layer."""
+
+
+def validate_agent_payload(data: Dict[str, Any], partial: bool = False) -> Dict[str, Any]:
+    """Validate/normalize client agent input. Raises AgentValidationError.
+    Unknown tools are rejected (they would be silently ignored at run time)."""
+    out = dict(data)
+    if "name" in out or not partial:
+        name = str(out.get("name") or "").strip() if ("name" in out) else "Untitled Agent"
+        if not name:
+            raise AgentValidationError("Agent name is required")
+        if len(name) > 120:
+            raise AgentValidationError("Agent name is too long (max 120 characters)")
+        out["name"] = name
+    for key, limit in (("role", 50), ("model", 100), ("provider", 30)):
+        if key in out:
+            if not isinstance(out[key], str) or not out[key].strip() or len(out[key]) > limit:
+                raise AgentValidationError(f"{key} must be a non-empty string (max {limit} chars)")
+            out[key] = out[key].strip()
+    if "provider" in out:
+        out["provider"] = out["provider"].lower()
+        if out["provider"] not in VALID_PROVIDERS:
+            raise AgentValidationError(f"provider must be one of {sorted(VALID_PROVIDERS)}")
+    for key, limit in (("description", 2000), ("system_prompt", 20000)):
+        if out.get(key) is not None and (not isinstance(out[key], str) or len(out[key]) > limit):
+            raise AgentValidationError(f"{key} must be a string (max {limit} chars)")
+    if "tools" in out:
+        tools = out["tools"]
+        if not isinstance(tools, list) or not all(isinstance(t, str) for t in tools):
+            raise AgentValidationError("tools must be a list of tool names")
+        unknown = sorted(set(tools) - set(ALL_TOOLS))
+        if unknown:
+            raise AgentValidationError(f"Unknown tools: {unknown}")
+        out["tools"] = list(dict.fromkeys(tools))
+    for key in ("permissions", "config"):
+        if key in out and not isinstance(out[key], dict):
+            raise AgentValidationError(f"{key} must be an object")
+    if "knowledge_sources" in out and not isinstance(out["knowledge_sources"], list):
+        raise AgentValidationError("knowledge_sources must be a list")
+    return out
+
+
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 _AGENT_COLUMNS = """id, owner_id, name, role, description, system_prompt,
@@ -218,7 +278,7 @@ _AGENT_COLUMNS = """id, owner_id, name, role, description, system_prompt,
                     created_at, updated_at"""
 
 
-async def _log_activity(owner_id: str, agent_id: Optional[str], activity_type: str,
+async def log_activity(owner_id: str, agent_id: Optional[str], activity_type: str,
                          description: str, metadata: dict = None) -> None:
     """Write an entry to the agent activity log. Best-effort."""
     conn = await get_conn()
@@ -242,6 +302,7 @@ async def _log_activity(owner_id: str, agent_id: Optional[str], activity_type: s
 
 async def create_agent(owner_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new agent. Returns the created agent dict."""
+    data = validate_agent_payload(data)
     conn = await get_conn()
     if not conn:
         raise RuntimeError("Database unavailable")
@@ -267,7 +328,7 @@ async def create_agent(owner_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         )
         agent = _row_to_dict(row)
 
-        await _log_activity(owner_id, agent["id"], "system",
+        await log_activity(owner_id, agent["id"], "system",
                              f"Agent '{agent['name']}' created with role '{agent['role']}'")
         return agent
     except Exception:
@@ -279,6 +340,8 @@ async def create_agent(owner_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
 
 async def get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
     """Get a single agent by ID."""
+    if not _valid_uuid(agent_id):
+        return None
     conn = await get_conn()
     if not conn:
         return None
@@ -315,6 +378,8 @@ async def list_agents(owner_id: str) -> List[Dict[str, Any]]:
 
 async def update_agent(agent_id: str, owner_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Update agent fields. Only provided fields are updated."""
+    if not _valid_uuid(agent_id):
+        return None
     allowed_fields = {
         "name", "role", "description", "system_prompt", "model", "provider",
         "tools", "permissions", "config", "knowledge_sources",
@@ -322,6 +387,7 @@ async def update_agent(agent_id: str, owner_id: str, data: Dict[str, Any]) -> Op
     updates = {k: v for k, v in data.items() if k in allowed_fields}
     if not updates:
         return await get_agent(agent_id, owner_id)
+    updates = validate_agent_payload(updates, partial=True)
 
     conn = await get_conn()
     if not conn:
@@ -373,15 +439,19 @@ async def update_agent_status(agent_id: str, owner_id: str, new_status: str) -> 
     if not conn:
         return None
     try:
+        # Compare-and-set on the status we validated against, so two racing
+        # transitions can't both pass validation from the same starting state.
         row = await conn.fetchrow(
             f"""UPDATE agents SET status = $1, updated_at = now()
-               WHERE id = $2::uuid AND owner_id = $3::uuid
+               WHERE id = $2::uuid AND owner_id = $3::uuid AND status = $4
                RETURNING {_AGENT_COLUMNS}""",
-            new_status, agent_id, owner_id,
+            new_status, agent_id, owner_id, current,
         )
+        if row is None:
+            raise ValueError("Agent status changed concurrently; please retry")
         result = _row_to_dict(row)
 
-        await _log_activity(owner_id, agent_id, "status_change",
+        await log_activity(owner_id, agent_id, "status_change",
                              f"Agent '{agent['name']}' status: {current} → {new_status}",
                              {"from": current, "to": new_status})
         return result
@@ -394,6 +464,8 @@ async def update_agent_status(agent_id: str, owner_id: str, new_status: str) -> 
 
 async def delete_agent(agent_id: str, owner_id: str) -> bool:
     """Delete an agent. Returns True if deleted."""
+    if not _valid_uuid(agent_id):
+        return False
     agent = await get_agent(agent_id, owner_id)
     if not agent:
         return False
@@ -408,7 +480,7 @@ async def delete_agent(agent_id: str, owner_id: str) -> bool:
         )
         deleted = result.split()[-1] != "0"
         if deleted:
-            await _log_activity(owner_id, agent_id, "system",
+            await log_activity(owner_id, agent_id, "system",
                                  f"Agent '{agent['name']}' deleted")
         return deleted
     except Exception:
@@ -450,7 +522,7 @@ async def attach_agent_to_sandbox(agent_id: str, owner_id: str, sandbox_id: str)
         )
         result = _row_to_dict(row)
         if result:
-            await _log_activity(owner_id, agent_id, "system",
+            await log_activity(owner_id, agent_id, "system",
                                  f"Agent '{result['name']}' attached to sandbox session")
         return result
     except Exception:
@@ -476,7 +548,7 @@ async def drop_agent_from_sandbox(agent_id: str, owner_id: str, sandbox_id: str)
         )
         result = _row_to_dict(row)
         if result:
-            await _log_activity(owner_id, agent_id, "system",
+            await log_activity(owner_id, agent_id, "system",
                                  f"Agent '{result['name']}' dropped from sandbox session")
         return result
     except Exception:
@@ -604,3 +676,45 @@ async def get_activity_log(owner_id: str, agent_id: Optional[str] = None,
         return result
     finally:
         await release_conn(conn)
+
+
+# ── Task-execution lifecycle ──────────────────────────────────────────────────
+
+async def claim_agent(agent_id: str, owner_id: str, task_id: str) -> bool:
+    """Atomically mark an agent 'working' on task_id. False if it is already
+    busy with a different, non-stale task."""
+    conn = await get_conn()
+    if not conn:
+        return False
+    try:
+        row = await conn.fetchrow(
+            """UPDATE agents SET status = 'working', current_task_id = $3::uuid, updated_at = now()
+                WHERE id = $1::uuid AND owner_id = $2::uuid
+                  AND (status <> 'working'
+                       OR current_task_id IS NULL
+                       OR current_task_id = $3::uuid
+                       OR updated_at < now() - make_interval(mins => $4))
+            RETURNING id""",
+            agent_id, owner_id, task_id, STALE_AGENT_MINUTES,
+        )
+        return row is not None
+    finally:
+        await release_conn(conn)
+
+
+async def release_agent(agent_id: str, owner_id: str, task_id: str, status: str = "idle") -> None:
+    """Return an agent to idle - but only if it is still on this task."""
+    conn = await get_conn()
+    if not conn:
+        return
+    try:
+        await conn.execute(
+            """UPDATE agents SET status = $4, current_task_id = NULL, updated_at = now()
+                WHERE id = $1::uuid AND owner_id = $2::uuid AND current_task_id = $3::uuid""",
+            agent_id, owner_id, task_id, status,
+        )
+    finally:
+        await release_conn(conn)
+
+
+_log_activity = log_activity  # backwards-compatible alias

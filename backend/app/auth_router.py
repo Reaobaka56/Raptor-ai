@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import secrets
@@ -60,7 +61,8 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
     if req.redirectUri:
         token_payload["redirect_uri"] = req.redirectUri
 
-    token_res = requests.post(
+    token_res = await asyncio.to_thread(
+        requests.post,
         "https://github.com/login/oauth/access_token",
         headers={"Accept": "application/json"},
         json=token_payload,
@@ -77,7 +79,8 @@ async def exchange_github_code(req: AuthCallbackRequest, request: Request):
         error = token_data.get("error_description", "No access token returned")
         raise HTTPException(status_code=401, detail=error)
 
-    user_res = requests.get(
+    user_res = await asyncio.to_thread(
+        requests.get,
         "https://api.github.com/user",
         headers=_get_github_auth_headers(access_token),
         timeout=10,

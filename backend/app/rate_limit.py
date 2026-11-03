@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from .services.redis_client import get_redis
+from .services.redis_client import get_async_redis
 
 logger = logging.getLogger(__name__)
 
@@ -134,21 +134,21 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, rules: Iterable[RateLimitRule]):
         super().__init__(app)
         self.rules = tuple(rules)
-        self.redis = get_redis()
+        self.redis = get_async_redis()
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # Check for admin bypass FIRST
-        user = await _extract_user_from_request(request)
-        if user and user.get("role") == "admin":
-            # Admin — no rate limiting at all
-            return await call_next(request)
-
         rule = self._rule_for_path(request.url.path)
         client_key = self._client_key(request)
         now = time.time()
 
-        allowed, remaining, reset_seconds = self._record_hit(rule, client_key, now)
+        allowed, remaining, reset_seconds = await self._record_hit(rule, client_key, now)
         if not allowed:
+            # Admin bypass is checked lazily, only for requests that are
+            # actually over the limit. This keeps the Postgres session lookup
+            # off the hot path of every request.
+            user = await _extract_user_from_request(request)
+            if user and user.get("role") == "admin":
+                return await call_next(request)
             return JSONResponse(
                 status_code=429,
                 content={
@@ -182,7 +182,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
             return peer
         return "unknown"
 
-    def _record_hit(self, rule: RateLimitRule, client_key: str, now: float) -> Tuple[bool, int, int]:
+    async def _record_hit(self, rule: RateLimitRule, client_key: str, now: float) -> Tuple[bool, int, int]:
         # Fixed window: bucket index = which window_seconds-sized slot `now`
         # falls into. All instances hitting the same bucket share the same
         # Redis key, so the count is global regardless of which replica
@@ -193,13 +193,13 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         redis_key = f"ratelimit:{rule.name}:{client_key}:{window_index}"
 
         try:
-            pipe = self.redis.pipeline()
-            pipe.incr(redis_key, 1)
-            # TTL a little past the window boundary so a slow request right
-            # at the edge doesn't get an evicted key mid-check.
-            pipe.expire(redis_key, rule.window_seconds + 5)
-            count, _ = pipe.execute()
-        except redis.RedisError:
+            async with self.redis.pipeline(transaction=False) as pipe:
+                pipe.incr(redis_key, 1)
+                # TTL a little past the window boundary so a slow request right
+                # at the edge doesn't get an evicted key mid-check.
+                pipe.expire(redis_key, rule.window_seconds + 5)
+                count, _ = await pipe.execute()
+        except (redis.RedisError, OSError, TimeoutError):
             logger.error(
                 "[rate_limit] Redis unavailable, failing open for rule=%s client=%s",
                 rule.name, client_key,

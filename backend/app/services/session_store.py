@@ -51,18 +51,24 @@ async def save_session(token: str, session: Dict[str, Any]) -> None:
 
 
 async def get_session(token: str) -> Optional[Dict[str, Any]]:
+    result = await get_session_with_expiry(token)
+    return result[0] if result else None
+
+
+async def get_session_with_expiry(token: str):
+    """Returns (session_data, expires_at) or None."""
     conn = await get_conn()
     if not conn:
         raise SessionStoreUnavailable("database pool unavailable")
     try:
         row = await conn.fetchrow(
-            "SELECT data FROM sessions WHERE token = $1 AND expires_at > now()",
+            "SELECT data, expires_at FROM sessions WHERE token = $1 AND expires_at > now()",
             token,
         )
         if not row:
             return None
         data = row["data"]
-        return json.loads(data) if isinstance(data, str) else data
+        return (json.loads(data) if isinstance(data, str) else data), row["expires_at"]
     except SessionStoreUnavailable:
         raise
     except Exception:

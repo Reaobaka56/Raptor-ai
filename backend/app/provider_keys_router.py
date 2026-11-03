@@ -1,3 +1,4 @@
+import asyncio
 """Provider API key management endpoints. Secrets are never returned."""
 from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
@@ -120,4 +121,4 @@ async def test_key(provider: str, session: Dict[str, Any] = Depends(get_required
     api_key = await get_decrypted_key(user["id"], provider)
     if not api_key:
         return {"ok": False, "error": "No key configured for this provider"}
-    return _validate_key(provider, api_key)
+    return await asyncio.to_thread(_validate_key, provider, api_key)

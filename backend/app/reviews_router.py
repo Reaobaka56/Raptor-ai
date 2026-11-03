@@ -1,13 +1,13 @@
+import asyncio
 import requests
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, List, Optional
 from types import SimpleNamespace
 
-from .auth_dependencies import get_required_github_session
+from .auth_dependencies import get_required_github_session, get_current_user
 from .models import Review, CreatePRResponse, RepositoryInfo
 from .services.db import get_conn, release_conn
 from .services.github_app import github_app_service
-from .state import MOCK_REVIEWS
 
 router = APIRouter(prefix="/api", tags=["Reviews"])
 
@@ -25,8 +25,19 @@ def _serialize_review_row(row: dict) -> dict:
         "summary": row.get("summary"),
         "status": row.get("status"),
         "reviewTimeMs": row.get("review_time_ms"),
-        "createdAt": row.get("created_at"),
+        "createdAt": (row.get("created_at").isoformat()
+                      if hasattr(row.get("created_at"), "isoformat") else row.get("created_at")),
     }
+
+
+def review_scope_sql(user: dict, first_param: int = 1):
+    """Tenant scope: reviews the user triggered, or on repos under their own
+    GitHub login (which is how webhook-triggered reviews get attributed).
+    Returns (sql_fragment, params)."""
+    return (
+        f"(owner_user_id = ${first_param}::uuid OR repo_owner = ${first_param + 1})",
+        [user["id"], (user.get("username") or "").lower()],
+    )
 
 
 def _fetch_github_repositories(access_token: str) -> List[RepositoryInfo]:
@@ -76,44 +87,53 @@ def _fetch_github_repositories(access_token: str) -> List[RepositoryInfo]:
 
 @router.get("/repos", response_model=List[RepositoryInfo])
 async def list_repositories(session: dict = Depends(get_required_github_session)):
-    return _fetch_github_repositories(session["access_token"])
+    if not session:
+        raise HTTPException(status_code=401, detail="This endpoint requires a user session")
+    # sync requests loop -> worker thread so it can't stall the event loop
+    return await asyncio.to_thread(_fetch_github_repositories, session["access_token"])
 
 
 @router.get("/reviews", response_model=List[Review])
-async def get_all_reviews():
+async def get_all_reviews(session: dict = Depends(get_required_github_session)):
+    user = await get_current_user(session)
     conn = await get_conn()
     if not conn:
         return []
 
     try:
-        rows = await conn.fetch("SELECT * FROM reviews ORDER BY created_at DESC LIMIT 50")
+        scope, params = review_scope_sql(user)
+        rows = await conn.fetch(
+            f"SELECT * FROM reviews WHERE {scope} ORDER BY created_at DESC LIMIT 50", *params
+        )
         return [_serialize_review_row(dict(row)) for row in rows]
     finally:
         await release_conn(conn)
 
 
 @router.get("/reviews/{review_id}", response_model=Review)
-async def get_review_by_id(review_id: str):
-    conn = await get_conn()
-    if not conn:
+async def get_review_by_id(review_id: str, session: dict = Depends(get_required_github_session)):
+    user = await get_current_user(session)
+    review = await _fetch_review_from_db(review_id, user)
+    if not review:
         raise HTTPException(status_code=404, detail="Review not found")
+    return review
 
+
+async def _fetch_review_from_db(review_id: str, user: dict) -> Optional[dict]:
+    import uuid as _uuid
     try:
-        row = await conn.fetchrow("SELECT * FROM reviews WHERE id = $1", review_id)
-        if not row:
-            raise HTTPException(status_code=404, detail="Review not found")
-        return _serialize_review_row(dict(row))
-    finally:
-        await release_conn(conn)
-
-
-async def _fetch_review_from_db(review_id: str) -> Optional[dict]:
+        _uuid.UUID(review_id)
+    except ValueError:
+        return None
     conn = await get_conn()
     if not conn:
         return None
 
     try:
-        row = await conn.fetchrow("SELECT * FROM reviews WHERE id = $1", review_id)
+        scope, params = review_scope_sql(user, first_param=2)
+        row = await conn.fetchrow(
+            f"SELECT * FROM reviews WHERE id = $1::uuid AND {scope}", review_id, *params
+        )
         if not row:
             return None
         return _serialize_review_row(dict(row))
@@ -139,13 +159,9 @@ async def _update_review_fix_pr(review_id: str, fix_pr_number: int, fix_pr_url: 
 
 
 @router.post("/reviews/{review_id}/pull-request", response_model=CreatePRResponse)
-async def create_fix_pull_request(review_id: str):
-    review = await _fetch_review_from_db(review_id)
-    if not review:
-        for candidate in MOCK_REVIEWS:
-            if candidate.get("id") == review_id:
-                review = candidate
-                break
+async def create_fix_pull_request(review_id: str, session: dict = Depends(get_required_github_session)):
+    user = await get_current_user(session)
+    review = await _fetch_review_from_db(review_id, user)
 
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
@@ -161,7 +177,9 @@ async def create_fix_pull_request(review_id: str):
     try:
         # github_app_service.create_fix_pull_request is still sync (item 4,
         # not addressed here — same as _fetch_github_repositories above).
-        pr = github_app_service.create_fix_pull_request(SimpleNamespace(**review))
+        pr = await asyncio.to_thread(
+            github_app_service.create_fix_pull_request, SimpleNamespace(**review)
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"GitHub App pull request creation failed: {exc}") from exc
 

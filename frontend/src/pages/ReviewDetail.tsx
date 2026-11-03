@@ -156,11 +156,11 @@ export default function ReviewDetail() {
 
   const { data: review, isLoading } = useQuery({
     queryKey: ['review', id],
-    queryFn: () => reviewsApi.getById(Number(id)).then(r => r.data as Review),
+    queryFn: () => reviewsApi.getById(id as string).then(r => r.data as Review),
   })
 
   const prMutation = useMutation<any, unknown, void>({
-    mutationFn: () => prApi.createPullRequest(Number(id)),
+    mutationFn: () => prApi.createPullRequest(id as string),
     onMutate: () => {
       setPrError(null)
     },

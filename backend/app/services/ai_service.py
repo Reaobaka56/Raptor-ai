@@ -113,14 +113,7 @@ Return your findings strictly in valid JSON format matching this schema:
 Calibrate confidence honestly — it is shown to the reviewer to help them triage. Don't default every finding to a high score.
 """
         if self.client:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0,
-                    response_mime_type="application/json",
-                ),
-            )
+            response = self._generate_with_retry(prompt)
             data = _extract_json_object(response.text or "")
         else:
             data = self._analyze_diff_with_local_rules(repo, pr_number, diff_text)
@@ -128,6 +121,29 @@ Calibrate confidence honestly — it is shown to the reviewer to help them triag
         data["issues"] = self._normalize_issues(data.get("issues", []))
         data["reviewTimeMs"] = int((time.time() - start_time) * 1000)
         return data
+
+    def _generate_with_retry(self, prompt: str, attempts: int = 4):
+        """Retry transient Gemini failures (429 / 5xx / timeouts) with
+        exponential backoff + jitter. Runs in a worker thread, so sleep is OK."""
+        import random
+        delay = 2.0
+        for attempt in range(1, attempts + 1):
+            try:
+                return self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0,
+                        response_mime_type="application/json",
+                    ),
+                )
+            except Exception as exc:
+                msg = str(exc).lower()
+                transient = any(t in msg for t in ("429", "503", "500", "unavailable", "resource_exhausted", "timeout", "deadline"))
+                if attempt == attempts or not transient:
+                    raise
+                time.sleep(delay + random.random())
+                delay *= 2
 
     def _normalize_issues(self, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         normalized = []

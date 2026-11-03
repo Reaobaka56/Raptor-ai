@@ -12,6 +12,7 @@ Mirrors memory_service's connection/mock-fallback pattern so it degrades
 gracefully without a configured Postgres/pgvector instance.
 """
 
+import asyncio
 import base64
 import hashlib
 import logging
@@ -22,7 +23,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from .db import get_conn, release_conn
-from .embedding_service import generate_embedding
+from .embedding_service import generate_embedding, generate_embeddings_batch
 
 logger = logging.getLogger(__name__)
 
@@ -83,15 +84,39 @@ async def is_repo_indexed(repo: str) -> bool:
         await release_conn(conn)
 
 
+MAX_CONCURRENT_INDEXES = int(os.getenv("MAX_CONCURRENT_INDEXES", "2"))
+_index_semaphore = asyncio.Semaphore(MAX_CONCURRENT_INDEXES)
+_inflight: Dict[str, "asyncio.Task"] = {}      # repo -> running task (dedupe + strong refs)
+
+
+def schedule_index(repo: str, github_token: str, commit_sha: Optional[str] = None) -> bool:
+    """Fire-and-forget indexing that is deduped per repo, concurrency-capped,
+    and keeps a strong reference to the task (bare create_task results can be
+    garbage-collected mid-run). Returns False if one is already running."""
+    existing = _inflight.get(repo)
+    if existing and not existing.done():
+        return False
+
+    async def _run():
+        async with _index_semaphore:
+            await index_repository(repo, github_token, commit_sha)
+
+    task = asyncio.create_task(_run())
+    _inflight[repo] = task
+    task.add_done_callback(lambda t, r=repo: _inflight.pop(r, None))
+    return True
+
+
 async def index_repository(
     repo: str,
     github_token: str,
     commit_sha: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Fetch the repo's file tree at HEAD (or commit_sha), embed indexable
-    files in chunks, and upsert them into code_chunks. Best-effort — never
-    raises; callers treat indexing as an optional context boost, not a
-    dependency of the review itself."""
+    files in chunks, and upsert them into code_chunks. Best-effort - never
+    raises. Holds a DB connection only for each short per-file write, never
+    across GitHub/Gemini network calls (a long-held connection from a pool of
+    ~20 would starve the whole API)."""
     from ..github_utils import get_github_auth_headers
 
     headers = get_github_auth_headers(github_token)
@@ -115,61 +140,80 @@ async def index_repository(
                 and _should_index(item.get("path", ""), item.get("size", 0))
             ][:MAX_FILES_PER_INDEX]
 
-            conn = await get_conn()
-            if not conn:
+            if not await get_conn_ok():
                 logger.warning("[codebase_index] no DB pool; skipping index for %s", repo)
                 return {"repo": repo, "files": 0, "chunks": 0, "indexed": False}
 
-            try:
-                for item in candidates:
-                    path = item["path"]
-                    try:
-                        blob_res = await client.get(
-                            f"https://api.github.com/repos/{repo}/git/blobs/{item['sha']}",
-                            headers=headers,
-                        )
-                        blob_res.raise_for_status()
-                        blob = blob_res.json()
-                        if blob.get("encoding") != "base64":
-                            continue
-                        content = base64.b64decode(blob["content"]).decode("utf-8", errors="ignore")
-                    except Exception:
+            for item in candidates:
+                path = item["path"]
+                try:
+                    blob_res = await client.get(
+                        f"https://api.github.com/repos/{repo}/git/blobs/{item['sha']}",
+                        headers=headers,
+                    )
+                    blob_res.raise_for_status()
+                    blob = blob_res.json()
+                    if blob.get("encoding") != "base64":
                         continue
+                    content = base64.b64decode(blob["content"]).decode("utf-8", errors="ignore")
+                except Exception:
+                    continue
 
-                    content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
-                    chunks = _chunk_text(content)
-                    if not chunks:
-                        continue
+                content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+                chunks = _chunk_text(content)
+                if not chunks:
+                    continue
 
-                    for idx, chunk in enumerate(chunks):
-                        embedding = generate_embedding(f"# {path}\n{chunk}")
-                        await conn.execute(
-                            """INSERT INTO code_chunks
-                                   (repo, file_path, chunk_index, content, content_hash, embedding, indexed_at)
-                               VALUES ($1, $2, $3, $4, $5, $6::vector, now())
-                               ON CONFLICT (repo, file_path, chunk_index)
-                               DO UPDATE SET content = EXCLUDED.content,
-                                             content_hash = EXCLUDED.content_hash,
-                                             embedding = EXCLUDED.embedding,
-                                             indexed_at = now()
-                               WHERE code_chunks.content_hash != EXCLUDED.content_hash""",
-                            repo, path, idx, chunk, content_hash, str(embedding),
-                        )
-                        chunk_count += 1
-                    file_count += 1
-
-                await conn.execute(
-                    """INSERT INTO code_index_state (repo, last_indexed_sha, file_count, chunk_count, updated_at)
-                       VALUES ($1, $2, $3, $4, now())
-                       ON CONFLICT (repo) DO UPDATE
-                       SET last_indexed_sha = EXCLUDED.last_indexed_sha,
-                           file_count = EXCLUDED.file_count,
-                           chunk_count = EXCLUDED.chunk_count,
-                           updated_at = now()""",
-                    repo, commit_sha, file_count, chunk_count,
+                # One batched embedding call per file, off the event loop, no DB conn held.
+                embeddings = await asyncio.to_thread(
+                    generate_embeddings_batch, [f"# {path}\n{c}" for c in chunks]
                 )
-            finally:
-                await release_conn(conn)
+
+                conn = await get_conn()
+                if not conn:
+                    break
+                try:
+                    async with conn.transaction():
+                        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                            await conn.execute(
+                                """INSERT INTO code_chunks
+                                       (repo, file_path, chunk_index, content, content_hash, embedding, indexed_at)
+                                   VALUES ($1, $2, $3, $4, $5, $6::vector, now())
+                                   ON CONFLICT (repo, file_path, chunk_index)
+                                   DO UPDATE SET content = EXCLUDED.content,
+                                                 content_hash = EXCLUDED.content_hash,
+                                                 embedding = EXCLUDED.embedding,
+                                                 indexed_at = now()
+                                   WHERE code_chunks.content_hash != EXCLUDED.content_hash""",
+                                repo, path, idx, chunk, content_hash, str(embedding),
+                            )
+                            chunk_count += 1
+                        # drop stale trailing chunks if the file shrank
+                        await conn.execute(
+                            "DELETE FROM code_chunks WHERE repo = $1 AND file_path = $2 AND chunk_index >= $3",
+                            repo, path, len(chunks),
+                        )
+                    file_count += 1
+                except Exception:
+                    logger.exception("[codebase_index] failed writing %s:%s", repo, path)
+                finally:
+                    await release_conn(conn)
+
+            conn = await get_conn()
+            if conn:
+                try:
+                    await conn.execute(
+                        """INSERT INTO code_index_state (repo, last_indexed_sha, file_count, chunk_count, updated_at)
+                           VALUES ($1, $2, $3, $4, now())
+                           ON CONFLICT (repo) DO UPDATE
+                           SET last_indexed_sha = EXCLUDED.last_indexed_sha,
+                               file_count = EXCLUDED.file_count,
+                               chunk_count = EXCLUDED.chunk_count,
+                               updated_at = now()""",
+                        repo, commit_sha, file_count, chunk_count,
+                    )
+                finally:
+                    await release_conn(conn)
 
         logger.info("[codebase_index] indexed %s: %d files, %d chunks", repo, file_count, chunk_count)
         return {"repo": repo, "files": file_count, "chunks": chunk_count, "indexed": True}
@@ -177,6 +221,14 @@ async def index_repository(
     except Exception:
         logger.exception("[codebase_index] failed to index %s", repo)
         return {"repo": repo, "files": file_count, "chunks": chunk_count, "indexed": False}
+
+
+async def get_conn_ok() -> bool:
+    conn = await get_conn()
+    if not conn:
+        return False
+    await release_conn(conn)
+    return True
 
 
 async def retrieve_relevant_context(
@@ -189,12 +241,12 @@ async def retrieve_relevant_context(
     `query_text` (typically the PR diff or a summary of it), excluding
     chunks from files already in the diff — those are already visible to
     the model, so surfacing them again just wastes context."""
+    embedding = await asyncio.to_thread(generate_embedding, query_text[:8000])
+    emb = str(embedding)
     conn = await get_conn()
     if not conn:
         return []
     try:
-        embedding = generate_embedding(query_text[:8000])
-        emb = str(embedding)
         exclude = changed_files or []
         rows = await conn.fetch(
             """SELECT file_path, content,
