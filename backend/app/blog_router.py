@@ -7,6 +7,7 @@ create / update / delete posts (see services.user_service.is_admin).
 import logging
 import os
 import uuid
+from .services.upload_validation import content_matches_extension
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
@@ -96,6 +97,8 @@ async def upload_media(file: UploadFile = File(...),
         raise HTTPException(status_code=413, detail=f"File too large — max {max_bytes // (1024*1024)}MB for {media_type}s")
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
+    if not content_matches_extension(ext, contents):
+        raise HTTPException(status_code=400, detail="File content does not match its extension")
 
     os.makedirs(_MEDIA_DIR, exist_ok=True)
     safe_name = f"{uuid.uuid4().hex}{ext}"

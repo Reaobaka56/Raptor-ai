@@ -1,5 +1,20 @@
 # Scaling to 100,000 Users
 
+## Status (updated 2026-11-05)
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Shared Redis rate limiting | **Done** - `redis.asyncio`, no per-request DB lookup (still per-IP) |
+| 2 | Stateless instances | Mostly - sessions in Postgres; webhook log in Redis. Mock data in `state.py` remains |
+| 3 | Async DB + AI calls | **Done** via `asyncpg` + `asyncio.to_thread` under semaphores (native async SDKs optional) |
+| 4 | Contain the sandbox | **Partial** - `docker` backend + fail-closed switch added; managed/gVisor runner and live-daemon CI still open |
+| 5 | Horizontal autoscaling | Open - `render.yaml` runs 2 workers on one instance |
+| 6 | Background job queue | **Open - biggest remaining gap** (Arq/RQ on Redis) |
+| - | Review persistence + tenant scoping, indexer connection hygiene, migration lock, webhook dedupe | **Done** |
+| - | Tool-using agents with enforced permissions | **Done** ([AGENT_SYSTEM.md](AGENT_SYSTEM.md)) |
+
+The detailed plan below is the original; checkboxes there may be stale.
+
 Current state: a single Docker web service on Render, in-process rate limiting, and a host-level
 subprocess sandbox — solid MVP infrastructure, not yet built for concurrent scale. This is a
 phased plan to get there.

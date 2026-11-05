@@ -12,40 +12,10 @@ import uuid
 import pytest
 from fastapi import BackgroundTasks, HTTPException
 
-TEST_DB = os.getenv("TEST_DATABASE_URL")
-pytestmark = pytest.mark.skipif(not TEST_DB, reason="TEST_DATABASE_URL not set")
+pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-async def db():
-    from app.services import db as dbm
-    dbm.DB_URL = TEST_DB
-    dbm._pool = None
-    await dbm.init_pool()
-    conn = await dbm.get_conn()
-    await conn.execute(
-        "TRUNCATE agent_activity_log, agent_tasks, agents, reviews, users RESTART IDENTITY CASCADE"
-    )
-    await dbm.release_conn(conn)
-    yield dbm
-    await dbm._pool.close()
-    dbm._pool = None
-
-
-async def _user(db, name):
-    conn = await db.get_conn()
-    try:
-        row = await conn.fetchrow(
-            "INSERT INTO users (github_id, username) VALUES ($1, $2) RETURNING id",
-            abs(hash(name)) % 10**9, name,
-        )
-        return str(row["id"])
-    finally:
-        await db.release_conn(conn)
-
-
-def _session(name):
-    return {"user": {"username": name}, "access_token": "t"}
+from helpers import _user, _session  # noqa: E402
 
 
 # ── jsonb codec ───────────────────────────────────────────────────────────────

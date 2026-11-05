@@ -14,6 +14,15 @@ the thing customers are paying for.
 5. LLM call (via the BYOK provider abstraction) generates the review.
 6. Review comments are posted back to the PR via the GitHub API.
 
+Current details (2026-11): the webhook de-duplicates on `repo:pr:head_sha` (Redis); scans run
+under `MAX_CONCURRENT_SCANS`; the diff/title/context are fenced as untrusted in the prompt;
+findings for files not in the diff are dropped; inline comments are limited to lines that exist
+in the diff (`services/diff_utils.py`) - one invalid line makes GitHub reject the whole review;
+the review is persisted (`reviews`, with owner columns) before posting; the bot never
+auto-approves unless `RAPTOR_AUTO_APPROVE=1`. Embeddings are Gemini `gemini-embedding-001`
+(768-d); migration 018 cleared the derived `code_chunks` index so repos re-index. See
+`docs/ARCHITECTURE.md` for the full flow.
+
 ## Rules when touching this flow
 
 - Never change the webhook signature validation without testing against a real GitHub webhook
