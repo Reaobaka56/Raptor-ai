@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from .auth_dependencies import get_required_github_session, get_current_user as _get_user
 from .services.user_service import get_user_by_username
-from .services import task_service, agent_service
+from .services import task_service, agent_service, agent_runtime
 from .services.provider_key_service import get_decrypted_key
 from .services.db import get_conn, release_conn
 
@@ -20,26 +20,8 @@ router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
 
 
 async def _get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
-    conn = await get_conn()
-    if not conn:
-        return None
-    try:
-        row = await conn.fetchrow(
-            """SELECT id, name, role, description, system_prompt, model, provider,
-                      tools, permissions, status, config
-               FROM agents WHERE id=$1::uuid AND owner_id=$2::uuid""",
-            agent_id, owner_id,
-        )
-        if not row:
-            return None
-        a = dict(row)
-        a["id"] = str(a["id"])
-        return a
-    except Exception:
-        logger.exception("_get_agent failed")
-        return None
-    finally:
-        await release_conn(conn)
+    # Full agent row (incl. sandbox_id, which the tool runtime needs).
+    return await agent_service.get_agent(agent_id, owner_id)
 
 
 # ── LLM providers ─────────────────────────────────────────────────────────────
@@ -47,6 +29,7 @@ async def _get_agent(agent_id: str, owner_id: str) -> Optional[Dict[str, Any]]:
 # under a concurrency cap and an overall timeout.
 
 LLM_TIMEOUT_SECONDS = int(os.getenv("AGENT_LLM_TIMEOUT_SECONDS", "120"))
+AGENT_RUN_TIMEOUT_SECONDS = int(os.getenv("AGENT_RUN_TIMEOUT_SECONDS", "600"))
 _llm_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_AGENT_RUNS", "8")))
 PLATFORM_DAILY_LIMIT = int(os.getenv("AGENT_PLATFORM_DAILY_LIMIT", "25"))
 
@@ -212,19 +195,54 @@ async def _run_task(task_id: str, owner_id: str, agent: Dict[str, Any]) -> None:
                 "Daily limit for the shared platform key reached. Add your own API key in Settings -> API Keys."
             )
 
+        async def llm(system: str, prompt: str) -> str:
+            async with _llm_semaphore:
+                return await asyncio.wait_for(
+                    asyncio.to_thread(_call_provider, provider, api_key, model, system, prompt),
+                    timeout=LLM_TIMEOUT_SECONDS,
+                )
+
         start = time.time()
-        async with _llm_semaphore:
-            output = await asyncio.wait_for(
-                asyncio.to_thread(_call_provider, provider, api_key, model, system_prompt, task_prompt),
-                timeout=LLM_TIMEOUT_SECONDS,
+        outcome_status = "done"
+        sandbox_id = agent.get("sandbox_id")
+        if sandbox_id and [t for t in (agent.get("tools") or []) if t in agent_runtime.EXECUTABLE_TOOLS]:
+            # Tool-using run inside the attached sandbox, with the agent's tools
+            # and permissions enforced by agent_runtime.authorize().
+            from .services import sandbox_service
+            sess = await sandbox_service.get_session(str(sandbox_id), owner_id)
+            if not sess or sess.get("status") != "running":
+                raise RunError("The sandbox attached to this agent is not running. Start it or detach the agent.")
+
+            async def on_event(kind: str, desc: str, meta: Dict[str, Any]) -> None:
+                await agent_service.log_activity(owner_id, agent_id, kind, desc, {"task_id": task_id, **meta})
+
+            result = await asyncio.wait_for(
+                agent_runtime.run_agent_loop(
+                    agent, task_prompt, llm,
+                    agent_runtime.SandboxToolBackend(str(sandbox_id), owner_id, sess.get("workspace_path")),
+                    on_event=on_event,
+                ),
+                timeout=AGENT_RUN_TIMEOUT_SECONDS,
             )
+            output = result.output
+            if result.files_changed or result.commands_run:
+                output += (f"\n\n---\nSteps: {result.steps} · commands: {result.commands_run} · "
+                           f"files changed: {', '.join(result.files_changed) or 'none'}")
+                # Agents that changed things need human sign-off unless explicitly disabled.
+                if (agent.get("permissions") or {}).get("requires_approval", True):
+                    outcome_status = "review"
+            if result.incomplete:
+                raise RunError(output)
+        else:
+            output = await llm(system_prompt, task_prompt)
         duration = int((time.time() - start) * 1000)
 
-        await task_service.finish_task(task_id, owner_id, ok=True, output=output)
+        await task_service.finish_task(task_id, owner_id, ok=True, output=output, status=outcome_status)
         await agent_service.release_agent(agent_id, owner_id, task_id, "idle")
         await agent_service.log_activity(
             owner_id, agent_id, "task_completed",
-            f"Completed task '{task['title']}'", {"task_id": task_id, "duration_ms": duration},
+            f"Completed task '{task['title']}'" + (" - awaiting your review" if outcome_status == "review" else ""),
+            {"task_id": task_id, "duration_ms": duration, "status": outcome_status},
         )
         logger.info("Task %s completed in %dms", task_id, duration)
 

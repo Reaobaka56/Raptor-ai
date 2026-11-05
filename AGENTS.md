@@ -67,8 +67,9 @@ writing or renumbering a migration. Never edit an already-applied migration file
 
 ## Sandbox / agent execution
 
-The sandbox currently shells out via bare `subprocess.run()` — no real container isolation yet.
-Treat anything that touches the sandbox as untrusted-input-adjacent. Read
+The sandbox has two backends (`services/sandbox_executor.py`): `local` (default; scrubbed env +
+rlimits, **not isolation**) and `docker` (container per command). Treat anything that touches the
+sandbox as untrusted-input-adjacent. Full details: `docs/SANDBOX.md`. Read
 `.agents/skills/sandbox-safety/SKILL.md` before adding new sandbox endpoints.
 
 ## PR review flow
@@ -79,8 +80,9 @@ through routers/services when touching this flow — it's the part that must not
 
 ## Known open issues (check before "fixing" these as if new)
 
-- LLM/GitHub API calls are still sync HTTP clients, not async — on the list, not yet done.
-- Sandbox has no real container isolation (see above).
+- Sync HTTP/LLM/embedding calls now run via `asyncio.to_thread` under semaphores (not native async clients).
+- No job queue yet: scans, indexing and agent runs are in-process and lost on restart.
+- Sandbox default backend is `local` (no isolation); the `docker` backend is unit-tested but not yet run against a live daemon in CI.
 - `memory_router.py`'s `get_required_github_session()` call outside `Depends()` — already
   patched, checked into `app/memory_router.py`. Don't re-flag it as new.
 
@@ -92,6 +94,8 @@ that's meant to catch issues before they hit either of those.
 
 ## Further reading
 
+- `docs/`: ARCHITECTURE, AGENT_SYSTEM, SANDBOX, SECURITY, TESTING, API (generated), SCALING_TO_100K. Start at `docs/README.md`.
+- Tests live in `backend/tests/{unit,security,integration}`; see `docs/TESTING.md`.
 - `.agents/skills/`: db-migrations, pr-review-flow, sandbox-safety, ticket-format, decide,
   redesign. Read the matching SKILL.md when a task fits its description.
 - `plans/`: dated design docs written before non-trivial work starts. See `plans/README.md`.

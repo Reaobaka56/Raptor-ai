@@ -377,59 +377,17 @@ async def get_events(session_id: str, owner_id: str,
 
 # ── Command execution ─────────────────────────────────────────────────────────
 # Commands run in a worker thread (never on the event loop), under a global
-# concurrency cap, with a scrubbed environment and POSIX resource limits.
-# NOTE: this is hardening, not isolation. Untrusted multi-tenant use still
-# needs per-session containers / a managed sandbox (E2B, Modal, Firecracker).
+# concurrency cap, through the configured executor (see sandbox_executor.py and
+# docs/SANDBOX.md). `local` is hardening only; `docker` is container isolation.
+from . import sandbox_executor
+from .sandbox_executor import SandboxIsolationUnavailable
+
 MAX_CONCURRENT_EXECS = int(os.getenv("SANDBOX_MAX_CONCURRENT_EXECS", "8"))
 _exec_semaphore = asyncio.Semaphore(MAX_CONCURRENT_EXECS)
 
-# Only these host variables are ever visible to sandboxed commands. Everything
-# else (DATABASE_URL, GEMINI_API_KEY, GITHUB_CLIENT_SECRET, encryption keys...)
-# is dropped.
-_SAFE_ENV_KEYS = ("PATH", "LANG", "LC_ALL", "TERM")
-
-
-def _sandbox_env(workspace: str, session_id: str) -> Dict[str, str]:
-    env = {k: os.environ[k] for k in _SAFE_ENV_KEYS if k in os.environ}
-    env.update({
-        "HOME": workspace,
-        "TMPDIR": workspace,
-        "SANDBOX": "1",
-        "RAPTOR_SANDBOX_ID": session_id,
-    })
-    return env
-
-
-def _apply_rlimits() -> None:  # runs in the child between fork and exec
-    try:
-        import resource
-        resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
-        resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1024 * 1024,) * 2)
-        resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
-        resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024,) * 2)
-    except Exception:
-        pass
-
-
-def _run_blocking(command: str, workspace: str, env: Dict[str, str], timeout: int):
-    """Blocking subprocess run. Executes in a worker thread. On timeout the
-    whole process group is killed, not just the shell."""
-    import signal
-    proc = subprocess.Popen(
-        command, shell=True, cwd=workspace, env=env,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        start_new_session=True, preexec_fn=_apply_rlimits,
-    )
-    try:
-        out, err = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except Exception:
-            proc.kill()
-        proc.communicate()
-        raise
-    return subprocess.CompletedProcess(command, proc.returncode, out, err)
+# Backwards-compatible names (used by tests)
+_sandbox_env = sandbox_executor.sandbox_env
+_run_blocking = sandbox_executor.run_local
 
 
 async def execute_command(session_id: str, owner_id: str,
@@ -473,8 +431,7 @@ async def execute_command(session_id: str, owner_id: str,
     try:
         async with _exec_semaphore:
             result = await asyncio.to_thread(
-                _run_blocking, command, workspace,
-                _sandbox_env(workspace, session_id), timeout,
+                sandbox_executor.run_command_blocking, command, workspace, session_id, timeout,
             )
         duration_ms = int((time.time() - start) * 1000)
         stdout = result.stdout[:4096]   # cap output
@@ -507,6 +464,17 @@ async def execute_command(session_id: str, owner_id: str,
             "exit_code": 124,
             "blocked": False,
             "duration_ms": timeout * 1000,
+        }
+    except SandboxIsolationUnavailable as e:
+        await _log_event(session_id, "policy_violation", {
+            "command": command, "reason": str(e),
+        }, severity="critical")
+        return {
+            "stdout": "",
+            "stderr": f"[RAPTOR SANDBOX] Refused: {e}",
+            "exit_code": 1,
+            "blocked": True,
+            "duration_ms": 0,
         }
     except Exception as e:
         await _log_event(session_id, "command", {

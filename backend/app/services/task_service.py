@@ -284,7 +284,8 @@ async def release_task(task_id: str, owner_id: str, status: str = "assigned") ->
 
 
 async def finish_task(task_id: str, owner_id: str, ok: bool,
-                      output: Optional[str] = None, error: Optional[str] = None) -> None:
+                      output: Optional[str] = None, error: Optional[str] = None,
+                      status: str = "done") -> None:
     """Record a run's result. Errors are stored via json.dumps (never string
     formatting) so quotes/newlines in an error message can't corrupt the JSON."""
     conn = await get_conn()
@@ -292,11 +293,18 @@ async def finish_task(task_id: str, owner_id: str, ok: bool,
         return
     try:
         if ok:
+            if status not in ("done", "review"):
+                raise ValueError("status must be 'done' or 'review'")
+            # 'review' = work is finished but a human must approve it
+            # (agent.permissions.requires_approval); completed_at is set when
+            # the reviewer approves, so only 'done' stamps it here.
             await conn.execute(
-                """UPDATE agent_tasks SET status = 'done', output = $3,
-                          completed_at = now(), updated_at = now()
+                """UPDATE agent_tasks SET status = $4, output = $3,
+                          review_status = CASE WHEN $4 = 'review' THEN 'pending' ELSE review_status END,
+                          completed_at = CASE WHEN $4 = 'done' THEN now() ELSE NULL END,
+                          updated_at = now()
                     WHERE id = $1::uuid AND owner_id = $2::uuid""",
-                task_id, owner_id, output or "",
+                task_id, owner_id, output or "", status,
             )
         else:
             entry = [{"error": (error or "Unknown error")[:2000],

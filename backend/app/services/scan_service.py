@@ -8,6 +8,7 @@ from typing import Optional
 import httpx
 
 from ..models import Review, ReviewIssue
+from .diff_utils import parse_diff_lines
 
 # Cap concurrent webhook-triggered scans per process so a burst of pushes
 # queues instead of stampeding Gemini / the DB pool.
@@ -25,6 +26,7 @@ async def post_pr_review(
     summary: str,
     github_token: str,
     commit_sha: str,
+    valid_lines: Optional[dict] = None,
 ) -> None:
     """
     Post a single GitHub PR review with all issues as inline comments.
@@ -37,7 +39,12 @@ async def post_pr_review(
 
     # Build inline comments for issues that have a file + line
     comments = []
+    not_inline = []   # findings whose line isn't in the diff -> listed in the review body
     for issue in issues:
+        if (valid_lines is not None and issue.get("file")
+                and int(issue.get("line") or 0) not in valid_lines.get(issue["file"], set())):
+            not_inline.append(issue)
+            continue
         if issue.get("file") and issue.get("line"):
             severity_emoji = {
                 "critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵"
@@ -77,8 +84,12 @@ async def post_pr_review(
     critical = sum(1 for i in issues if i.get("severity") == "critical")
     high = sum(1 for i in issues if i.get("severity") == "high")
 
+    # Never let model output approve a PR by default: a diff that talks the
+    # model into "no issues" would otherwise get a bot approval. Opt in with
+    # RAPTOR_AUTO_APPROVE=1.
+    auto_approve = os.getenv("RAPTOR_AUTO_APPROVE", "").lower() in ("1", "true", "yes")
     if issue_count == 0:
-        review_state = "APPROVE"
+        review_state = "APPROVE" if auto_approve else "COMMENT"
         review_body = f"✅ **Raptor AI Review — No issues found**\n\n{summary or 'This PR looks clean.'}"
     elif critical > 0:
         review_state = "REQUEST_CHANGES"
@@ -92,6 +103,13 @@ async def post_pr_review(
         review_body = (
             f"🟡 **Raptor AI Review — {issue_count} issue(s) found**\n\n"
             f"{summary or ''}"
+        )
+
+    if not_inline:
+        review_body += "\n\n**Also noted (not on a changed line):**\n" + "\n".join(
+            f"- `{i.get('file', '?')}`" + (f":{i['line']}" if i.get("line") else "")
+            + f" — {i.get('title', 'Issue')}: {i.get('description', '')}"
+            for i in not_inline
         )
 
     payload = {
@@ -286,6 +304,7 @@ async def run_scan(
                     summary=new_review.summary or "",
                     github_token=github_token,
                     commit_sha=commit_sha,
+                    valid_lines=parse_diff_lines(diff_text),
                 )
             except Exception:
                 import logging

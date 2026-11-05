@@ -34,7 +34,8 @@ By integrating directly with your **GitHub repositories** and utilizing **Google
 - Gets smarter the more your team uses it — suppressing false positives specific to your codebase.
 
 ### Secure Agent Sandbox Environments
-- **Isolated Execution**: Provision, execute commands, monitor, and teardown containerized sessions.
+- **Sandboxed Execution**: Provision, execute commands, monitor, and teardown sessions. Runs as a hardened local process by default; set `SANDBOX_BACKEND=docker` for per-command container isolation (see [docs/SANDBOX.md](docs/SANDBOX.md)).
+- **Tool-using agents**: agents attached to a sandbox run a bounded tool loop with enforced tool allow-lists, path rules, and human approval (see [docs/AGENT_SYSTEM.md](docs/AGENT_SYSTEM.md)).
 - **Policy Enforcement**: Blocks access to metadata endpoints and private config paths (`.env`, `.ssh`, `.aws`, `.pem`).
 - **Audit Logs**: Full execution history for auditing agent activities.
 
