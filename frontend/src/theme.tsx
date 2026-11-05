@@ -11,26 +11,31 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
-const THEME_STORAGE_KEY = 'raptor-theme'
+export const THEME_STORAGE_KEY = 'raptor-theme'
+
+// Storage can throw (private mode, blocked site data) — theme must still work.
+function readStoredTheme(): Theme {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (stored === 'light' || stored === 'dark') return stored
+  } catch {
+    /* fall through to default */
+  }
+  return 'dark' // dark is the default on first visit
+}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark')
-
-  useEffect(() => {
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) as Theme | null
-    if (storedTheme === 'light' || storedTheme === 'dark') {
-      setThemeState(storedTheme)
-      return
-    }
-    // Default to dark on first visit
-    window.localStorage.setItem(THEME_STORAGE_KEY, 'dark')
-    setThemeState('dark')
-  }, [])
+  // Lazy init so a returning light-mode user never renders a dark frame first.
+  const [theme, setThemeState] = useState<Theme>(readStoredTheme)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     document.documentElement.classList.toggle('light', theme === 'light')
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+    } catch {
+      /* non-fatal */
+    }
   }, [theme])
 
   const toggleTheme = () => setThemeState((current) => (current === 'dark' ? 'light' : 'dark'))

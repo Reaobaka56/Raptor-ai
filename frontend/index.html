@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Raptor — AI Code Review on Autopilot</title>
+    <script>
+      // Apply the saved theme before first paint (no flash). Mirrors src/theme.tsx.
+      try {
+        if (localStorage.getItem('raptor-theme') === 'light') {
+          document.documentElement.classList.add('light');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

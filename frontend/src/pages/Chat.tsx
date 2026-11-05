@@ -211,7 +211,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] rounded-2xl border border-white/10 overflow-hidden">
+    <div className="flex h-[calc(100vh-7rem)] md:h-[calc(100vh-4rem)] rounded-2xl border border-white/10 overflow-hidden">
       {showSearch && (
         <NewConvoSearch
           onSelect={username => openConversation(username)}
