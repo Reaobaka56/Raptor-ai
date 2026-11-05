@@ -395,7 +395,7 @@
 /* ─────────────────────────────────────────────
    APP THEME TOKENS
    `white`, `black` and `gray-*` in tailwind.config.js read these.
-   Dark (default) = Tailwind's stock values, so dark mode is unchanged.
+   Dark (default, global): deep-slate page + lifted muted text (contrast).
    Light = the same scale inverted, scoped to the in-app shell via
    data-theme="light" (set by Layout). Public pages are unaffected.
    `.keep-dark` re-pins a subtree (terminals, code panes) to dark.
@@ -403,15 +403,15 @@
 :root,
 .keep-dark {
   --c-white: 255 255 255;
-  --c-black: 0 0 0;
+  --c-black: 9 13 22;        /* page #090D16: deep slate, not pure black */
   --c-gray-50: 249 250 251;
   --c-gray-100: 243 244 246;
   --c-gray-200: 229 231 235;
   --c-gray-300: 209 213 219;
-  --c-gray-400: 156 163 175;
-  --c-gray-500: 107 114 128;
-  --c-gray-600: 75 85 99;
-  --c-gray-700: 55 65 81;
+  --c-gray-400: 175 184 198;
+  --c-gray-500: 148 163 184; /* muted #94A3B8 */
+  --c-gray-600: 124 135 153;
+  --c-gray-700: 100 112 130; /* faintest text */
   --c-gray-800: 31 41 55;
   --c-gray-900: 17 24 39;
   --c-gray-950: 3 7 18;
@@ -427,21 +427,11 @@
   --c-gray-400: 71 85 105;   /* secondary #475569 */
   --c-gray-500: 100 116 139; /* muted #64748B */
   --c-gray-600: 116 128 148; /* tertiary */
-  --c-gray-700: 148 163 184; /* faintest text; also fine as a border */
+  --c-gray-700: 120 132 152; /* faintest text (>=3:1 on the page) */
   --c-gray-800: 226 232 240;
   --c-gray-900: 241 245 249;
   --c-gray-950: 248 250 252;
   color: rgb(var(--c-gray-300));
-}
-
-/* Dark app shell: deep slate page (no pure black / OLED smear) and muted text
-   lifted so it stays readable. Public pages keep the stock :root values. */
-[data-theme='dark'] {
-  --c-black: 9 13 22;        /* page #090D16 */
-  --c-gray-400: 175 184 198;
-  --c-gray-500: 148 163 184; /* muted #94A3B8 */
-  --c-gray-600: 124 135 153;
-  --c-gray-700: 100 112 130; /* faintest text */
 }
 
 /* Light: cards are pure white with a soft slate border */
@@ -450,17 +440,17 @@
 [data-theme='light'] .border-white\/15 { border-color: #cbd5e1; }
 
 /* Dark: panels sit slightly lighter than the page, wells slightly darker */
-[data-theme='dark'] .bg-\[\#0d0d14\],
-[data-theme='dark'] .bg-\[\#0a0a10\],
-[data-theme='dark'] .bg-\[\#0a0a0f\],
-[data-theme='dark'] .bg-\[\#101010\],
-[data-theme='dark'] .bg-\[\#111118\] { background-color: #0f172a; }
-[data-theme='dark'] .bg-\[\#080810\],
-[data-theme='dark'] .bg-\[\#08080f\],
-[data-theme='dark'] .bg-\[\#06060c\],
-[data-theme='dark'] .bg-\[\#04040a\],
-[data-theme='dark'] .bg-\[\#070707\],
-[data-theme='dark'] .bg-\[\#050505\] { background-color: #070b13; }
+.bg-\[\#0d0d14\],
+.bg-\[\#0a0a10\],
+.bg-\[\#0a0a0f\],
+.bg-\[\#101010\],
+.bg-\[\#111118\] { background-color: #0f172a; }
+.bg-\[\#080810\],
+.bg-\[\#08080f\],
+.bg-\[\#06060c\],
+.bg-\[\#04040a\],
+.bg-\[\#070707\],
+.bg-\[\#050505\] { background-color: #070b13; }
 
 /* Dark hex panels hardcoded in pages → light surfaces */
 [data-theme='light'] .bg-\[\#0d0d14\],

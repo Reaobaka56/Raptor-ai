@@ -188,8 +188,8 @@ export default function Analytics() {
                 />
                 <YAxis stroke="#888" tick={{ fill: '#888', fontSize: 11 }} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#000', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'monospace', fontSize: '12px' }}
-                  itemStyle={{ color: '#fff' }}
+                  contentStyle={{ backgroundColor: 'rgb(var(--c-black))', borderRadius: '12px', border: '1px solid rgb(var(--c-white) / 0.2)', color: 'rgb(var(--c-white))', fontFamily: 'monospace', fontSize: '12px' }}
+                  itemStyle={{ color: 'rgb(var(--c-white))' }}
                   labelFormatter={(val) => new Date(val).toLocaleDateString()}
                 />
                 <Legend wrapperStyle={{ fontFamily: 'monospace', fontSize: '12px', color: '#888' }} />
@@ -220,13 +220,17 @@ export default function Analytics() {
                   outerRadius={105}
                   paddingAngle={3}
                   dataKey="value"
-                  label={({ name, value }) => `${name}: ${value}`}
+                  label={({ name, value, x, y, textAnchor }) => (
+                    <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central" fontSize={12} fill="rgb(var(--c-gray-400))">
+                      {`${name}: ${value}`}
+                    </text>
+                  )}
                 >
                   {severityData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#000', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'monospace', fontSize: '12px' }} itemStyle={{ color: '#fff' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'rgb(var(--c-black))', borderRadius: '12px', border: '1px solid rgb(var(--c-white) / 0.2)', color: 'rgb(var(--c-white))', fontFamily: 'monospace', fontSize: '12px' }} itemStyle={{ color: 'rgb(var(--c-white))' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
@@ -247,7 +251,7 @@ export default function Analytics() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis type="number" stroke="#888" tick={{ fill: '#888', fontSize: 11 }} />
                 <YAxis dataKey="name" type="category" stroke="#888" tick={{ fill: '#888', fontSize: 11 }} width={90} />
-                <Tooltip contentStyle={{ backgroundColor: '#000', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'monospace', fontSize: '12px' }} itemStyle={{ color: '#fff' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'rgb(var(--c-black))', borderRadius: '12px', border: '1px solid rgb(var(--c-white) / 0.2)', color: 'rgb(var(--c-white))', fontFamily: 'monospace', fontSize: '12px' }} itemStyle={{ color: 'rgb(var(--c-white))' }} />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                   {categoryData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
