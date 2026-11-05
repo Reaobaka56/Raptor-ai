@@ -92,3 +92,17 @@ async def test_only_valid_diff_lines_become_inline_comments(monkeypatch):
                        valid_lines=parse_diff_lines(DIFF))
     assert [c["line"] for c in sent["comments"]] == [2]                # one bad line can't 422 the whole review
     assert "not on a changed line" in sent["body"] and "elsewhere.py" in sent["body"]
+
+
+def test_review_prompt_keeps_persona_schema_and_pass_message():
+    """Guards the hardened reviewer prompt: parser-facing JSON schema, mandatory fixes,
+    and the explicit 'passed' summary must survive future prompt edits."""
+    captured = []
+    svc = make_service('{"summary": "s", "issues": []}', captured)
+    svc.analyze_pr("o/r", 1, "t", DIFF)
+    p = captured[0]
+    assert "Principal Security Engineer" in p
+    assert "MUST include a concrete, correct fix" in p
+    assert '"suggestion"' in p and '"confidence"' in p          # JSON schema the parser relies on
+    assert "Raptor Check Passed" in p
+    assert p.index("REVIEW GUIDELINES") < p.index("<untrusted_")  # instructions precede fenced data
