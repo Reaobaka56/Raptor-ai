@@ -9,6 +9,9 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      // Steps the codebase already uses (border-white/8, bg-white/3 …) but Tailwind
+      // doesn't generate by default, which made those classes silently no-ops.
+      opacity: { 2: '0.02', 3: '0.03', 4: '0.04', 6: '0.06', 8: '0.08', 12: '0.12' },
       colors: {
         white: v('--c-white'),
         black: v('--c-black'),

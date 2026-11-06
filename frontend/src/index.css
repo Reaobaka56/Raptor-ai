@@ -395,7 +395,7 @@
 /* ─────────────────────────────────────────────
    APP THEME TOKENS
    `white`, `black` and `gray-*` in tailwind.config.js read these.
-   Dark (default) = Tailwind's stock values, so dark mode is unchanged.
+   Dark (default, global): deep-slate page + lifted muted text (contrast).
    Light = the same scale inverted, scoped to the in-app shell via
    data-theme="light" (set by Layout). Public pages are unaffected.
    `.keep-dark` re-pins a subtree (terminals, code panes) to dark.
@@ -403,36 +403,54 @@
 :root,
 .keep-dark {
   --c-white: 255 255 255;
-  --c-black: 0 0 0;
+  --c-black: 9 13 22;        /* page #090D16: deep slate, not pure black */
   --c-gray-50: 249 250 251;
   --c-gray-100: 243 244 246;
   --c-gray-200: 229 231 235;
   --c-gray-300: 209 213 219;
-  --c-gray-400: 156 163 175;
-  --c-gray-500: 107 114 128;
-  --c-gray-600: 75 85 99;
-  --c-gray-700: 55 65 81;
+  --c-gray-400: 175 184 198;
+  --c-gray-500: 148 163 184; /* muted #94A3B8 */
+  --c-gray-600: 124 135 153;
+  --c-gray-700: 100 112 130; /* faintest text */
   --c-gray-800: 31 41 55;
   --c-gray-900: 17 24 39;
   --c-gray-950: 3 7 18;
 }
 
 [data-theme='light'] {
-  --c-white: 24 24 27;      /* ink: headings, active pills */
-  --c-black: 250 250 250;   /* page */
-  --c-gray-50: 3 7 18;
-  --c-gray-100: 17 24 39;
-  --c-gray-200: 31 41 55;
-  --c-gray-300: 55 65 81;   /* body text */
-  --c-gray-400: 75 85 99;   /* secondary text */
-  --c-gray-500: 107 114 128;
-  --c-gray-600: 120 128 142; /* tertiary text, kept readable */
-  --c-gray-700: 170 176 188; /* faintest text; still usable as a border */
-  --c-gray-800: 229 231 235;
-  --c-gray-900: 243 244 246;
-  --c-gray-950: 249 250 251;
+  --c-white: 15 23 42;      /* ink #0F172A: headings, active pills */
+  --c-black: 248 250 252;   /* page #F8FAFC (not pure white) */
+  --c-gray-50: 2 6 23;
+  --c-gray-100: 15 23 42;
+  --c-gray-200: 30 41 59;
+  --c-gray-300: 51 65 85;    /* body #334155 */
+  --c-gray-400: 71 85 105;   /* secondary #475569 */
+  --c-gray-500: 100 116 139; /* muted #64748B */
+  --c-gray-600: 116 128 148; /* tertiary */
+  --c-gray-700: 120 132 152; /* faintest text (>=3:1 on the page) */
+  --c-gray-800: 226 232 240;
+  --c-gray-900: 241 245 249;
+  --c-gray-950: 248 250 252;
   color: rgb(var(--c-gray-300));
 }
+
+/* Light: cards are pure white with a soft slate border */
+[data-theme='light'] .bg-white\/5 { background-color: #ffffff; }
+[data-theme='light'] .border-white\/10 { border-color: #e2e8f0; }
+[data-theme='light'] .border-white\/15 { border-color: #cbd5e1; }
+
+/* Dark: panels sit slightly lighter than the page, wells slightly darker */
+.bg-\[\#0d0d14\],
+.bg-\[\#0a0a10\],
+.bg-\[\#0a0a0f\],
+.bg-\[\#101010\],
+.bg-\[\#111118\] { background-color: #0f172a; }
+.bg-\[\#080810\],
+.bg-\[\#08080f\],
+.bg-\[\#06060c\],
+.bg-\[\#04040a\],
+.bg-\[\#070707\],
+.bg-\[\#050505\] { background-color: #070b13; }
 
 /* Dark hex panels hardcoded in pages → light surfaces */
 [data-theme='light'] .bg-\[\#0d0d14\],
@@ -731,6 +749,9 @@
 .reveal.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
 }
 
 @keyframes floatBadgeIn {

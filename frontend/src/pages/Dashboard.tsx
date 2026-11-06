@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { statsApi, reviewsApi, reposApi, type Stats, type Review, type UserProfile } from '../api'
 import { formatDistanceToNow } from 'date-fns'
+import { Reveal } from '../components/Reveal'
 
 function StatCard({ 
   title, 
@@ -351,6 +352,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
+      <Reveal>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Reviews"
@@ -377,17 +379,22 @@ export default function Dashboard() {
           icon={Shield}
         />
       </div>
+      </Reveal>
 
       {/* Severity & Categories */}
+      <Reveal delay={80}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {stats && <SeverityBar stats={stats.issuesBySeverity} />}
         <div className="space-y-4">
           {stats && <CategoryGrid stats={stats.issuesByCategory} />}
         </div>
       </div>
+      </Reveal>
 
       {/* Recent Reviews */}
-      <RecentReviews reviews={reviews} />
+      <Reveal delay={120}>
+        <RecentReviews reviews={reviews} />
+      </Reveal>
     </div>
   )
 }
