@@ -144,7 +144,7 @@ export default function RuleManager() {
             <AlertTriangle className="w-3.5 h-3.5" /> Suppression Rate
           </div>
           <p className="text-2xl font-bold text-white font-mono">
-            {feedbackStats ? `${(feedbackStats.suppressionRate * 100).toFixed(0)}%` : '0%'}
+            {feedbackStats ? `${((Number(feedbackStats.suppressionRate) || 0) * 100).toFixed(0)}%` : '0%'}
           </p>
           <p className="text-[10px] text-gray-500 font-sans">False positives your team rejected</p>
         </div>
