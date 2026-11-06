@@ -1,9 +1,8 @@
 {
   "framework": "vite",
-  "rootDirectory": "frontend",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
+  "installCommand": "cd frontend && npm ci",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/dist",
   "rewrites": [
     { "source": "/api/auth/github/callback", "destination": "/index.html" },
     { "source": "/api/(.*)", "destination": "https://raptor-ai.onrender.com/api/$1" },
